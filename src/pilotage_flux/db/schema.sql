@@ -420,6 +420,127 @@ CREATE INDEX IF NOT EXISTS idx_event_deviations_candidate
 CREATE INDEX IF NOT EXISTS idx_event_deviations_kind_score
     ON event_deviations (deviation_kind, score);
 
+CREATE TABLE IF NOT EXISTS root_cause_rules (
+    rule_id         TEXT NOT NULL,
+    cause           TEXT NOT NULL,
+        -- production_breakdown | quality_defect | supply_shortage |
+        -- logistic_delay | demand_change | bottleneck_overload | other
+    label           TEXT NOT NULL,
+    weight          REAL NOT NULL DEFAULT 0.5,  -- prior 0..1
+    confidence      REAL NOT NULL DEFAULT 0.5,  -- mise à jour bayésienne
+    domain          TEXT,                       -- production | quality | supply | logistic | demand
+    applies_to_kind TEXT,                       -- time_delta | quantity_delta | ...
+    version         INTEGER NOT NULL DEFAULT 1,
+    valid_from      TEXT NOT NULL DEFAULT (datetime('now')),
+    valid_to        TEXT,
+    PRIMARY KEY (rule_id, version)
+);
+
+-- Seed des 6 causes racines standard (§18 du cadrage)
+INSERT OR IGNORE INTO root_cause_rules
+    (rule_id, cause, label, weight, confidence, domain, applies_to_kind)
+VALUES
+    ('R-RC-01', 'production_breakdown', 'Panne ou arrêt poste',
+     0.6, 0.5, 'production', 'time_delta'),
+    ('R-RC-02', 'quality_defect', 'Défaut qualité bloquant',
+     0.4, 0.5, 'quality', 'qty_scrap_excess'),
+    ('R-RC-03', 'supply_shortage', 'Rupture composant achaté',
+     0.7, 0.5, 'supply', 'missing_actual'),
+    ('R-RC-04', 'logistic_delay', 'Retard logistique / file',
+     0.5, 0.5, 'logistic', 'time_delta'),
+    ('R-RC-05', 'demand_change', 'Modification demande client',
+     0.3, 0.5, 'demand', 'quantity_delta'),
+    ('R-RC-06', 'bottleneck_overload', 'Surcharge goulot dynamique',
+     0.5, 0.5, 'production', 'time_delta');
+
+CREATE TABLE IF NOT EXISTS event_deviation_causes (
+    attach_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    deviation_id        INTEGER NOT NULL REFERENCES event_deviations(deviation_id),
+    rule_id             TEXT NOT NULL,
+    rule_version        INTEGER NOT NULL,
+    score               REAL NOT NULL,          -- weight * confidence à l'instant de l'attache
+    posterior           REAL,                   -- mise à jour bayésienne après évidence
+    explanation         TEXT,
+    confirmed           INTEGER NOT NULL DEFAULT 0,  -- 1 si validé manuellement
+    attached_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_deviation_causes_dev
+    ON event_deviation_causes (deviation_id);
+CREATE INDEX IF NOT EXISTS idx_event_deviation_causes_rule
+    ON event_deviation_causes (rule_id);
+
+-- ---------------------------------------------------------------------
+-- V3 : filtre dual de tolerances (run-time) - §7 bis.4
+-- ---------------------------------------------------------------------
+-- Le filtre dual combine score (magnitude) × frequence (recurrence sur
+-- fenetre) avec latence avant declenchement. Decision proportionnee.
+
+CREATE TABLE IF NOT EXISTS tolerance_filter_decisions (
+    decision_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    deviation_id        INTEGER NOT NULL REFERENCES event_deviations(deviation_id),
+    candidate_id        TEXT REFERENCES candidate_orders(candidate_id),
+    score_magnitude     REAL NOT NULL,
+    frequency_in_window INTEGER NOT NULL,        -- nb deviations similaires dans la fenetre
+    score_combined      REAL NOT NULL,           -- magnitude × ponderation_frequence
+    action_level        TEXT NOT NULL,
+        -- inform | watch | correct_local | replan_local | escalate | replan_global
+    latency_minutes     INTEGER NOT NULL DEFAULT 0,
+    triggered_at        TEXT,                    -- NULL = en attente (latence)
+    decided_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_tolerance_filter_dev
+    ON tolerance_filter_decisions (deviation_id);
+CREATE INDEX IF NOT EXISTS idx_tolerance_filter_action
+    ON tolerance_filter_decisions (action_level, triggered_at);
+
+-- ---------------------------------------------------------------------
+-- V3 : filtre dual de memoire P4 (apprentissage) - §7 bis.5
+-- ---------------------------------------------------------------------
+-- À la cloture P4, on capture la "recette" (combinaison ecart - cause -
+-- decision - resultat) et un score decide si elle est :
+--   (a) journalisee seulement (pour audit)
+--   (b) retenue pour apprentissage : enrichit l'historique et permet la
+--       mise a jour des seuils/regles.
+
+CREATE TABLE IF NOT EXISTS memory_recipes (
+    recipe_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    of_id               TEXT REFERENCES manufacturing_orders(of_id),
+    candidate_id        TEXT REFERENCES candidate_orders(candidate_id),
+    deviation_signature TEXT NOT NULL,          -- ex: 'time_delta|R-RC-04|escalate'
+    deviation_kind      TEXT,
+    cause_rule_id       TEXT,
+    action_level        TEXT,
+    outcome             TEXT,                   -- success | failure | partial
+    score_significance  REAL,                   -- 0..1 significativite statistique
+    score_recurrence    REAL,                   -- 0..1 frequence dans l'historique
+    score_combined      REAL,
+    is_retained         INTEGER NOT NULL DEFAULT 0,  -- 1 si retenue pour apprentissage
+    retention_reason    TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_recipes_signature
+    ON memory_recipes (deviation_signature, is_retained);
+CREATE INDEX IF NOT EXISTS idx_memory_recipes_of
+    ON memory_recipes (of_id);
+
+CREATE TABLE IF NOT EXISTS memory_filter_decisions (
+    decision_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipe_id           INTEGER NOT NULL REFERENCES memory_recipes(recipe_id),
+    decision            TEXT NOT NULL,          -- log_only | retain | update_rule
+    target_rule_id      TEXT,                   -- regle ajustee si update_rule
+    parameter_updated   TEXT,                   -- nom parametre modifie
+    old_value           REAL,
+    new_value           REAL,
+    explanation         TEXT,
+    decided_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_filter_recipe
+    ON memory_filter_decisions (recipe_id);
+
 -- ---------------------------------------------------------------------
 -- V2 : stocks et achats ouverts
 -- ---------------------------------------------------------------------

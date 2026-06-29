@@ -18,6 +18,9 @@ data/runs/*.db
 data/runs/*.sqlite
 data/runs/*.sqlite3
 
+# Random fixtures generated at runtime
+data/runs/random/
+
 # IDE
 .vscode/
 .idea/

@@ -46,6 +46,7 @@ def run_random_study(
     fixture_spec: FixtureSpec | None = None,
     scenario_spec: RandomScenarioSpec | None = None,
     doctrines: list[str] | None = None,
+    on_run_complete: callable = None,
 ) -> RandomStudy:
     """Exécute pour chaque (fixture_seed, scenario_seed, doctrine) un run.
 
@@ -77,6 +78,8 @@ def run_random_study(
                     scen, d, db_path, fixtures_dir=fix_dir,
                 )
                 kpis_per_doctrine[d].append(compute_kpis(scen, result))
+                if on_run_complete is not None:
+                    on_run_complete(fix_seed, scen_seed, d)
 
     study = RandomStudy(
         fixture_seeds=list(fixture_seeds),

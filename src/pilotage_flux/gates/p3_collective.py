@@ -23,6 +23,13 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from pilotage_flux.events import EventType, append_event
+from pilotage_flux.flux.buffers import (
+    BufferSpec,
+    apply_buffer_to_capacity,
+    get_safety_factor,
+    get_saturation_limits,
+    little_buffer_for_bottleneck,
+)
 from pilotage_flux.flux.contracts import (
     fetch_contract,
     fetch_version,
@@ -70,6 +77,10 @@ class CollectiveResult:
         default_factory=list
     )
     # liste de (ws_id, load, capacity, ratio) sorted desc par ratio
+    # L10.5 — tampons + classification Little
+    buffers: list[BufferSpec] = field(default_factory=list)
+    saturation_classes: dict[str, str] = field(default_factory=dict)
+    # workstation_id -> 'safe' | 'warn' | 'block' | 'defer'
     batch_id: str | None = None
 
 
@@ -367,32 +378,59 @@ def run_p3_collective_freeze(
 
         profiles_sorted = sorted(profiles, key=_priority_key)
 
-        # Si pas de goulot identifié OU charge sous capacité → freeze all
-        if not bottleneck or capacity <= 0 or cumul_load <= capacity:
+        # L10.3 : identifie les goulots (top contenders à ≥10%)
+        multi_bottlenecks = identify_bottlenecks(
+            conn, profiles, horizon_start, horizon_end,
+            threshold_ratio=0.10,
+        )
+
+        # L10.5 — Décision Little-aware avec tampons sur les goulots
+        limits = get_saturation_limits(conn)
+        safety = get_safety_factor(conn)
+
+        # Calcule capacité effective (tampon réservé) pour chaque WS goulot
+        # Un poste est "goulot" si son ratio brut ≥ warn threshold
+        buffer_specs: list[BufferSpec] = []
+        sat_classes: dict[str, str] = {}
+        effective_capa_by_ws: dict[str, float] = {}
+        for ws, load, raw_capa, ratio_raw in multi_bottlenecks:
+            is_bn = ratio_raw >= limits.warn
+            eff_capa = apply_buffer_to_capacity(raw_capa, is_bn, safety)
+            effective_capa_by_ws[ws] = eff_capa
+            eff_ratio = (load / eff_capa) if eff_capa > 0 else float("inf")
+            sat_classes[ws] = limits.classify(eff_ratio)
+            if is_bn:
+                buffer_specs.append(
+                    little_buffer_for_bottleneck(ws, raw_capa, safety)
+                )
+
+        # Ratio effectif au goulot principal après tampon
+        eff_capacity = effective_capa_by_ws.get(bottleneck, capacity) if bottleneck else capacity
+        eff_ratio_main = (
+            (cumul_load / eff_capacity) if eff_capacity > 0 else float("inf")
+        )
+        main_class = limits.classify(eff_ratio_main) if bottleneck else "safe"
+
+        if main_class in ("safe", "warn") or not bottleneck:
+            # safe ou warn → FREEZE_ALL (warn est tracé mais ne refuse pas)
             decision = DECISION_FREEZE_ALL
             frozen = [p.contract_id for p in profiles_sorted]
             deferred: list[str] = []
         else:
-            # Saturation : inclure jusqu'à saturation
+            # block / defer → PARTIAL_FREEZE jusqu'à effective_capacity
             decision = DECISION_PARTIAL_FREEZE
             running_load = 0.0
             frozen = []
             deferred = []
             for p in profiles_sorted:
                 p_load = p.load_by_workstation.get(bottleneck, 0.0)
-                if running_load + p_load <= capacity:
+                if running_load + p_load <= eff_capacity:
                     running_load += p_load
                     frozen.append(p.contract_id)
                 else:
                     deferred.append(p.contract_id)
             if not frozen:
                 decision = DECISION_DEFER_ALL
-
-        # L10.3 : identifie aussi les goulots secondaires (top contenders à ≥10%)
-        multi_bottlenecks = identify_bottlenecks(
-            conn, profiles, horizon_start, horizon_end,
-            threshold_ratio=0.10,
-        )
 
         result = CollectiveResult(
             horizon_start=horizon_start, horizon_end=horizon_end,
@@ -404,6 +442,8 @@ def run_p3_collective_freeze(
             bottleneck_load=cumul_load,
             bottleneck_capacity=capacity,
             bottleneck_workstations=multi_bottlenecks,
+            buffers=buffer_specs,
+            saturation_classes=sat_classes,
         )
 
         explanation = (

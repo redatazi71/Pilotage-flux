@@ -8,7 +8,7 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 **V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2), **V7** (L7.1), **V8** (L8.1 + L8.3 + L8.4) et **V9** (L9.1 → L9.5) complets.
 
-- 287 tests pytest verts, dont dix tests d'acceptation end-to-end :
+- 293 tests pytest verts, dont onze tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
@@ -452,6 +452,45 @@ Résultats agrégés (16 runs de validation, fixtures à 5 articles × 8 postes)
 le **smoothing flux divise le lead time par 1.7** et fait l'essentiel du gain
 (−25 677 €). L'event sourcing seul (sans flux) ne trouve presque rien
 (−173 €) — parce que sans contrat, l'attendu est trop proche du réel.
+
+### L10.5 — Seuils Little + tampons goulots (DBR)
+
+`flux/buffers.py` implémente la doctrine Drum-Buffer-Rope (Goldratt) :
+
+- **`SaturationLimits`** : seuils data-driven (warn 80%, block 90%, defer
+  110%). Classification `safe`/`warn`/`block`/`defer` selon le ratio
+  load/capacity.
+- **`BufferSpec`** : tampon dimensionné via loi de Little —
+  `safety_factor%` de la capacité brute réservée pour absorber la
+  variabilité au goulot (défaut 15%).
+- **`apply_buffer_to_capacity(raw, is_bottleneck, safety)`** : capacité
+  effective = raw si non-goulot, raw × (1 − safety) si goulot.
+
+P3 collective utilise désormais ces seuils pour décider :
+`safe`/`warn` → FREEZE_ALL ; `block`/`defer` → PARTIAL_FREEZE jusqu'à
+capacité effective.
+
+### L10.6 — Progress bar live
+
+`run_variance_study` et `run_random_study` exposent un callback
+`on_run_complete(scen, doctrine, seed)`. La CLI consomme via
+`rich.progress` : barre, ETA, temps écoulé, MofN.
+
+### L10.7 — Validation multi-goulot serré
+
+5 fixtures × 5 scénarios × 4 doctrines = **100 runs**, fixtures à 8 finis
+× 10 postes × 4 goulots forts (capacité 0.35-0.50). Résultat :
+
+| Doctrine | Coût | Δ vs OF |
+|---|---|---|
+| OF | 262 407 ± 78 761 € | +0 |
+| FLUX | 203 812 ± 60 847 € | **−58 595** |
+| OF+EVENT | 259 482 ± 79 035 € | −2 925 |
+| EVENT | 197 606 ± 58 725 € | **−64 801** |
+
+**Sur multi-goulot serré, l'apport doctrinal est multiplié par 2.5** vs
+config légère. L'event sourcing marginal passe de −161 € à **−6 206 €**
+— sous tension, V3 fait plus de différence.
 
 ## V9 — fixtures étendues + multi-contrats + smoothing actif
 

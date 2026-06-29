@@ -2128,13 +2128,36 @@ def compare_doctrines_extended(
         f"[yellow]→[/yellow] étude étendue : {len(scen_list)} scénarios × "
         f"{len(DOCTRINES)} doctrines × {len(seed_list)} seeds = [bold]{total}[/bold] runs"
     )
-    study = run_variance_study(
-        scenarios=scen_list,
-        doctrines=list(DOCTRINES),
-        seeds=seed_list,
-        work_dir=work_dir,
-        fixtures_dir=fixtures,
+    from rich.progress import (
+        BarColumn, MofNCompleteColumn, Progress, TextColumn,
+        TimeElapsedColumn, TimeRemainingColumn,
     )
+
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(), MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("runs", total=total)
+
+        def _cb(scen_name: str, doctrine: str, seed: int) -> None:
+            progress.update(
+                task, advance=1,
+                description=f"[cyan]{scen_name}/{doctrine}/seed={seed}[/cyan]",
+            )
+
+        study = run_variance_study(
+            scenarios=scen_list,
+            doctrines=list(DOCTRINES),
+            seeds=seed_list,
+            work_dir=work_dir,
+            fixtures_dir=fixtures,
+            on_run_complete=_cb,
+        )
     report = build_variance_report(study)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
@@ -2319,14 +2342,36 @@ def random_study(
         f"{len(fix_list)} fixtures × {len(scen_list)} scénarios × "
         f"{len(DOCTRINES)} doctrines = [bold]{total}[/bold] runs"
     )
-
-    study = run_random_study(
-        fixture_seeds=fix_list,
-        scenario_seeds=scen_list,
-        work_dir=work_dir,
-        fixture_spec=fixture_spec,
-        scenario_spec=scenario_spec,
+    from rich.progress import (
+        BarColumn, MofNCompleteColumn, Progress, TextColumn,
+        TimeElapsedColumn, TimeRemainingColumn,
     )
+
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(), MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("runs", total=total)
+
+        def _cb(fix: int, scen: int, doctrine: str) -> None:
+            progress.update(
+                task, advance=1,
+                description=f"[cyan]fix={fix} scen={scen} {doctrine}[/cyan]",
+            )
+
+        study = run_random_study(
+            fixture_seeds=fix_list,
+            scenario_seeds=scen_list,
+            work_dir=work_dir,
+            fixture_spec=fixture_spec,
+            scenario_spec=scenario_spec,
+            on_run_complete=_cb,
+        )
     report = build_random_study_report(study)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")

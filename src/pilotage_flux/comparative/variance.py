@@ -124,11 +124,15 @@ def run_variance_study(
     *,
     work_dir: Path,
     fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
+    on_run_complete: callable = None,
 ) -> VarianceStudy:
     """Exécute chaque (scenario, doctrine, seed) et agrège les KPIs.
 
     Le nombre total de runs = len(scenarios) × len(doctrines) × len(seeds).
     Chaque run écrit une DB dans `work_dir/{scenario}_{doctrine}_{seed}.db`.
+
+    `on_run_complete(scenario_name, doctrine, seed_idx_total)` est appelé
+    après chaque run pour permettre une barre de progression.
     """
     work_dir.mkdir(parents=True, exist_ok=True)
     study = VarianceStudy(seeds=list(seeds), scenarios=list(scenarios),
@@ -147,6 +151,8 @@ def run_variance_study(
                     jittered, d, db_path, fixtures_dir=fixtures_dir
                 )
                 kpis_per_seed.append(compute_kpis(jittered, result))
+                if on_run_complete is not None:
+                    on_run_complete(scen_name, d, s)
             study.aggregates[scen_name][d] = aggregate_kpis(
                 d, scen_name, kpis_per_seed
             )

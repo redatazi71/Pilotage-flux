@@ -1,0 +1,4 @@
+article_id,sequence_idx,workstation_id,unit_time_min
+ART-A,1,WS-1,2.5
+ART-A,2,WS-2,3.0
+ART-A,3,WS-3,1.2

@@ -1,0 +1,4 @@
+article_id,label,unit,is_purchased
+ART-A,Produit fini A,PCE,0
+COMP-X,Composant X,PCE,1
+COMP-Y,Composant Y,PCE,1

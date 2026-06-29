@@ -7,6 +7,7 @@ from pilotage_flux.comparative.scenario import (
     DOCTRINE_EVENT,
     DOCTRINE_FLUX,
     DOCTRINE_OF,
+    DOCTRINE_OF_EVENT,
     Scenario,
 )
 
@@ -14,7 +15,8 @@ from pilotage_flux.comparative.scenario import (
 _DOCTRINE_LABEL = {
     DOCTRINE_OF: "APS+MES OF-driven (V0)",
     DOCTRINE_FLUX: "APS+MES flux sans event sourcing (V1+V2)",
-    DOCTRINE_EVENT: "APS+MES event sourcing (V3)",
+    DOCTRINE_OF_EVENT: "APS+MES OF + event sourcing",
+    DOCTRINE_EVENT: "APS+MES flux + event sourcing (V3)",
 }
 
 
@@ -34,11 +36,10 @@ def build_comparative_report(scenario: Scenario, kpis: list[KpiSet]) -> str:
     `kpis` doit contenir les 3 KpiSet (OF, FLUX, EVENT), peu importe l'ordre.
     """
     by_doctrine = {k.doctrine: k for k in kpis}
-    ordered = [
-        by_doctrine[DOCTRINE_OF],
-        by_doctrine[DOCTRINE_FLUX],
-        by_doctrine[DOCTRINE_EVENT],
-    ]
+    ordered = []
+    for d in (DOCTRINE_OF, DOCTRINE_FLUX, DOCTRINE_OF_EVENT, DOCTRINE_EVENT):
+        if d in by_doctrine:
+            ordered.append(by_doctrine[d])
     lines: list[str] = []
     lines.append(f"# Étude comparative V4 — scénario `{scenario.name}`")
     lines.append("")
@@ -99,9 +100,13 @@ def build_comparative_report(scenario: Scenario, kpis: list[KpiSet]) -> str:
     lines.append("")
     lines.append("## Lecture")
     lines.append("")
-    of_k = by_doctrine[DOCTRINE_OF]
-    flux_k = by_doctrine[DOCTRINE_FLUX]
-    event_k = by_doctrine[DOCTRINE_EVENT]
+    of_k = by_doctrine.get(DOCTRINE_OF)
+    flux_k = by_doctrine.get(DOCTRINE_FLUX)
+    event_k = by_doctrine.get(DOCTRINE_EVENT)
+    if of_k is None or flux_k is None or event_k is None:
+        # Rapport partiel : si certaines doctrines manquent, on saute la lecture
+        lines.append("_(Rapport partiel — certaines doctrines manquent.)_")
+        return "\n".join(lines)
     lines.append(
         f"- **OF-driven** : {of_k.aps_recalculations} recalculs APS pour gérer "
         f"les aléas (replan global systématique). Aucune trace d'écart, aucune "

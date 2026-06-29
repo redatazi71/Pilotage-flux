@@ -62,6 +62,7 @@ from pilotage_flux.comparative.scenario import (
     DOCTRINE_EVENT,
     DOCTRINE_FLUX,
     DOCTRINE_OF,
+    DOCTRINE_OF_EVENT,
     DOCTRINES,
     HAZARD_BREAKDOWN,
     HAZARD_PO_DELAY,
@@ -1070,6 +1071,257 @@ def run_event_doctrine(
 
 
 # ----------------------------------------------------------------------
+# L8.4 — Runner OF+EVENT : V0 OF-driven + couche event sourcing,
+# SANS contractualisation flux. Permet d'isoler l'apport propre du flux
+# (en comparant EVENT vs OF+EVENT) et l'apport propre de l'event sourcing
+# (en comparant OF+EVENT vs OF).
+# ----------------------------------------------------------------------
+
+
+def _create_virtual_batch_for_of(
+    conn: sqlite3.Connection, scenario: Scenario
+) -> str:
+    """Crée une freeze_batch virtuelle pour porter les expected_events en
+    mode OF+EVENT (où il n'y a pas de contrat ni de tranche réelle).
+
+    Cette tranche est un véhicule technique pour respecter le FK
+    `expected_events.batch_id REFERENCES freeze_batches`, sans modifier
+    la sémantique : pas de contrat lié, decision = 'OF_VIRTUAL'.
+    """
+    from datetime import date, timedelta
+
+    horizon_start_dt = date.fromisoformat(scenario.horizon_start)
+    horizon_end_dt = horizon_start_dt + timedelta(days=scenario.horizon_days)
+    batch_id = "FZ-OF-VIRTUAL"
+    conn.execute(
+        """
+        INSERT INTO freeze_batches
+            (batch_id, horizon_start, horizon_end, status, decision,
+             total_quantity, contract_count, candidate_count, explanation)
+        VALUES (?, ?, ?, 'frozen', 'OF_VIRTUAL', 0, 0, 0, ?)
+        """,
+        (
+            batch_id,
+            scenario.horizon_start,
+            horizon_end_dt.strftime("%Y-%m-%d"),
+            "Tranche virtuelle pour porter expected_events en mode OF+EVENT (pas de contrat)",
+        ),
+    )
+    return batch_id
+
+
+def _generate_expected_from_ofs(
+    conn: sqlite3.Connection,
+    of_ids: list[str],
+    horizon_start: str,
+    batch_id: str,
+) -> None:
+    """Génère expected_events pour une liste d'OFs en mode OF (sans flux).
+
+    L'« attendu » est calculé sans lissage : chaque OF est censé démarrer
+    à horizon_start, puis enchaîner ses ops dans l'ordre de la gamme. C'est
+    le référentiel d'attendu le plus naïf possible — la doctrine OF+EVENT
+    ne dispose pas de mécanisme de lissage des lancements.
+    """
+    from datetime import datetime, timedelta
+
+    try:
+        base_dt = datetime.fromisoformat(horizon_start)
+    except ValueError:
+        base_dt = datetime.fromisoformat(horizon_start + "T00:00:00")
+
+    for of_id in of_ids:
+        of = conn.execute(
+            """
+            SELECT candidate_id, article_id, quantity
+            FROM manufacturing_orders WHERE of_id = ?
+            """,
+            (of_id,),
+        ).fetchone()
+        if of is None or of["candidate_id"] is None:
+            continue
+        cand_id = of["candidate_id"]
+        article_id = of["article_id"]
+        qty = float(of["quantity"])
+        ops = conn.execute(
+            """
+            SELECT sequence_idx, workstation_id, unit_time_min
+            FROM routing_operations WHERE article_id = ?
+            ORDER BY sequence_idx ASC
+            """,
+            (article_id,),
+        ).fetchall()
+        if not ops:
+            continue
+
+        cumul_min = 0.0
+        for op in ops:
+            op_minutes = float(op["unit_time_min"]) * qty
+            start_dt = base_dt + timedelta(minutes=cumul_min)
+            finish_dt = start_dt + timedelta(minutes=op_minutes)
+            for evt_type, evt_dt in (
+                ("op_start", start_dt),
+                ("op_finish", finish_dt),
+            ):
+                conn.execute(
+                    """
+                    INSERT INTO expected_events
+                        (batch_id, contract_id, candidate_id, event_type,
+                         sequence_idx, workstation_id, expected_at, expected_qty)
+                    VALUES (?, 'OF-VIRTUAL', ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        batch_id, cand_id, evt_type,
+                        int(op["sequence_idx"]), op["workstation_id"],
+                        evt_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                        qty,
+                    ),
+                )
+            cumul_min += op_minutes
+
+        close_dt = base_dt + timedelta(minutes=cumul_min)
+        conn.execute(
+            """
+            INSERT INTO expected_events
+                (batch_id, contract_id, candidate_id, event_type,
+                 expected_at, expected_qty)
+            VALUES (?, 'OF-VIRTUAL', ?, 'of_close', ?, ?)
+            """,
+            (
+                batch_id, cand_id,
+                close_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                qty,
+            ),
+        )
+
+
+def run_of_event_doctrine(
+    scenario: Scenario, db_path: Path, *,
+    fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
+    parameter_overrides: dict[str, float] | None = None,
+) -> RunResult:
+    """Doctrine OF+EVENT (L8.4) : V0 OF-driven + event sourcing.
+
+    Combinaison qui n'existe pas dans le cadrage stratifié original — on la
+    construit pour isoler scientifiquement l'apport propre du flux. On a
+    alors la matrice 2×2 : (flux ✗, event ✗)=OF, (flux ✓, event ✗)=FLUX,
+    (flux ✗, event ✓)=OF+EVENT, (flux ✓, event ✓)=EVENT.
+
+    Architecture : P1 direct (comme OF, pas de contrat) + tranche virtuelle
+    pour porter les expected_events, puis le même pipeline matching → causes
+    → dual tolérance → boucle physique → mémoire qu'EVENT.
+    """
+    _bootstrap_db(scenario, db_path, fixtures_dir)
+    result = RunResult(
+        doctrine=DOCTRINE_OF_EVENT, scenario_name=scenario.name,
+        db_path=db_path, seed=scenario.seed,
+    )
+    rng = random.Random(scenario.seed)
+    state = HazardState()
+
+    defaults = {
+        "matching_time_tolerance_minutes": 1440.0,
+        "cpm_margin_minutes": 240.0,
+        "tolerance_threshold_watch": 0.20,
+        "tolerance_threshold_correct_local": 0.50,
+        "tolerance_threshold_replan_local": 1.00,
+        "tolerance_threshold_escalate": 2.00,
+        "tolerance_threshold_replan_global": 3.50,
+    }
+    if parameter_overrides:
+        defaults.update(parameter_overrides)
+
+    with db_session(db_path) as conn:
+        for name, value in defaults.items():
+            conn.execute(
+                "INSERT INTO parameters (scope, scope_ref, name, value_num) "
+                "VALUES ('global', NULL, ?, ?)",
+                (name, float(value)),
+            )
+
+        # P1 immédiat sur les SO initiaux (mode OF — pas de contrat)
+        p1 = run_p1_promotion(conn, actor="of_event.p1")
+        result.aps_recalculations += 1
+        initial_of_ids: list[str] = []
+        for plan in p1.ofs_created:
+            result.of_created_day[plan.of_id] = 0
+            _launch_of_at_day(
+                conn, plan.of_id, horizon_start=scenario.horizon_start,
+                day=0, actor="of_event.mes",
+            )
+            initial_of_ids.append(plan.of_id)
+
+        # Tranche virtuelle + expected events pour la couche événementielle
+        batch_id = _create_virtual_batch_for_of(conn, scenario)
+        result.batch_id = batch_id
+        _generate_expected_from_ofs(
+            conn, initial_of_ids, scenario.horizon_start, batch_id
+        )
+
+        hazards_by_day: dict[int, list] = {}
+        for h in scenario.hazards:
+            hazards_by_day.setdefault(h.day, []).append(h)
+
+        for day in range(1, scenario.horizon_days + 1):
+            _receive_due_purchase_orders(conn, scenario, day)
+            for h in hazards_by_day.get(day, []):
+                _apply_hazard(conn, scenario, h, state, result, DOCTRINE_OF_EVENT)
+                if h.kind == HAZARD_URGENT_ORDER:
+                    state.urgent_seen_count += 1
+                    compute_candidates(conn)
+                    if state.urgent_seen_count == 1:
+                        result.aps_recalculations += 1
+                    else:
+                        # L8.1.c : absorption locale au-delà du 1er urgent
+                        result.corrective_actions_applied.append({
+                            "day": day,
+                            "decision_id": None,
+                            "action_level": "absorb_urgent",
+                            "effect": "urgent_absorbed_no_aps_replan",
+                            "urgent_count": state.urgent_seen_count,
+                        })
+                    p1 = run_p1_promotion(conn, actor="of_event.p1")
+                    new_of_ids: list[str] = []
+                    for plan in p1.ofs_created:
+                        result.of_created_day[plan.of_id] = day
+                        _launch_of_at_day(
+                            conn, plan.of_id,
+                            horizon_start=scenario.horizon_start,
+                            day=day, actor="of_event.mes",
+                        )
+                        new_of_ids.append(plan.of_id)
+                    # Étend les expected_events à ces nouveaux OFs
+                    if new_of_ids:
+                        _generate_expected_from_ofs(
+                            conn, new_of_ids,
+                            scenario.horizon_start, batch_id,
+                        )
+            _advance_one_day(
+                conn, scenario, day, state, result, rng, actor="of_event.mes",
+            )
+            _decay_breakdowns(state)
+            _measure_wip(conn, result, day)
+
+            # Couche événementielle V3 : match → causes → décision dual
+            match_actuals_to_expected(conn, batch_id)
+            for d in list_deviations(conn):
+                if not d.is_absorbed:
+                    attach_causes_to_deviation(conn, d.deviation_id)
+            evaluate_all_open_deviations(conn, batch_id=batch_id)
+            # L5.2 + L8.1 : boucle physique corrective
+            _apply_corrective_actions(conn, scenario, state, result, day)
+
+        # Capture mémoire P4 sur les OF clôturés
+        closed = conn.execute(
+            "SELECT of_id FROM manufacturing_orders WHERE status = 'closed' "
+            "ORDER BY of_id ASC"
+        ).fetchall()
+        for row in closed:
+            capture_recipe(conn, of_id=row["of_id"], outcome="success")
+    return result
+
+
+# ----------------------------------------------------------------------
 # Dispatch
 # ----------------------------------------------------------------------
 
@@ -1077,6 +1329,7 @@ def run_event_doctrine(
 _DISPATCH = {
     DOCTRINE_OF: run_of_doctrine,
     DOCTRINE_FLUX: run_flux_doctrine,
+    DOCTRINE_OF_EVENT: run_of_event_doctrine,
     DOCTRINE_EVENT: run_event_doctrine,
 }
 

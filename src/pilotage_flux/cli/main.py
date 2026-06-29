@@ -2143,6 +2143,28 @@ def compare_doctrines_extended(
         )
     console.print(tbl)
 
+    # Décomposition 2×2 (flux × event sourcing) si 4 doctrines présentes
+    if any("of_event" in by_doc for by_doc in study.aggregates.values()):
+        tbl2 = Table(title="Décomposition 2×2 — Δ coût (€) vs OF (référence)")
+        tbl2.add_column("Scénario")
+        tbl2.add_column("OF (réf)", justify="right")
+        tbl2.add_column("FLUX seul", justify="right")
+        tbl2.add_column("EVENT seul (OF+ES)", justify="right")
+        tbl2.add_column("Combiné (FLUX+ES)", justify="right")
+        for scen, by_doc in study.aggregates.items():
+            if "of" not in by_doc:
+                continue
+            of_cost = by_doc["of"].total_cost_eur_mean
+            row = [scen, f"{of_cost:.0f}"]
+            for key in ("flux", "of_event", "event"):
+                if key in by_doc:
+                    delta = by_doc[key].total_cost_eur_mean - of_cost
+                    row.append(f"{delta:+.0f}")
+                else:
+                    row.append("—")
+            tbl2.add_row(*row)
+        console.print(tbl2)
+
 
 @app.command("learning-loop")
 def learning_loop(

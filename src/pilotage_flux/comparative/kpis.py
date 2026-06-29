@@ -33,6 +33,7 @@ from pilotage_flux.comparative.runner import RunResult
 from pilotage_flux.comparative.scenario import (
     DOCTRINE_EVENT,
     DOCTRINE_FLUX,
+    DOCTRINE_OF_EVENT,
     Scenario,
 )
 
@@ -116,7 +117,7 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
         ).fetchone()
         quality_events = int(qe_row["n"]) if qe_row else 0
 
-        if result.doctrine == DOCTRINE_EVENT:
+        if result.doctrine in (DOCTRINE_EVENT, DOCTRINE_OF_EVENT):
             row = conn.execute(
                 "SELECT COUNT(*) AS n FROM event_deviations"
             ).fetchone()

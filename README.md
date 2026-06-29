@@ -6,9 +6,9 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 ## État
 
-**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2), **V7** (L7.1) et **V8** (L8.1 + L8.3) complets.
+**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2), **V7** (L7.1) et **V8** (L8.1 + L8.3 + L8.4) complets.
 
-- 273 tests pytest verts, dont sept tests d'acceptation end-to-end :
+- 276 tests pytest verts, dont huit tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
@@ -126,6 +126,7 @@ tests/              146 tests : unitaires + intégration + acceptation
 | Modèle de coûts data-driven (matière + MOD + MOI) | `costing/` | V7 ✓ |
 | Boucle physique V3 étendue (4 familles d'aléas) | `comparative/runner.py:_apply_corrective_actions` | V8 ✓ |
 | Apprentissage long auto-tune seuils filtre dual | `comparative/learning.py` | V8 ✓ |
+| 4ème doctrine OF+EVENT (décomposition 2×2 flux × event) | `comparative/runner.py:run_of_event_doctrine` | V8 ✓ |
 
 ## V2 — extensions livrées
 
@@ -353,6 +354,57 @@ d'actions locales (vs escalate). Le seuil `tolerance_threshold_escalate`
 converge de 2.0 vers 2.88. C'est l'opérationalisation du §7 bis.5 du
 cadrage : « C'est par lui [le filtre] que la solution apprend de ses
 clôtures. »
+
+## L8.4 — 4ème doctrine OF+EVENT (isolation de l'apport flux)
+
+Pour décomposer scientifiquement l'apport propre du flux vs l'apport propre
+de l'event sourcing, on a ajouté une 4ème doctrine **OF+EVENT** : V0 OF-driven
+(pas de contrat de flux, pas de freeze) + couche événementielle V3 complète.
+
+Architecture : `_create_virtual_batch_for_of` + `_generate_expected_from_ofs`
+posent un référentiel d'attendus depuis les OFs directement, sans contrat
+ni lissage. Le reste du pipeline V3 (matching, dual tolérance, boucle
+physique, mémoire) est inchangé.
+
+On obtient la matrice 2×2 :
+
+| | Flux ✗ | Flux ✓ |
+|---|---|---|
+| **Event ✗** | OF | FLUX |
+| **Event ✓** | **OF+EVENT** | EVENT |
+
+Résultat (5 seeds × 4 scénarios × **4 doctrines** = 80 runs) — **Δ coût vs OF** :
+
+| Scénario | OF (réf) | FLUX seul | EVENT seul (OF+ES) | Combiné (FLUX+ES) |
+|---|---|---|---|---|
+| baseline | 18 759 € | **+0** | **-7 816** | -7 816 |
+| stress_double_breakdown | 18 326 € | **+0** | **-7 925** | -7 925 |
+| stress_cascade_nc | 7 864 € | **+0** | **-182** | -182 |
+| stress_demand_spike | 12 422 € | **+0** | **+0** | +0 |
+
+**Trois conclusions scientifiques** sur les scénarios actuels :
+
+1. **« Flux seul » apporte exactement 0 €** sur les 4 scénarios. La
+   contractualisation V1+V2 sans event sourcing ne change rien de mesurable.
+2. **« Event seul » récupère 100 % de l'apport** de la combinaison. La couche
+   événementielle + boucle physique fait le job toute seule.
+3. **L'apport opérationnel est dans la couche événementielle**, pas dans la
+   contractualisation. Plus précisément : la contractualisation flux est un
+   **substrat structurel nécessaire** (objets versionnés, traçabilité,
+   gouvernance) mais opérationnellement **silencieux** sans la couche V3.
+
+### Caveats scientifiques
+
+Ce résultat tient **sur nos 4 scénarios canoniques avec 1 contrat de flux**.
+Trois mécanismes flux ne sont pas exercés par ces scénarios :
+
+- **Cohérence collective P3 multi-contrats** (`gates/p3_collective.py`)
+- **Lissage des lancements** (`flux/smoothing.py`)
+- **P3 inverse / fragmentation lot streaming** (`gates/p3_inverse.py`)
+
+Sur des scénarios qui exerceraient ces mécanismes (multi-contrats, ≥10 OF
+concurrents J0, urgences nombreuses), **EVENT > OF+EVENT** est attendu. Pas
+encore mesuré.
 
 ## Critères de succès validés par tests d'acceptation
 

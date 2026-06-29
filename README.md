@@ -6,12 +6,14 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 ## État
 
-**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7) et **V2** (L2.1 → L2.7) complets.
+**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7) et **V4** (L4.1 → L4.3) complets.
 
-- 201 tests pytest verts, dont trois tests d'acceptation end-to-end :
+- 253 tests pytest verts, dont cinq tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
+  - `test_acceptance_v3` couche événementielle (attendus / matching / CPM / causes / dual tolérance / mémoire)
+  - `test_acceptance_v4` étude comparative (OF / FLUX / EVENT sur même scénario, KPIs §19)
 
 ## Setup (Windows, PowerShell)
 
@@ -109,6 +111,13 @@ tests/              146 tests : unitaires + intégration + acceptation
 | Porte P4 (clôture) | `mes/closure.py` | V0 ✓ |
 | Event sourcing + reconstruction | `events/` | V0 ✓ |
 | Pegging multi-niveau | `aps/pegging.py` | V1 ✓ |
+| Événements attendus | `events_v3/expected.py` | V3 ✓ |
+| Matching attendu/réel + score | `events_v3/matching.py` | V3 ✓ |
+| Absorption CPM niveau 0 | `events_v3/cpm.py` | V3 ✓ |
+| Causes racines bayésiennes | `events_v3/root_causes.py` | V3 ✓ |
+| Filtre dual de tolérances | `events_v3/dual_tolerance.py` | V3 ✓ |
+| Filtre dual de mémoire (apprentissage) | `events_v3/dual_memory.py` | V3 ✓ |
+| Étude comparative doctrinale (OF/FLUX/EVENT) | `comparative/` | V4 ✓ |
 
 ## V2 — extensions livrées
 
@@ -130,12 +139,63 @@ tests/              146 tests : unitaires + intégration + acceptation
   une même séquence d'opération, sélection par `pick_workstation` avec
   stratégie 'preferred' ou 'fastest'.
 
-## Reporté à V3
+## V3 — extensions livrées (couche événementielle lean)
 
-- Événements attendus vs réels (couche événementielle V3 complète).
-- Filtre dual de tolérances et de mémoire (cf. §7 bis.4 et §7 bis.5 du cadrage).
-- Causes racines bayésiennes pondérées.
-- Apprentissage automatique des seuils.
+- **Événements attendus** (`events_v3/expected.py`) : `generate_expected_from_batch`
+  produit, à partir d'une tranche gelée + lissage, les événements attendus
+  (`op_start`, `op_finish`, `of_close`) avec horodatage prévisionnel.
+- **Matching attendu/réel** (`events_v3/matching.py`) : apparie les MES events
+  réels (OP_STARTED, OP_FINISHED, OF_CLOSED) à leurs attendus, calcule
+  `delta_time` et `score` normalisés. Le seuil de tolérance temporelle est
+  désormais **data-driven** via `parameters.matching_time_tolerance_minutes`.
+- **Absorption CPM** (`events_v3/cpm.py`) : marge `cpm_margin_minutes`
+  paramétrable ; les écarts en-dessous de la marge ne déclenchent pas d'action.
+- **Causes racines bayésiennes** (`events_v3/root_causes.py`) : 6 règles
+  seedées (panne, défaut qualité, rupture composant, retard logistique,
+  modification demande, surcharge goulot) ; `attach_causes_to_deviation`
+  applique un score `weight × confidence` à chaque déviation non absorbée.
+- **Filtre dual de tolérances** (`events_v3/dual_tolerance.py` — §7 bis.4) :
+  combine magnitude × récurrence sur fenêtre, mappe sur 6 niveaux d'action
+  (inform → replan_global) avec latence configurable.
+- **Filtre dual de mémoire** (`events_v3/dual_memory.py` — §7 bis.5) :
+  capture la recette (écart + cause + décision + résultat) à la clôture P4,
+  score significativité × récurrence, décide retenir/journaliser, et
+  permet la mise à jour des paramètres (apprentissage).
+
+## V4 — étude comparative doctrinale
+
+Trois doctrines exécutent le **même scénario** (commandes + aléas datés +
+seed déterministe) sur des bases SQLite séparées (cf. `comparative/`) :
+
+| Doctrine | Périmètre |
+|---|---|
+| `of` | APS+MES OF-driven (V0) — pas de contrat de flux, pas de freeze, replan global sur chaque aléa |
+| `flux` | APS+MES flux (V1+V2) — contrats, portes P2/P3, freeze, stocks/qualité/logistique mais pas d'event sourcing |
+| `event` | APS+MES event sourcing (V3) — V1+V2 + expected/match/CPM/causes/dual tolerance |
+
+KPIs mesurés (§19 cadrage) : lead time, WIP, recalculs APS, nervosité, écarts
+détectés, actions filtre dual, replans locaux/globaux, causes attachées.
+
+Exécution :
+
+```powershell
+python -m pilotage_flux compare-doctrines --report-path data/runs/comparative_report.md
+```
+
+Résultats sur le scénario `baseline` (10 jours, 3 SO ART-A, 4 aléas) :
+
+| KPI | OF | FLUX | EVENT |
+|---|---|---|---|
+| Recalculs APS | 5 | 5 | **2** |
+| Nervosité (replan/jour) | 0.50 | 0.50 | **0.20** |
+| Écarts détectés | 0 | 0 | **24** |
+| Actions filtre dual (correct/replan local) | 0 | 0 | **3** |
+| Replans globaux | 0 | 0 | 0 |
+| Causes attachées | 0 | 0 | **72** |
+| Événements qualité | 0 | 2 | 2 |
+
+→ V3 divise la nervosité par 2.5 et apporte une traçabilité complète des
+écarts et des causes, sans dégrader le lead time ni le WIP.
 
 ## Critères de succès validés par tests d'acceptation
 
@@ -161,3 +221,21 @@ tests/              146 tests : unitaires + intégration + acceptation
 14. Workflow qualité : contrôle PASS + libération tracés
 15. Workflow logistique : feed + ship + queue calculée correctement
 16. Routings alternatifs déclarables, pick_workstation déterministe
+
+`tests/test_acceptance_v3.py` (V3) :
+17. Génération expected_events depuis tranche gelée (16 events / 4 candidates)
+18. Matching attendu/réel produit des deviations qualifiées (low/medium/high/critical)
+19. Absorption CPM (marge data-driven via parameters.cpm_margin_minutes)
+20. Causes racines attachées (6 règles seedées disponibles)
+21. Filtre dual de tolérances : décision par déviation avec action_level valide
+22. Filtre dual de mémoire : capture recette + score + décision retain/log_only
+23. Apprentissage : mise à jour data-driven d'un paramètre depuis une recette retenue
+
+`tests/test_acceptance_v4.py` (V4 — étude comparative) :
+24. Les 3 doctrines (OF/FLUX/EVENT) terminent le même scénario sans erreur
+25. Seul V3 détecte des écarts (deviations_detected > 0)
+26. Seul V3 attache des causes (causes_attached > 0)
+27. V3 produit au moins une correction locale (filtre dual calibré)
+28. Nervosité V3 ≤ nervosité V1+V2 ≤ nervosité OF (par construction)
+29. Même nombre d'OF clôturés entre doctrines (la doctrine ne change pas la réalité physique)
+30. Reproductibilité : 2 runs successifs même doctrine → mêmes KPIs

@@ -1,0 +1,4 @@
+workstation_id,label,sequence_idx
+WS-1,Poste 1 - Decoupe,1
+WS-2,Poste 2 - Assemblage,2
+WS-3,Poste 3 - Controle,3

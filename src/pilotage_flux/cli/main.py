@@ -92,7 +92,7 @@ from pilotage_flux.events import (
     append_event,
     reconstruct_of,
 )
-from pilotage_flux.gates import run_p1_promotion
+from pilotage_flux.gates import run_p1_promotion, run_p3_collective_freeze
 from pilotage_flux.importers import import_referentials
 from pilotage_flux.mes import (
     compute_consumption_gaps,
@@ -103,7 +103,19 @@ from pilotage_flux.mes import (
     finish_operation,
     close_of,
 )
-from pilotage_flux.visualization import of_detail_view, workstation_view
+from pilotage_flux.visualization import (
+    decision_flow_view,
+    event_flow_view,
+    material_flow_view,
+    of_detail_view,
+    quality_flow_view,
+    workstation_view,
+)
+from pilotage_flux.costing import (
+    compute_of_cost,
+    compute_run_cost_report,
+    seed_default_unit_costs,
+)
 from pilotage_flux.comparative import (
     ALL_SCENARIOS,
     DOCTRINES,
@@ -1852,6 +1864,214 @@ def compare_doctrines(
     console.print(f"[green]OK[/green] rapport écrit : [bold]{report_path}[/bold]")
 
 
+@app.command("costs")
+def costs(
+    run: str = typer.Option("default", help="Nom du run."),
+    seed_defaults: bool = typer.Option(
+        True, "--seed/--no-seed",
+        help="Seed des prix unitaires/taux horaires si absents (idempotent).",
+    ),
+    of_id: str | None = typer.Option(None, help="Détail d'un OF spécifique."),
+) -> None:
+    """Affiche le breakdown coûts (matière + MOD + MOI + scrap) du run."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+
+    with db_session(path) as conn:
+        if seed_defaults:
+            n = seed_default_unit_costs(conn)
+            if n > 0:
+                console.print(f"[dim](seedé {n} paramètres de coût)[/dim]")
+        if of_id:
+            breakdown = compute_of_cost(conn, of_id)
+            console.print(f"[bold]{breakdown.of_id}[/bold] — {breakdown.article_id}")
+            console.print(f"  quantité       : {breakdown.quantity:.0f} (bon {breakdown.qty_good:.0f}, rebut {breakdown.qty_scrap:.0f})")
+            console.print(f"  matière        : {breakdown.material_cost:.2f} €")
+            console.print(f"  MOD            : {breakdown.mod_cost:.2f} €")
+            console.print(f"  MOI            : {breakdown.moi_cost:.2f} €")
+            console.print(f"  scrap          : {breakdown.scrap_cost:.2f} €")
+            console.print(f"  [bold]total          : {breakdown.total_cost:.2f} €[/bold]")
+            console.print(f"  coût/unité bon : {breakdown.cost_per_good_unit:.2f} €")
+            if breakdown.unvalued_articles:
+                console.print(
+                    f"  [yellow]articles sans prix[/yellow] : {breakdown.unvalued_articles}"
+                )
+            if breakdown.unvalued_workstations:
+                console.print(
+                    f"  [yellow]postes sans taux[/yellow] : {breakdown.unvalued_workstations}"
+                )
+            return
+        report = compute_run_cost_report(conn)
+
+    tbl = Table(title=f"Coûts par OF — run {run}")
+    for col in ("OF", "Article", "Qté", "Matière", "MOD", "MOI", "Scrap", "Total", "€/unité bon"):
+        tbl.add_column(col, justify="right" if col != "Article" and col != "OF" else "left")
+    for b in report.of_breakdowns:
+        tbl.add_row(
+            b.of_id, b.article_id, f"{b.quantity:.0f}",
+            f"{b.material_cost:.0f}", f"{b.mod_cost:.0f}",
+            f"{b.moi_cost:.0f}", f"{b.scrap_cost:.0f}",
+            f"{b.total_cost:.0f}", f"{b.cost_per_good_unit:.2f}",
+        )
+    console.print(tbl)
+    console.print(
+        f"\n[bold]Totaux[/bold] : matière {report.total_material:.0f} € | "
+        f"MOD {report.total_mod:.0f} € | MOI {report.total_moi:.0f} € | "
+        f"scrap {report.total_scrap:.0f} € | "
+        f"[bold]grand total {report.grand_total:.0f} €[/bold] "
+        f"({report.cost_per_of:.0f} €/OF)"
+    )
+
+
+@app.command("p3-collective")
+def p3_collective(
+    run: str = typer.Option("default", help="Nom du run."),
+    contracts: str = typer.Option(
+        ..., help="IDs de contrats séparés par virgule (ex : FX-0001,FX-0002)."
+    ),
+    cycle_id: str | None = typer.Option(None, help="ID du cycle territorial (optionnel)."),
+) -> None:
+    """Évalue et fige collectivement N contrats sur le même horizon (L6.1)."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+    cids = [c.strip() for c in contracts.split(",") if c.strip()]
+    with db_session(path) as conn:
+        result = run_p3_collective_freeze(conn, cids, cycle_id=cycle_id)
+    console.print(
+        f"[bold]P3 collective[/bold] horizon {result.horizon_start} → {result.horizon_end}"
+    )
+    console.print(f"  décision : [yellow]{result.decision}[/yellow]")
+    if result.bottleneck_workstation:
+        console.print(
+            f"  goulot : {result.bottleneck_workstation} "
+            f"(charge {result.bottleneck_load:.0f} / capa {result.bottleneck_capacity:.0f} min)"
+        )
+    if result.frozen_contracts:
+        console.print(f"  [green]gelés[/green] : {result.frozen_contracts}")
+    if result.deferred_contracts:
+        console.print(f"  [yellow]reportés[/yellow] : {result.deferred_contracts}")
+    if result.rejected_contracts:
+        for cid, reason in result.rejected_contracts:
+            console.print(f"  [red]rejeté[/red] {cid} : {reason}")
+    if result.batch_id:
+        console.print(f"  tranche : [bold]{result.batch_id}[/bold]")
+
+
+@app.command("flow-material")
+def flow_material(
+    run: str = typer.Option("default", help="Nom du run."),
+) -> None:
+    """Famille 2 — flux matière (stocks + PO + conso vs théorique)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        report = material_flow_view(conn)
+    tbl = Table(title="Flux matière")
+    for col in ("Article", "Stock", "Réservé", "PO ouv.", "Consommé",
+                "Théorique BOM", "Écart"):
+        tbl.add_column(col, justify="right" if col != "Article" else "left")
+    for item in report.items:
+        tbl.add_row(
+            item.article_id,
+            f"{item.qty_on_hand:.1f}",
+            f"{item.qty_reserved:.1f}",
+            f"{item.qty_on_order:.1f}",
+            f"{item.qty_consumed:.1f}",
+            f"{item.qty_theoretical:.1f}",
+            f"{item.qty_gap:+.1f}",
+        )
+    console.print(tbl)
+
+
+@app.command("flow-quality")
+def flow_quality(
+    run: str = typer.Option("default", help="Nom du run."),
+) -> None:
+    """Famille 3 — flux qualité (yield rate, NCs)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        report = quality_flow_view(conn)
+    tbl = Table(title=f"Flux qualité (yield global : {report.overall_yield_rate:.1%})")
+    for col in ("OF", "Article", "Qté", "Bon", "Rebut", "Yield",
+                "NC", "Bloc.", "Libéré"):
+        tbl.add_column(col)
+    for item in report.items:
+        tbl.add_row(
+            item.of_id, item.article_id,
+            f"{item.quantity:.0f}",
+            f"{item.qty_good:.0f}", f"{item.qty_scrap:.0f}",
+            f"{item.yield_rate:.1%}",
+            str(item.nc_opened),
+            "OUI" if item.blocked else "—",
+            "OUI" if item.released else "—",
+        )
+    console.print(tbl)
+
+
+@app.command("flow-decision")
+def flow_decision(
+    run: str = typer.Option("default", help="Nom du run."),
+) -> None:
+    """Famille 4 — flux décisionnel (portes + zones + filtre dual)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        report = decision_flow_view(conn)
+    tbl_gates = Table(title=f"Décisions des portes ({len(report.gate_decisions)})")
+    for col in ("Porte", "Sujet", "Décision", "Cycle", "Quand"):
+        tbl_gates.add_column(col)
+    for d in report.gate_decisions[-15:]:
+        tbl_gates.add_row(
+            d.gate, f"{d.subject_type}:{d.subject_id}", d.decision,
+            d.cycle_id or "—", d.at_time,
+        )
+    console.print(tbl_gates)
+    tbl_tol = Table(title=f"Filtre dual de tolérances ({len(report.tolerance_actions)})")
+    for col in ("ID", "Candidate", "Action", "Score", "Triggered"):
+        tbl_tol.add_column(col)
+    by_level = report.actions_by_level()
+    for a in report.tolerance_actions[-15:]:
+        tbl_tol.add_row(
+            str(a.decision_id), a.candidate_id or "—",
+            a.action_level, f"{a.score_combined:.3f}",
+            a.triggered_at or "(pending)",
+        )
+    console.print(tbl_tol)
+    if by_level:
+        console.print(f"Niveaux d'action : {by_level}")
+
+
+@app.command("flow-events")
+def flow_events(
+    run: str = typer.Option("default", help="Nom du run."),
+    batch: str | None = typer.Option(None, help="Limiter à une tranche gelée."),
+) -> None:
+    """Famille 5 — flux événementiel (attendus vs réels + causes)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        report = event_flow_view(conn, batch_id=batch)
+    tbl = Table(
+        title=f"Flux événementiel — {report.total_matched}/{report.total_expected} "
+              f"matched ({report.match_rate:.0%})"
+    )
+    for col in ("Candidate", "Type", "Attendu", "Réel", "Δ min",
+                "Qualif.", "Absorbé", "Cause"):
+        tbl.add_column(col)
+    for line in report.lines[:30]:
+        tbl.add_row(
+            line.candidate_id, line.event_type,
+            line.expected_at[:16] if line.expected_at else "—",
+            line.actual_at[:16] if line.actual_at else "—",
+            f"{line.delta_minutes:.0f}" if line.delta_minutes is not None else "—",
+            line.qualification or "—",
+            "OUI" if line.is_absorbed else "—",
+            line.cause_label or "—",
+        )
+    console.print(tbl)
+
+
 @app.command("compare-doctrines-extended")
 def compare_doctrines_extended(
     seeds: str = typer.Option(
@@ -1899,11 +2119,12 @@ def compare_doctrines_extended(
     console.print(f"[green]OK[/green] rapport étendu : [bold]{report_path}[/bold]")
 
     # Tableau de résumé par scénario
-    tbl = Table(title="Synthèse — Δ nervosité V3 vs FLUX par scénario")
+    tbl = Table(title="Synthèse — apport V3 vs FLUX par scénario")
     tbl.add_column("Scénario")
     tbl.add_column("Δ nervosité", justify="right")
-    tbl.add_column("Δ lead time", justify="right")
+    tbl.add_column("Δ lead time (j)", justify="right")
     tbl.add_column("Δ WIP", justify="right")
+    tbl.add_column("Δ coût (€)", justify="right")
     tbl.add_column("Détections V3", justify="right")
     for scen, by_doc in study.aggregates.items():
         if "event" not in by_doc or "flux" not in by_doc:
@@ -1915,6 +2136,7 @@ def compare_doctrines_extended(
             f"{ev.nervousness_mean - fx.nervousness_mean:+.3f}",
             f"{ev.lead_time_avg_mean - fx.lead_time_avg_mean:+.3f}",
             f"{ev.wip_mean - fx.wip_mean:+.3f}",
+            f"{ev.total_cost_eur_mean - fx.total_cost_eur_mean:+.0f}",
             f"{ev.deviations_detected_mean:.1f}",
         )
     console.print(tbl)

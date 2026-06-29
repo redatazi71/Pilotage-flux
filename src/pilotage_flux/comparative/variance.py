@@ -49,6 +49,10 @@ class AggregatedKpi:
     causes_attached_mean: float
     quality_events_mean: float
     of_closed_mean: float
+    total_cost_eur_mean: float = 0.0
+    total_cost_eur_std: float = 0.0
+    cost_per_of_eur_mean: float = 0.0
+    cost_scrap_eur_mean: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -76,6 +80,9 @@ def aggregate_kpis(
     cau_m, _ = _stat([float(k.causes_attached) for k in kpis])
     qua_m, _ = _stat([float(k.quality_events) for k in kpis])
     cls_m, _ = _stat([float(k.of_closed) for k in kpis])
+    cost_m, cost_s = _stat([k.total_cost_eur for k in kpis])
+    cost_per_m, _ = _stat([k.cost_per_of_eur for k in kpis])
+    scrap_m, _ = _stat([k.cost_scrap_eur for k in kpis])
     return AggregatedKpi(
         doctrine=doctrine,
         scenario_name=scenario_name,
@@ -93,6 +100,10 @@ def aggregate_kpis(
         causes_attached_mean=round(cau_m, 2),
         quality_events_mean=round(qua_m, 2),
         of_closed_mean=round(cls_m, 2),
+        total_cost_eur_mean=round(cost_m, 2),
+        total_cost_eur_std=round(cost_s, 2),
+        cost_per_of_eur_mean=round(cost_per_m, 2),
+        cost_scrap_eur_mean=round(scrap_m, 2),
     )
 
 
@@ -196,6 +207,9 @@ def build_variance_report(study: VarianceStudy) -> str:
             ("Replans globaux (moy.)", lambda a: f"{a.replan_global_mean:.1f}"),
             ("Causes attachées (moy.)", lambda a: f"{a.causes_attached_mean:.1f}"),
             ("Événements qualité (moy.)", lambda a: f"{a.quality_events_mean:.1f}"),
+            ("Coût total (€)", lambda a: f"{a.total_cost_eur_mean:.0f} ± {a.total_cost_eur_std:.0f}"),
+            ("Coût par OF (€)", lambda a: f"{a.cost_per_of_eur_mean:.0f}"),
+            ("Coût scrap (€)", lambda a: f"{a.cost_scrap_eur_mean:.0f}"),
         ]
         for kpi_label, fmt in rows:
             cells = [kpi_label] + [fmt(a) for a in ordered]
@@ -214,22 +228,24 @@ def build_variance_report(study: VarianceStudy) -> str:
             d_nrv = ev.nervousness_mean - fx.nervousness_mean
             d_lead = ev.lead_time_avg_mean - fx.lead_time_avg_mean
             d_wip = ev.wip_mean - fx.wip_mean
+            d_cost = ev.total_cost_eur_mean - fx.total_cost_eur_mean
             deltas.append({
                 "scenario": scen,
                 "delta_nervousness": d_nrv,
                 "delta_lead_time": d_lead,
                 "delta_wip": d_wip,
+                "delta_cost_eur": d_cost,
                 "detection_count": ev.deviations_detected_mean,
                 "causes": ev.causes_attached_mean,
             })
     if deltas:
-        lines.append("| Scénario | Δ nervosité (V3 - FLUX) | Δ lead time (V3 - FLUX) | Δ WIP (V3 - FLUX) | Écarts détectés V3 | Causes V3 |")
+        lines.append("| Scénario | Δ nervosité | Δ lead time (j) | Δ WIP | Δ coût (€) | Écarts V3 |")
         lines.append("|---|---|---|---|---|---|")
         for d in deltas:
             lines.append(
                 f"| {d['scenario']} | {d['delta_nervousness']:+.3f} | "
                 f"{d['delta_lead_time']:+.3f} | {d['delta_wip']:+.3f} | "
-                f"{d['detection_count']:.1f} | {d['causes']:.1f} |"
+                f"{d['delta_cost_eur']:+.0f} | {d['detection_count']:.1f} |"
             )
     lines.append("")
     lines.append("**Lecture** : une valeur Δ négative signifie que V3 fait mieux que FLUX. "

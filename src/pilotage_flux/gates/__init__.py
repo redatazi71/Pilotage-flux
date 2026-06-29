@@ -30,6 +30,14 @@ from pilotage_flux.gates.p3_inverse import (
     get_lineage,
     return_to_negociable,
 )
+from pilotage_flux.gates.p3_collective import (
+    DECISION_DEFER_ALL,
+    DECISION_FREEZE_ALL,
+    CollectiveResult,
+    ContractLoadProfile,
+    evaluate_p3_collective,
+    run_p3_collective_freeze,
+)
 
 __all__ = [
     "run_p1_promotion",
@@ -57,4 +65,10 @@ __all__ = [
     "fragment_of",
     "get_lineage",
     "return_to_negociable",
+    "DECISION_DEFER_ALL",
+    "DECISION_FREEZE_ALL",
+    "CollectiveResult",
+    "ContractLoadProfile",
+    "evaluate_p3_collective",
+    "run_p3_collective_freeze",
 ]

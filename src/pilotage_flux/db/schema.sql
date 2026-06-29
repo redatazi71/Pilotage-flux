@@ -257,6 +257,152 @@ CREATE INDEX IF NOT EXISTS idx_zone_transitions_subject
 -- existe deja (cf. les wrappers Python qui catchent OperationalError).
 
 -- ---------------------------------------------------------------------
+-- V2 : implantations paralleles et hybrides (postes alternatifs)
+-- ---------------------------------------------------------------------
+-- Pour modeliser plusieurs postes capables d'executer la meme operation
+-- (parallele) ou un routage conditionnel (hybride), on ajoute une table
+-- routing_alternatives. Chaque ligne decrit un poste alternatif pour
+-- une (article, sequence_idx). routing_operations garde la version
+-- principale (legacy) ; routing_alternatives la complete.
+
+CREATE TABLE IF NOT EXISTS routing_alternatives (
+    alt_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id          TEXT NOT NULL REFERENCES articles(article_id),
+    sequence_idx        INTEGER NOT NULL,
+    workstation_id      TEXT NOT NULL REFERENCES workstations(workstation_id),
+    unit_time_min       REAL NOT NULL,
+    preference_order    INTEGER NOT NULL DEFAULT 100,  -- ordre de preference (faible = meilleur)
+    condition_json      TEXT NOT NULL DEFAULT '{}',    -- conditions de selection (V3)
+    UNIQUE (article_id, sequence_idx, workstation_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_routing_alt_article_seq
+    ON routing_alternatives (article_id, sequence_idx);
+
+-- ---------------------------------------------------------------------
+-- V2 : logistique (emplacements + transferts + files)
+-- ---------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS locations (
+    location_id     TEXT PRIMARY KEY,           -- ex: STOCK-IN, WS-1-IN, WS-1-OUT
+    label           TEXT NOT NULL,
+    kind            TEXT NOT NULL,              -- stock | ws_in | ws_out | shipping
+    workstation_id  TEXT REFERENCES workstations(workstation_id),
+    capacity        INTEGER,                    -- file max (NULL = illimite)
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS logistic_events (
+    log_event_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    of_id           TEXT REFERENCES manufacturing_orders(of_id),
+    of_op_id        INTEGER REFERENCES order_operations(of_op_id),
+    article_id      TEXT REFERENCES articles(article_id),
+    qty             REAL NOT NULL,
+    from_location   TEXT REFERENCES locations(location_id),
+    to_location     TEXT REFERENCES locations(location_id),
+    event_type      TEXT NOT NULL,
+        -- transfer | feed | evacuate | ship | receive
+    explanation     TEXT,
+    actor           TEXT,
+    at_time         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_logistic_events_of
+    ON logistic_events (of_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_logistic_events_location
+    ON logistic_events (to_location, event_type);
+
+-- ---------------------------------------------------------------------
+-- V2 : qualite (controles + non-conformites + libérations)
+-- ---------------------------------------------------------------------
+-- quality_controls : plans de controle (article, criterion, frequency).
+-- quality_events   : evenements terrain (control PASS/FAIL, NC, retouche,
+--                    liberation, blocage). Lies a un OF (et optionnellement
+--                    a une op_id pour la granularite).
+
+CREATE TABLE IF NOT EXISTS quality_controls (
+    control_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id      TEXT NOT NULL REFERENCES articles(article_id),
+    label           TEXT NOT NULL,
+    criterion       TEXT NOT NULL,                  -- ex: 'tolerance_5pct'
+    sample_rate     REAL NOT NULL DEFAULT 1.0,      -- 1.0 = 100% controle
+    blocking        INTEGER NOT NULL DEFAULT 1,     -- 1 si FAIL doit bloquer
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_quality_controls_article
+    ON quality_controls (article_id);
+
+CREATE TABLE IF NOT EXISTS quality_events (
+    quality_event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    of_id           TEXT NOT NULL REFERENCES manufacturing_orders(of_id),
+    of_op_id        INTEGER REFERENCES order_operations(of_op_id),
+    control_id      INTEGER REFERENCES quality_controls(control_id),
+    event_type      TEXT NOT NULL,
+        -- control_pass | control_fail | nc_opened | nc_rework | nc_scrap | release | block
+    severity        TEXT NOT NULL DEFAULT 'normal', -- normal | high | critical
+    qty_concerned   REAL,
+    explanation     TEXT,
+    actor           TEXT,
+    at_time         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_quality_events_of
+    ON quality_events (of_id, event_type);
+
+-- ---------------------------------------------------------------------
+-- V2 : consommations matiere reelles (mes_consumptions)
+-- ---------------------------------------------------------------------
+-- Chaque consommation matiere reelle declaree pendant l'execution d'un OF
+-- est tracee en mes_consumptions. La quantite est decompte de stocks.
+-- L'ecart matiere = qty_real - qty_theoretical (depuis BOM × OF.quantity)
+-- est calcule en lecture, pas persiste (recalculable depuis les donnees).
+
+CREATE TABLE IF NOT EXISTS mes_consumptions (
+    consumption_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+    of_id           TEXT NOT NULL REFERENCES manufacturing_orders(of_id),
+    of_op_id        INTEGER REFERENCES order_operations(of_op_id),
+    article_id      TEXT NOT NULL REFERENCES articles(article_id),
+    qty_consumed    REAL NOT NULL,
+    at_time         TEXT NOT NULL DEFAULT (datetime('now')),
+    note            TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_mes_consumptions_of
+    ON mes_consumptions (of_id, article_id);
+
+-- ---------------------------------------------------------------------
+-- V2 : stocks et achats ouverts
+-- ---------------------------------------------------------------------
+-- Modele V2 simple : un stock global par article (qty_available +
+-- qty_reserved) et des achats ouverts (purchase_orders) qui projettent une
+-- arrivee future. L'evaluation R-P2-05 utilise ces deux sources pour
+-- determiner si un composant achete est projetable.
+
+CREATE TABLE IF NOT EXISTS stocks (
+    article_id      TEXT PRIMARY KEY REFERENCES articles(article_id),
+    qty_available   REAL NOT NULL DEFAULT 0,
+    qty_reserved    REAL NOT NULL DEFAULT 0,
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS purchase_orders (
+    po_id           TEXT PRIMARY KEY,           -- ex: PO-0001
+    article_id      TEXT NOT NULL REFERENCES articles(article_id),
+    qty_ordered     REAL NOT NULL,
+    qty_received    REAL NOT NULL DEFAULT 0,
+    expected_at     TEXT,                       -- ISO date arrivee prevue
+    status          TEXT NOT NULL DEFAULT 'open',
+        -- open | partial | received | cancelled
+    supplier_ref    TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    received_at     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_article
+    ON purchase_orders (article_id, status);
+
+-- ---------------------------------------------------------------------
 -- V1 : contrats de flux versionnes (§7 bis.1)
 -- ---------------------------------------------------------------------
 -- Un contrat de flux regroupe plusieurs candidates negocies sur un meme

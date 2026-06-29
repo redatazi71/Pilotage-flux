@@ -37,6 +37,14 @@ from pilotage_flux.gates import (
     run_p2_on_libre_zone,
     run_p3_freeze,
 )
+from pilotage_flux.stocks_purchasing import (
+    cancel_purchase,
+    create_purchase,
+    list_purchases,
+    list_stocks,
+    receive_purchase,
+    set_stock,
+)
 from pilotage_flux.risk_debt import (
     expire_overdue_risk_debts,
     extinguish_risk_debt,
@@ -64,7 +72,10 @@ from pilotage_flux.events import (
 from pilotage_flux.gates import run_p1_promotion
 from pilotage_flux.importers import import_referentials
 from pilotage_flux.mes import (
+    compute_consumption_gaps,
+    declare_consumption,
     launch_of,
+    list_consumptions,
     start_operation,
     finish_operation,
     close_of,
@@ -512,6 +523,193 @@ def flux_smooth_cmd(
     for l in launches:
         tbl.add_row(l.candidate_id, str(l.offset_minutes), l.planned_start)
     console.print(tbl)
+
+
+@app.command("declare-consumption")
+def declare_consumption_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+    article: str = typer.Option(..., "--article"),
+    qty: float = typer.Option(..., "--qty"),
+    note: str = typer.Option(None, "--note"),
+) -> None:
+    """Declare une consommation matiere reelle pour un OF."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        c = declare_consumption(
+            conn, of_id=of_id, article_id=article, qty_consumed=qty, note=note
+        )
+    console.print(
+        f"[green]OK[/green] consumption {c.consumption_id} : "
+        f"{of_id} consomme {qty:g} {article}"
+    )
+
+
+@app.command("consumption-list")
+def consumption_list_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(None, "--of"),
+) -> None:
+    """Liste les consommations matiere (filtrable par OF)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        cons = list_consumptions(conn, of_id=of_id)
+    if not cons:
+        console.print("[yellow]Aucune consommation.[/yellow]")
+        return
+    tbl = Table(title=f"Consommations ({len(cons)})")
+    tbl.add_column("id", justify="right")
+    tbl.add_column("of_id")
+    tbl.add_column("article")
+    tbl.add_column("qty", justify="right")
+    tbl.add_column("at")
+    tbl.add_column("note")
+    for c in cons:
+        tbl.add_row(
+            str(c.consumption_id), c.of_id, c.article_id,
+            f"{c.qty_consumed:g}", c.at_time, c.note or "-",
+        )
+    console.print(tbl)
+
+
+@app.command("consumption-gaps")
+def consumption_gaps_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+) -> None:
+    """Affiche les ecarts matiere d'un OF (reel vs theorique BOM)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        gaps = compute_consumption_gaps(conn, of_id)
+    if not gaps:
+        console.print("[yellow]Aucun composant dans la BOM.[/yellow]")
+        return
+    tbl = Table(title=f"Ecarts consommation {of_id}")
+    tbl.add_column("article")
+    tbl.add_column("theorique", justify="right")
+    tbl.add_column("reel", justify="right")
+    tbl.add_column("ecart", justify="right")
+    tbl.add_column("ratio", justify="right")
+    for g in gaps:
+        color = "green" if abs(g.gap) < 0.01 else ("yellow" if g.gap < 0 else "red")
+        tbl.add_row(
+            g.article_id,
+            f"{g.qty_theoretical:g}",
+            f"{g.qty_real:g}",
+            f"[{color}]{g.gap:+g}[/{color}]",
+            f"{g.gap_ratio:+.1%}",
+        )
+    console.print(tbl)
+
+
+@app.command("stock-list")
+def stock_list_cmd(
+    run: str = typer.Option("default"),
+) -> None:
+    """Liste les niveaux de stock."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        levels = list_stocks(conn)
+    if not levels:
+        console.print("[yellow]Aucun stock initialise.[/yellow]")
+        return
+    tbl = Table(title=f"Stocks ({len(levels)})")
+    tbl.add_column("article")
+    tbl.add_column("qty_available", justify="right")
+    tbl.add_column("qty_reserved", justify="right")
+    tbl.add_column("qty_free", justify="right")
+    tbl.add_column("updated_at")
+    for s in levels:
+        tbl.add_row(
+            s.article_id,
+            f"{s.qty_available:g}",
+            f"{s.qty_reserved:g}",
+            f"{s.qty_free:g}",
+            s.updated_at,
+        )
+    console.print(tbl)
+
+
+@app.command("stock-set")
+def stock_set_cmd(
+    run: str = typer.Option("default"),
+    article: str = typer.Option(..., "--article"),
+    qty: float = typer.Option(..., "--qty"),
+) -> None:
+    """Definit le qty_available d'un article (idempotent)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        result = set_stock(conn, article, qty)
+    console.print(
+        f"[green]OK[/green] stock {article} : qty_available={result.qty_available:g}, "
+        f"qty_reserved={result.qty_reserved:g}"
+    )
+
+
+@app.command("po-create")
+def po_create_cmd(
+    run: str = typer.Option("default"),
+    article: str = typer.Option(..., "--article"),
+    qty: float = typer.Option(..., "--qty"),
+    expected_at: str = typer.Option(None, "--expected"),
+    supplier: str = typer.Option(None, "--supplier"),
+) -> None:
+    """Cree un achat ouvert."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        po = create_purchase(
+            conn, article_id=article, qty_ordered=qty,
+            expected_at=expected_at, supplier_ref=supplier,
+        )
+    console.print(
+        f"[green]OK[/green] {po.po_id} cree : {article} qty {qty:g} "
+        f"(expected {expected_at or '-'})"
+    )
+
+
+@app.command("po-list")
+def po_list_cmd(
+    run: str = typer.Option("default"),
+    status: str = typer.Option(None, "--status"),
+    article: str = typer.Option(None, "--article"),
+) -> None:
+    """Liste les achats ouverts."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        pos = list_purchases(conn, status=status, article_id=article)
+    if not pos:
+        console.print("[yellow]Aucun achat.[/yellow]")
+        return
+    tbl = Table(title=f"Achats ({len(pos)})")
+    tbl.add_column("po_id")
+    tbl.add_column("article")
+    tbl.add_column("qty_ordered", justify="right")
+    tbl.add_column("qty_received", justify="right")
+    tbl.add_column("status")
+    tbl.add_column("expected")
+    for p in pos:
+        tbl.add_row(
+            p.po_id, p.article_id,
+            f"{p.qty_ordered:g}", f"{p.qty_received:g}",
+            p.status, p.expected_at or "-",
+        )
+    console.print(tbl)
+
+
+@app.command("po-receive")
+def po_receive_cmd(
+    run: str = typer.Option("default"),
+    po_id: str = typer.Option(..., "--id"),
+    qty: float = typer.Option(..., "--qty"),
+) -> None:
+    """Reception (totale ou partielle) d'un PO."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        po = receive_purchase(conn, po_id, qty_received=qty)
+    console.print(
+        f"[green]OK[/green] {po_id} : {po.qty_received:g}/{po.qty_ordered:g} "
+        f"recus, statut {po.status}"
+    )
 
 
 @app.command("mes-launch")

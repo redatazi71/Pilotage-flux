@@ -1,4 +1,4 @@
-"""Moteur APS V1 : CBN multi-niveau, charge/capacite, pegging, contrats OF."""
+"""Moteur APS V1+V2 : CBN multi-niveau, charge/capacite, pegging, alternatives."""
 
 from pilotage_flux.aps.bom_flattener import (
     FlatNode,
@@ -18,6 +18,14 @@ from pilotage_flux.aps.pegging import (
     get_root_demand,
 )
 from pilotage_flux.aps.planner import promote_candidate_to_of, PlanningResult
+from pilotage_flux.aps.routing_alternatives import (
+    RoutingAlternative,
+    WorkstationChoice,
+    add_alternative,
+    available_workstations_for,
+    list_alternatives_for,
+    pick_workstation,
+)
 
 __all__ = [
     # CBN / planning
@@ -40,4 +48,11 @@ __all__ = [
     "get_outgoing",
     "get_pegging_chain",
     "get_root_demand",
+    # Routings alternatifs (V2)
+    "RoutingAlternative",
+    "WorkstationChoice",
+    "add_alternative",
+    "available_workstations_for",
+    "list_alternatives_for",
+    "pick_workstation",
 ]

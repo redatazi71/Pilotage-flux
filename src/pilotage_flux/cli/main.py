@@ -45,6 +45,29 @@ from pilotage_flux.stocks_purchasing import (
     receive_purchase,
     set_stock,
 )
+from pilotage_flux.quality import (
+    create_control,
+    declare_control_pass,
+    list_controls,
+    list_events as quality_list_events,
+    open_nc,
+    release_of as quality_release_of,
+    rework_nc,
+    scrap_nc,
+)
+from pilotage_flux.logistics import (
+    create_location,
+    feed_workstation,
+    list_events as logistic_list_events,
+    list_locations,
+    queue_at,
+    ship,
+)
+from pilotage_flux.aps import (
+    add_alternative,
+    list_alternatives_for,
+    pick_workstation,
+)
 from pilotage_flux.risk_debt import (
     expire_overdue_risk_debts,
     extinguish_risk_debt,
@@ -522,6 +545,273 @@ def flux_smooth_cmd(
     tbl.add_column("planned_start")
     for l in launches:
         tbl.add_row(l.candidate_id, str(l.offset_minutes), l.planned_start)
+    console.print(tbl)
+
+
+@app.command("quality-control-create")
+def quality_control_create_cmd(
+    run: str = typer.Option("default"),
+    article: str = typer.Option(..., "--article"),
+    label: str = typer.Option(..., "--label"),
+    criterion: str = typer.Option(..., "--criterion"),
+    sample_rate: float = typer.Option(1.0, "--sample-rate"),
+    blocking: bool = typer.Option(True, "--blocking/--non-blocking"),
+) -> None:
+    """Cree un plan de controle qualite."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        c = create_control(
+            conn, article_id=article, label=label, criterion=criterion,
+            sample_rate=sample_rate, blocking=blocking,
+        )
+    console.print(
+        f"[green]OK[/green] controle {c.control_id} cree : {article} / {label}"
+    )
+
+
+@app.command("quality-control-pass")
+def quality_control_pass_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+    control_id: int = typer.Option(..., "--control"),
+    qty: float = typer.Option(None, "--qty"),
+) -> None:
+    """Declare un controle PASS sur un OF."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        e = declare_control_pass(
+            conn, of_id=of_id, control_id=control_id, qty_concerned=qty,
+        )
+    console.print(f"[green]OK[/green] control_pass {e.quality_event_id} sur {of_id}")
+
+
+@app.command("quality-nc-open")
+def quality_nc_open_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+    qty: float = typer.Option(..., "--qty"),
+    explanation: str = typer.Option(None, "--explanation"),
+) -> None:
+    """Ouvre une non-conformite sur un OF."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        e = open_nc(
+            conn, of_id=of_id, qty_concerned=qty, explanation=explanation,
+        )
+    console.print(f"[yellow]NC[/yellow] {e.quality_event_id} ouverte sur {of_id} ({qty:g} pcs)")
+
+
+@app.command("quality-release")
+def quality_release_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+    explanation: str = typer.Option(None, "--explanation"),
+) -> None:
+    """Libere un OF apres validation qualite."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        e = quality_release_of(conn, of_id=of_id, explanation=explanation)
+    console.print(f"[green]RELEASE[/green] {e.quality_event_id} : {of_id} libere")
+
+
+@app.command("quality-events")
+def quality_events_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(None, "--of"),
+) -> None:
+    """Liste les evenements qualite (filtrable par OF)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        events = quality_list_events(conn, of_id=of_id)
+    if not events:
+        console.print("[yellow]Aucun evenement qualite.[/yellow]")
+        return
+    tbl = Table(title=f"Quality events ({len(events)})")
+    tbl.add_column("id", justify="right")
+    tbl.add_column("of_id")
+    tbl.add_column("type")
+    tbl.add_column("severity")
+    tbl.add_column("qty", justify="right")
+    tbl.add_column("at")
+    tbl.add_column("explanation", overflow="fold")
+    for e in events:
+        tbl.add_row(
+            str(e.quality_event_id), e.of_id, e.event_type, e.severity,
+            f"{e.qty_concerned:g}" if e.qty_concerned else "-",
+            e.at_time, e.explanation or "-",
+        )
+    console.print(tbl)
+
+
+@app.command("location-create")
+def location_create_cmd(
+    run: str = typer.Option("default"),
+    loc_id: str = typer.Option(..., "--id"),
+    label: str = typer.Option(..., "--label"),
+    kind: str = typer.Option(..., "--kind", help="stock | ws_in | ws_out | shipping"),
+    workstation: str = typer.Option(None, "--ws"),
+    capacity: int = typer.Option(None, "--capacity"),
+) -> None:
+    """Cree un emplacement logistique."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        loc = create_location(
+            conn, location_id=loc_id, label=label, kind=kind,
+            workstation_id=workstation, capacity=capacity,
+        )
+    console.print(f"[green]OK[/green] {loc.location_id} ({loc.kind}) cree")
+
+
+@app.command("location-list")
+def location_list_cmd(
+    run: str = typer.Option("default"),
+    kind: str = typer.Option(None, "--kind"),
+) -> None:
+    """Liste les emplacements logistiques."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        locs = list_locations(conn, kind=kind)
+    if not locs:
+        console.print("[yellow]Aucun emplacement.[/yellow]")
+        return
+    tbl = Table(title=f"Emplacements ({len(locs)})")
+    tbl.add_column("id")
+    tbl.add_column("label")
+    tbl.add_column("kind")
+    tbl.add_column("workstation")
+    tbl.add_column("capacity", justify="right")
+    for l in locs:
+        tbl.add_row(
+            l.location_id, l.label, l.kind,
+            l.workstation_id or "-",
+            str(l.capacity) if l.capacity else "-",
+        )
+    console.print(tbl)
+
+
+@app.command("logistic-feed")
+def logistic_feed_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+    article: str = typer.Option(..., "--article"),
+    qty: float = typer.Option(..., "--qty"),
+    to_location: str = typer.Option(..., "--to"),
+) -> None:
+    """Alimente un poste (event feed)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        e = feed_workstation(
+            conn, of_id=of_id, of_op_id=None,
+            article_id=article, qty=qty, to_location=to_location,
+        )
+    console.print(f"[green]OK[/green] feed {e.log_event_id} : {qty:g} {article} -> {to_location}")
+
+
+@app.command("logistic-ship")
+def logistic_ship_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+    article: str = typer.Option(..., "--article"),
+    qty: float = typer.Option(..., "--qty"),
+    from_location: str = typer.Option(..., "--from"),
+) -> None:
+    """Expedie un produit fini (event ship)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        e = ship(
+            conn, of_id=of_id, article_id=article, qty=qty,
+            from_location=from_location,
+        )
+    console.print(f"[green]SHIP[/green] {e.log_event_id} : {qty:g} {article} depuis {from_location}")
+
+
+@app.command("logistic-events")
+def logistic_events_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(None, "--of"),
+) -> None:
+    """Liste les evenements logistiques."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        events = logistic_list_events(conn, of_id=of_id)
+    if not events:
+        console.print("[yellow]Aucun evenement logistique.[/yellow]")
+        return
+    tbl = Table(title=f"Logistic events ({len(events)})")
+    tbl.add_column("id", justify="right")
+    tbl.add_column("of_id")
+    tbl.add_column("type")
+    tbl.add_column("article")
+    tbl.add_column("qty", justify="right")
+    tbl.add_column("from")
+    tbl.add_column("to")
+    for e in events:
+        tbl.add_row(
+            str(e.log_event_id), e.of_id or "-", e.event_type,
+            e.article_id or "-", f"{e.qty:g}",
+            e.from_location or "-", e.to_location or "-",
+        )
+    console.print(tbl)
+
+
+@app.command("logistic-queue")
+def logistic_queue_cmd(
+    run: str = typer.Option("default"),
+    location: str = typer.Option(..., "--location"),
+) -> None:
+    """Affiche la file (net = entrees - sorties) a un emplacement."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        net = queue_at(conn, location)
+    console.print(f"File a [bold]{location}[/bold] : {net:g}")
+
+
+@app.command("routing-alt-add")
+def routing_alt_add_cmd(
+    run: str = typer.Option("default"),
+    article: str = typer.Option(..., "--article"),
+    seq: int = typer.Option(..., "--seq"),
+    workstation: str = typer.Option(..., "--ws"),
+    unit_time: float = typer.Option(..., "--time"),
+    preference: int = typer.Option(100, "--pref"),
+) -> None:
+    """Ajoute une alternative de routing (implantation parallele)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        alt = add_alternative(
+            conn, article_id=article, sequence_idx=seq,
+            workstation_id=workstation, unit_time_min=unit_time,
+            preference_order=preference,
+        )
+    console.print(
+        f"[green]OK[/green] alternative {alt.alt_id} : {article}/seq{seq} -> "
+        f"{workstation} ({unit_time:g} min, pref {preference})"
+    )
+
+
+@app.command("routing-alt-list")
+def routing_alt_list_cmd(
+    run: str = typer.Option("default"),
+    article: str = typer.Option(..., "--article"),
+    seq: int = typer.Option(..., "--seq"),
+) -> None:
+    """Liste les alternatives + le routing principal pour une operation."""
+    from pilotage_flux.aps import available_workstations_for
+
+    path = _db_path(run)
+    with db_session(path) as conn:
+        choices = available_workstations_for(conn, article, seq)
+    if not choices:
+        console.print(f"[yellow]Aucun routing pour {article}/seq{seq}.[/yellow]")
+        return
+    tbl = Table(title=f"Postes disponibles - {article} seq {seq}")
+    tbl.add_column("source")
+    tbl.add_column("workstation")
+    tbl.add_column("unit_time", justify="right")
+    tbl.add_column("preference", justify="right")
+    for c in choices:
+        tbl.add_row(c.source, c.workstation_id, f"{c.unit_time_min:g}",
+                    str(c.preference_order))
     console.print(tbl)
 
 

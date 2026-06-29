@@ -47,13 +47,17 @@ def test_l84_of_event_runs_without_error(
     assert kpi.actions_triggered > 0
 
 
-def test_l84_of_event_approx_event_on_operational_kpis(
+def test_l84_event_dominates_of_event_when_flux_adds_value(
     tmp_path: Path, fixtures_v1_dir: Path
 ) -> None:
-    """OF+EVENT ≈ EVENT sur les KPIs opérationnels (lead time, WIP, coût, nervosité).
+    """EVENT ≥ OF+EVENT sur les KPIs opérationnels (depuis L9.4).
 
-    Hypothèse : l'apport opérationnel ne dépend pas de la contractualisation
-    flux mais de la couche événementielle + boucle physique.
+    Hypothèse mise à jour (L9.4) : avec le smoothing actif, EVENT (flux+event)
+    est au moins aussi bon que OF+EVENT (event seul) sur tous les KPIs. Le
+    flux apporte le lissage, qui réduit la congestion goulot et donc le coût.
+
+    Note : sur des scénarios où le smoothing ne crée pas de différence (ex :
+    1 seul OF concurrent), EVENT ≈ OF+EVENT.
     """
     scenario = baseline_scenario()
     of_event = compute_kpis(
@@ -66,11 +70,11 @@ def test_l84_of_event_approx_event_on_operational_kpis(
         run_doctrine(scenario, DOCTRINE_EVENT, tmp_path / "event.db",
                      fixtures_dir=fixtures_v1_dir),
     )
-    # Tolérance 1% sur les KPIs opérationnels
-    assert of_event.lead_time_days_avg == pytest.approx(event.lead_time_days_avg, abs=0.1)
-    assert of_event.wip_avg == pytest.approx(event.wip_avg, abs=0.1)
-    assert of_event.total_cost_eur == pytest.approx(event.total_cost_eur, rel=0.05)
-    assert of_event.nervousness == pytest.approx(event.nervousness, abs=0.05)
+    # EVENT dominé par OF+EVENT serait une régression doctrinale grave.
+    assert event.lead_time_days_avg <= of_event.lead_time_days_avg + 0.01
+    assert event.wip_avg <= of_event.wip_avg + 0.01
+    assert event.total_cost_eur <= of_event.total_cost_eur + 1.0
+    assert event.nervousness <= of_event.nervousness + 0.01
 
 
 def test_l84_variance_study_4_doctrines(

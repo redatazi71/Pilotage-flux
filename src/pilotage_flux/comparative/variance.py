@@ -23,6 +23,7 @@ from pilotage_flux.comparative.runner import (
 )
 from pilotage_flux.comparative.scenario import (
     ALL_SCENARIOS,
+    ALL_SCENARIOS_ANY,
     DOCTRINES,
     Scenario,
     jitter_scenario,
@@ -133,9 +134,9 @@ def run_variance_study(
     study = VarianceStudy(seeds=list(seeds), scenarios=list(scenarios),
                           doctrines=list(doctrines))
     for scen_name in scenarios:
-        if scen_name not in ALL_SCENARIOS:
+        if scen_name not in ALL_SCENARIOS_ANY:
             raise ValueError(f"Scénario inconnu : {scen_name}")
-        base = ALL_SCENARIOS[scen_name]()
+        base = ALL_SCENARIOS_ANY[scen_name]()
         study.aggregates.setdefault(scen_name, {})
         for d in doctrines:
             kpis_per_seed: list[KpiSet] = []

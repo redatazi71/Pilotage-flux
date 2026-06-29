@@ -335,6 +335,9 @@ class HazardState:
     urgent_seen_count: int = 0
     # Nb d'urgent_order vus dans ce run. V3 sauve les replans APS au-delà du 1er.
 
+    # L9.4 — lissage : map of_id -> jour logique de lancement (selon smoothing)
+    scheduled_launch_day: dict[str, int] = field(default_factory=dict)
+
 
 def _apply_hazard(
     conn: sqlite3.Connection,
@@ -845,53 +848,169 @@ def run_of_doctrine(
 def _freeze_initial_contract(
     conn: sqlite3.Connection, scenario: Scenario, result: RunResult
 ) -> str:
-    """Effectue CBN + P2 + contrat de flux + lissage + extinction + P3 freeze.
+    """Effectue CBN + P2 + contrat(s) de flux + lissage + extinction + P3 freeze.
 
-    Renvoie le batch_id de la tranche gelée.
+    Comportement adaptatif :
+      - Si scénario contient un seul groupe d'articles finis → 1 contrat,
+        run_p3_freeze (chemin historique).
+      - Si scénario contient >=2 articles finis distincts → 1 contrat par
+        article fini, run_p3_collective_freeze (exerce L6.1).
+
+    Renvoie le batch_id de la tranche gelée (commune si multi-contrats).
     """
+    from pilotage_flux.gates import run_p3_collective_freeze
+
     compute_candidates(conn)
     result.aps_recalculations += 1
     run_p2_on_libre_zone(conn)
-    cids = [
-        r["candidate_id"]
-        for r in conn.execute(
-            "SELECT candidate_id FROM candidate_orders "
-            "WHERE zone = 'negociable' ORDER BY candidate_id ASC"
-        )
-    ]
-    if not cids:
+    rows = conn.execute(
+        """
+        SELECT candidate_id, article_id FROM candidate_orders
+        WHERE zone = 'negociable'
+        ORDER BY candidate_id ASC
+        """
+    ).fetchall()
+    if not rows:
         raise RuntimeError(
             "Aucun candidate en zone négociable : la doctrine flux ne peut "
             "pas former de contrat (vérifier P2)."
         )
+
     horizon_end = (
         datetime.fromisoformat(scenario.horizon_start)
         + timedelta(days=scenario.horizon_days)
     ).strftime("%Y-%m-%d")
-    contract = create_contract(
-        conn,
-        horizon_label=f"W-{scenario.name}",
-        horizon_start=scenario.horizon_start,
-        horizon_end=horizon_end,
-        candidate_ids=cids,
-    )
-    compute_coherence(conn, contract.contract_id)
-    compute_smoothing(conn, contract.contract_id)
+
+    # Groupe les candidates par article fini (= article qui n'est composant
+    # d'aucun autre BOM dans le scope considéré). Pour simplifier : un
+    # candidate est "fini" s'il n'apparaît pas comme child_article dans bom_lines.
+    finished_articles_query = conn.execute(
+        """
+        SELECT DISTINCT a.article_id FROM articles a
+        WHERE NOT EXISTS (
+            SELECT 1 FROM bom_lines b WHERE b.child_article = a.article_id
+        )
+        """
+    ).fetchall()
+    finished_set = {r["article_id"] for r in finished_articles_query}
+
+    # Map: finished_article -> [candidate_ids of that finished family]
+    # Pour les SEMI-* : on les rattache au contrat du premier fini qui les utilise
+    # (heuristique simple). Pour le V9, c'est suffisant ; un découpage plus fin
+    # exigerait du pegging multi-niveau côté contrats — hors scope.
+    family_by_finished: dict[str, list[str]] = {}
+    finished_cands_by_article: dict[str, list[str]] = {}
+    for r in rows:
+        cand_id, article_id = r["candidate_id"], r["article_id"]
+        if article_id in finished_set:
+            finished_cands_by_article.setdefault(article_id, []).append(cand_id)
+    # Découvre les SEMI utilisés par chaque fini via pegging
+    semi_to_finished: dict[str, str] = {}
+    for finished, cands in finished_cands_by_article.items():
+        for cand in cands:
+            peggings = conn.execute(
+                """
+                SELECT target_id FROM pegging_links
+                WHERE source_type = 'candidate_order' AND source_id = ?
+                  AND target_type = 'candidate_order'
+                """,
+                (cand,),
+            ).fetchall()
+            for p in peggings:
+                semi_to_finished.setdefault(p["target_id"], finished)
+    # Construit family_by_finished
+    for r in rows:
+        cand_id, article_id = r["candidate_id"], r["article_id"]
+        if article_id in finished_set:
+            family_by_finished.setdefault(article_id, []).append(cand_id)
+        else:
+            # Semi-fini : rattache au fini qui le pegging
+            owner = semi_to_finished.get(cand_id)
+            if owner:
+                family_by_finished.setdefault(owner, []).append(cand_id)
+            else:
+                # Pas de fini parent → premier fini disponible
+                first_finished = next(iter(family_by_finished), None)
+                if first_finished is None and finished_cands_by_article:
+                    first_finished = next(iter(finished_cands_by_article))
+                if first_finished:
+                    family_by_finished.setdefault(first_finished, []).append(cand_id)
+
+    # Si une seule famille → chemin mono-contrat historique
+    if len(family_by_finished) <= 1:
+        all_cids = [r["candidate_id"] for r in rows]
+        contract = create_contract(
+            conn,
+            horizon_label=f"W-{scenario.name}",
+            horizon_start=scenario.horizon_start,
+            horizon_end=horizon_end,
+            candidate_ids=all_cids,
+        )
+        compute_coherence(conn, contract.contract_id)
+        compute_smoothing(conn, contract.contract_id)
+        for d in list_risk_debts(conn, status="open"):
+            extinguish_risk_debt(conn, d.risk_debt_id, reason="L4 study seed")
+        batch = run_p3_freeze(conn, contract.contract_id)
+        return batch.batch_id
+
+    # Multi-contrats : un contrat par famille → P3 collective
+    contract_ids: list[str] = []
+    for finished_article, cids in sorted(family_by_finished.items()):
+        contract = create_contract(
+            conn,
+            horizon_label=f"W-{scenario.name}-{finished_article}",
+            horizon_start=scenario.horizon_start,
+            horizon_end=horizon_end,
+            candidate_ids=cids,
+        )
+        compute_coherence(conn, contract.contract_id)
+        compute_smoothing(conn, contract.contract_id)
+        contract_ids.append(contract.contract_id)
+
     for d in list_risk_debts(conn, status="open"):
-        extinguish_risk_debt(conn, d.risk_debt_id, reason="L4 study seed")
-    batch = run_p3_freeze(conn, contract.contract_id)
-    return batch.batch_id
+        extinguish_risk_debt(conn, d.risk_debt_id, reason="L9 multi-contracts")
+
+    collective = run_p3_collective_freeze(
+        conn, contract_ids, actor="flux.p3.collective"
+    )
+    # Trace la décision dans le RunResult
+    result.notes.append(
+        f"P3 collective: {collective.decision}, "
+        f"frozen={len(collective.frozen_contracts)}, "
+        f"deferred={len(collective.deferred_contracts)}, "
+        f"bottleneck={collective.bottleneck_workstation}"
+    )
+    if collective.batch_id is None:
+        raise RuntimeError(
+            f"P3 collective n'a gelé aucun contrat ({collective.decision}) — "
+            "vérifier la capacité goulot vs charge"
+        )
+    return collective.batch_id
 
 
 def _promote_frozen_candidates_to_ofs(
-    conn: sqlite3.Connection, scenario: Scenario, batch_id: str, result: RunResult
-) -> None:
-    """Une fois gelés, les candidates sont promus en OFs lancés."""
+    conn: sqlite3.Connection, scenario: Scenario, batch_id: str,
+    result: RunResult,
+    *,
+    state: HazardState | None = None,
+    use_smoothing: bool = False,
+    actor_prefix: str = "flux",
+) -> dict[str, int]:
+    """Promeut les candidates gelés en OFs.
+
+    Si `use_smoothing=True`, lit `flux_smoothed_launches.planned_start` pour
+    déterminer le jour de lancement de chaque OF. Les OFs au jour 0 sont
+    lancés immédiatement ; les autres restent en statut 'created' et seront
+    lancés par `_launch_scheduled_ofs` au jour adéquat.
+
+    Retourne un mapping {of_id: scheduled_launch_day}.
+    """
+    from datetime import datetime
     from pilotage_flux.aps.planner import promote_candidate_to_of
 
-    cids = conn.execute(
+    cids_rows = conn.execute(
         """
-        SELECT DISTINCT l.candidate_id
+        SELECT DISTINCT l.candidate_id, l.contract_id, l.version
         FROM freeze_batch_contracts fbc
         JOIN flux_contract_links l
           ON l.contract_id = fbc.contract_id AND l.version = fbc.version
@@ -901,13 +1020,76 @@ def _promote_frozen_candidates_to_ofs(
         """,
         (batch_id,),
     ).fetchall()
-    for row in cids:
-        plan = promote_candidate_to_of(conn, row["candidate_id"], actor="flux.p1")
-        result.of_created_day[plan.of_id] = 0
+
+    # Pré-calcule scheduled_day par candidate via flux_smoothed_launches
+    scheduled_day_by_cand: dict[str, int] = {}
+    if use_smoothing:
+        base = datetime.fromisoformat(scenario.horizon_start)
+        if base.hour == 0 and base.minute == 0:
+            base = base.replace(hour=0)  # garde l'heure 0 pour le calcul jour
+        smoothed_rows = conn.execute(
+            """
+            SELECT candidate_id, planned_start FROM flux_smoothed_launches
+            ORDER BY candidate_id ASC
+            """
+        ).fetchall()
+        for srow in smoothed_rows:
+            try:
+                planned_dt = datetime.fromisoformat(srow["planned_start"])
+                delta_days = max(0, (planned_dt - base).days)
+                scheduled_day_by_cand[srow["candidate_id"]] = delta_days
+            except (ValueError, TypeError):
+                scheduled_day_by_cand[srow["candidate_id"]] = 0
+
+    of_to_day: dict[str, int] = {}
+    for row in cids_rows:
+        cand_id = row["candidate_id"]
+        plan = promote_candidate_to_of(conn, cand_id, actor=f"{actor_prefix}.p1")
+        scheduled = scheduled_day_by_cand.get(cand_id, 0)
+        of_to_day[plan.of_id] = scheduled
+        result.of_created_day[plan.of_id] = scheduled
+        if scheduled == 0:
+            _launch_of_at_day(
+                conn, plan.of_id, horizon_start=scenario.horizon_start,
+                day=0, actor=f"{actor_prefix}.mes",
+            )
+
+    if state is not None:
+        state.scheduled_launch_day = of_to_day
+    return of_to_day
+
+
+def _launch_scheduled_ofs(
+    conn: sqlite3.Connection,
+    scenario: Scenario,
+    state: HazardState,
+    result: RunResult,
+    day: int,
+    *,
+    actor: str,
+) -> None:
+    """Lance les OFs dont le scheduled_launch_day correspond au jour courant.
+
+    Utilisé par les doctrines flux (avec smoothing). Pour OF/OF+EVENT, le
+    state.scheduled_launch_day reste vide → cette fonction ne fait rien.
+    """
+    if not state.scheduled_launch_day:
+        return
+    for of_id, scheduled in list(state.scheduled_launch_day.items()):
+        if scheduled != day:
+            continue
+        row = conn.execute(
+            "SELECT status FROM manufacturing_orders WHERE of_id = ?",
+            (of_id,),
+        ).fetchone()
+        if row is None or row["status"] != "created":
+            state.scheduled_launch_day.pop(of_id, None)
+            continue
         _launch_of_at_day(
-            conn, plan.of_id, horizon_start=scenario.horizon_start,
-            day=0, actor="flux.mes",
+            conn, of_id, horizon_start=scenario.horizon_start,
+            day=day, actor=actor,
         )
+        state.scheduled_launch_day.pop(of_id, None)
 
 
 # ----------------------------------------------------------------------
@@ -930,7 +1112,10 @@ def run_flux_doctrine(
     with db_session(db_path) as conn:
         batch_id = _freeze_initial_contract(conn, scenario, result)
         result.batch_id = batch_id
-        _promote_frozen_candidates_to_ofs(conn, scenario, batch_id, result)
+        _promote_frozen_candidates_to_ofs(
+            conn, scenario, batch_id, result,
+            state=state, use_smoothing=True, actor_prefix="flux",
+        )
 
         hazards_by_day: dict[int, list] = {}
         for h in scenario.hazards:
@@ -938,6 +1123,9 @@ def run_flux_doctrine(
 
         for day in range(1, scenario.horizon_days + 1):
             _receive_due_purchase_orders(conn, scenario, day)
+            # L9.4 : lance les OFs lissés du jour
+            _launch_scheduled_ofs(conn, scenario, state, result, day,
+                                  actor="flux.mes")
             # FLUX : sans régulation événementielle, replan APS sur chaque aléa.
             for h in hazards_by_day.get(day, []):
                 _apply_hazard(conn, scenario, h, state, result, DOCTRINE_FLUX)
@@ -1007,7 +1195,10 @@ def run_event_doctrine(
             )
         batch_id = _freeze_initial_contract(conn, scenario, result)
         result.batch_id = batch_id
-        _promote_frozen_candidates_to_ofs(conn, scenario, batch_id, result)
+        _promote_frozen_candidates_to_ofs(
+            conn, scenario, batch_id, result,
+            state=state, use_smoothing=True, actor_prefix="event",
+        )
         generate_expected_from_batch(conn, batch_id)
 
         hazards_by_day: dict[int, list] = {}
@@ -1016,6 +1207,9 @@ def run_event_doctrine(
 
         for day in range(1, scenario.horizon_days + 1):
             _receive_due_purchase_orders(conn, scenario, day)
+            # L9.4 : lance les OFs lissés du jour
+            _launch_scheduled_ofs(conn, scenario, state, result, day,
+                                  actor="event.mes")
             for h in hazards_by_day.get(day, []):
                 _apply_hazard(conn, scenario, h, state, result, DOCTRINE_EVENT)
                 # L8.1.c — EVENT doctrine : V3 crée les OFs pour servir la

@@ -6,9 +6,9 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 ## État
 
-**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2), **V7** (L7.1) et **V8** (L8.1 + L8.3 + L8.4) complets.
+**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2), **V7** (L7.1), **V8** (L8.1 + L8.3 + L8.4) et **V9** (L9.1 → L9.5) complets.
 
-- 276 tests pytest verts, dont huit tests d'acceptation end-to-end :
+- 282 tests pytest verts, dont neuf tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
@@ -127,6 +127,10 @@ tests/              146 tests : unitaires + intégration + acceptation
 | Boucle physique V3 étendue (4 familles d'aléas) | `comparative/runner.py:_apply_corrective_actions` | V8 ✓ |
 | Apprentissage long auto-tune seuils filtre dual | `comparative/learning.py` | V8 ✓ |
 | 4ème doctrine OF+EVENT (décomposition 2×2 flux × event) | `comparative/runner.py:run_of_event_doctrine` | V8 ✓ |
+| Fixtures étendues (4 finis × 4 semi × 5 comp, 6 postes) | `data/fixtures_extended/` | V9 ✓ |
+| Multi-contrats auto + P3 collective | `comparative/runner.py:_freeze_initial_contract` | V9 ✓ |
+| Smoothing propagé au launch_day | `comparative/runner.py:_launch_scheduled_ofs` | V9 ✓ |
+| 5 scénarios étendus (XL + overload multi-contrats) | `comparative/scenario.py:ALL_SCENARIOS_XL` | V9 ✓ |
 
 ## V2 — extensions livrées
 
@@ -403,8 +407,74 @@ Trois mécanismes flux ne sont pas exercés par ces scénarios :
 - **P3 inverse / fragmentation lot streaming** (`gates/p3_inverse.py`)
 
 Sur des scénarios qui exerceraient ces mécanismes (multi-contrats, ≥10 OF
-concurrents J0, urgences nombreuses), **EVENT > OF+EVENT** est attendu. Pas
-encore mesuré.
+concurrents J0, urgences nombreuses), **EVENT > OF+EVENT** est attendu.
+(Mesuré en V9.)
+
+## V9 — fixtures étendues + multi-contrats + smoothing actif
+
+**L9.1 — Fixtures étendues** (`data/fixtures_extended/`) : 4 articles
+finis (ART-A/B/C/D), 4 semi-finis (SEMI-1/2/3/4), 5 composants achetés,
+6 postes de travail (WS-1 à WS-6 avec WS-3 comme goulot), BOM 3 niveaux,
+routings 3-4 ops par fini. Capacités et coûts data-driven dans
+`parameters.csv`.
+
+**L9.2 — Multi-contrats dans le runner** : `_freeze_initial_contract`
+détecte automatiquement les scénarios multi-articles et :
+- Groupe les candidates par article fini → N contrats sur même horizon
+- Appelle `run_p3_collective_freeze` (L6.1) au lieu de `run_p3_freeze`
+- Trace dans `result.notes` la décision (FREEZE_ALL / PARTIAL_FREEZE / DEFER_ALL)
+
+**L9.3 — Scénarios étendus** :
+- `baseline_xl` : 6 SO × 4 articles, 4 aléas (panne goulot, NC, retard, urgence)
+- `stress_double_breakdown_xl` : 2 pannes WS-3 + WS-4
+- `stress_cascade_nc_xl` : 4 NC en cascade sur 3 articles
+- `stress_demand_spike_xl` : 5 urgences sur 4 articles
+- `stress_multi_contract_overload` : horizon serré, force PARTIAL_FREEZE
+
+**L9.4 — Smoothing actif dans les launches** : modification de
+`_promote_frozen_candidates_to_ofs` pour lire `flux_smoothed_launches`
+et lancer les OFs au jour prévu (au lieu de tous J0). Nouveau helper
+`_launch_scheduled_ofs` appelé chaque jour. C'est ce qui révèle l'apport
+réel du flux : étalement de la charge → moins de congestion goulot.
+
+### Résultats V9 (36 runs, 3 scénarios XL × 4 doctrines × 3 seeds)
+
+**Δ coût vs OF (référence)** :
+
+| Scénario | OF (réf) | FLUX seul | OF+EVENT seul | EVENT combiné |
+|---|---|---|---|---|
+| baseline_xl | 44 170 € | **-12 080** | -5 720 | -12 080 |
+| stress_double_breakdown_xl | 46 884 € | -18 420 | -12 106 | **-19 294** |
+| stress_multi_contract_overload | 21 391 € | **-11 449** | -1 716 | -11 449 |
+
+**Conclusions actualisées** (révisent V8) :
+
+1. **Le flux apporte sur tous les scénarios** (de −11k€ à −18k€). Le
+   lissage des lancements évite la congestion goulot — c'est le mécanisme
+   dominant. La V8 ne le voyait pas parce que le smoothing était calculé
+   mais pas propagé aux launch_day.
+
+2. **L'event sourcing apporte principalement sur les pannes**
+   (stress_double_breakdown). Sur cascade_nc / demand_spike / overload, le
+   flux fait l'essentiel et l'event sourcing rajoute peu en coût (mais
+   reste précieux en détection, causes et nervosité).
+
+3. **Additivité confirmée sur stress_double_breakdown_xl** : flux + event
+   = −19 294 € > flux seul −18 420 € > event seul −12 106 €. C'est le
+   premier scénario où les deux apports se cumulent mesurablement.
+
+4. **Multi-contrats + PARTIAL_FREEZE opérationnel** : sur
+   stress_multi_contract_overload, P3 collective arbitre 3 contrats gelés
+   + 1 différé. Le goulot WS-3 est identifié et la décision tracée dans
+   `gate_decisions_v1` (gate=P3_COLLECTIVE).
+
+```powershell
+python -m pilotage_flux compare-doctrines-extended `
+    --seeds "42,100,200,300,400" `
+    --scenarios "baseline_xl,stress_double_breakdown_xl,stress_cascade_nc_xl,stress_demand_spike_xl,stress_multi_contract_overload"
+```
+(la CLI bascule automatiquement sur `data/fixtures_extended` quand les
+scénarios sont en `*_xl`).
 
 ## Critères de succès validés par tests d'acceptation
 

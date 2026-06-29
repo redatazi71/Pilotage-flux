@@ -1,0 +1,4 @@
+sales_order_id,article_id,quantity,due_date
+SO-001,ART-A,80,2026-07-20
+SO-002,ART-B,120,2026-07-22
+SO-003,ART-C,100,2026-07-25

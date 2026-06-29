@@ -372,6 +372,55 @@ CREATE INDEX IF NOT EXISTS idx_mes_consumptions_of
     ON mes_consumptions (of_id, article_id);
 
 -- ---------------------------------------------------------------------
+-- V3 : couche événementielle lean (événements attendus vs réels)
+-- ---------------------------------------------------------------------
+-- Les événements attendus sont générés depuis une tranche gelée + le
+-- lissage du contrat de flux. À chaque event réel observé en MES, on
+-- recherche son pendant attendu pour qualifier l'écart.
+
+CREATE TABLE IF NOT EXISTS expected_events (
+    expected_event_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id            TEXT NOT NULL REFERENCES freeze_batches(batch_id),
+    contract_id         TEXT NOT NULL,
+    candidate_id        TEXT NOT NULL REFERENCES candidate_orders(candidate_id),
+    event_type          TEXT NOT NULL,
+        -- op_start | op_finish | transfer | control | bottleneck_pass | of_close
+    sequence_idx        INTEGER,                    -- ordre op (si applicable)
+    workstation_id      TEXT REFERENCES workstations(workstation_id),
+    expected_at         TEXT NOT NULL,              -- ISO datetime
+    expected_qty        REAL,
+    payload_json        TEXT NOT NULL DEFAULT '{}',
+    matched_actual_id   INTEGER REFERENCES event_store(event_id),
+    matched_at          TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_expected_events_batch
+    ON expected_events (batch_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_expected_events_candidate
+    ON expected_events (candidate_id, event_type, expected_at);
+
+CREATE TABLE IF NOT EXISTS event_deviations (
+    deviation_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    expected_event_id   INTEGER REFERENCES expected_events(expected_event_id),
+    actual_event_id     INTEGER REFERENCES event_store(event_id),
+    candidate_id        TEXT REFERENCES candidate_orders(candidate_id),
+    deviation_kind      TEXT NOT NULL,
+        -- time_delta | quantity_delta | missing_actual | unexpected_actual | qty_scrap_excess
+    delta_value         REAL,                       -- minutes (time) / pieces (qty)
+    score               REAL,                       -- 0..1 magnitude
+    cpm_margin_used     REAL,                       -- minutes absorbed by CPM
+    is_absorbed         INTEGER NOT NULL DEFAULT 0, -- 1 si écart dans le niveau 0 CPM
+    qualification       TEXT,                       -- low | medium | high | critical
+    detected_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_deviations_candidate
+    ON event_deviations (candidate_id, deviation_kind);
+CREATE INDEX IF NOT EXISTS idx_event_deviations_kind_score
+    ON event_deviations (deviation_kind, score);
+
+-- ---------------------------------------------------------------------
 -- V2 : stocks et achats ouverts
 -- ---------------------------------------------------------------------
 -- Modele V2 simple : un stock global par article (qty_available +

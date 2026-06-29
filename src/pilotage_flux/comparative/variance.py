@@ -155,7 +155,7 @@ def run_variance_study(
 def build_variance_report(study: VarianceStudy) -> str:
     """Rapport Markdown agrégé : table par scénario + résumé global."""
     from pilotage_flux.comparative.scenario import (
-        DOCTRINE_EVENT, DOCTRINE_FLUX, DOCTRINE_OF,
+        DOCTRINE_EVENT, DOCTRINE_FLUX, DOCTRINE_OF, DOCTRINE_OF_EVENT,
     )
 
     lines: list[str] = []
@@ -173,9 +173,10 @@ def build_variance_report(study: VarianceStudy) -> str:
     lines.append("")
 
     label = {
-        DOCTRINE_OF: "OF (V0)",
-        DOCTRINE_FLUX: "FLUX (V1+V2)",
-        DOCTRINE_EVENT: "EVENT (V3)",
+        DOCTRINE_OF: "OF",
+        DOCTRINE_FLUX: "FLUX",
+        DOCTRINE_OF_EVENT: "OF+EVENT",
+        DOCTRINE_EVENT: "EVENT",
     }
 
     for scen in study.scenarios:
@@ -216,40 +217,38 @@ def build_variance_report(study: VarianceStudy) -> str:
             lines.append("| " + " | ".join(cells) + " |")
         lines.append("")
 
-    # Résumé global : comparaison V3 vs (V0, V1+V2) sur les KPI clés
-    lines.append("## Lecture globale")
+    # Résumé global : décomposition 2×2 (flux × event sourcing)
+    lines.append("## Lecture globale — décomposition 2×2 (flux × event sourcing)")
     lines.append("")
-    deltas = []
+    lines.append("Δ coût par doctrine vs OF (référence) :")
+    lines.append("")
+    lines.append("| Scénario | OF (réf) | FLUX − OF (apport flux seul) "
+                 "| OF+EVENT − OF (apport event seul) "
+                 "| EVENT − OF (apport combiné) |")
+    lines.append("|---|---|---|---|---|")
     for scen in study.scenarios:
         agg = study.aggregates.get(scen, {})
-        if DOCTRINE_EVENT in agg and DOCTRINE_FLUX in agg:
-            ev = agg[DOCTRINE_EVENT]
-            fx = agg[DOCTRINE_FLUX]
-            d_nrv = ev.nervousness_mean - fx.nervousness_mean
-            d_lead = ev.lead_time_avg_mean - fx.lead_time_avg_mean
-            d_wip = ev.wip_mean - fx.wip_mean
-            d_cost = ev.total_cost_eur_mean - fx.total_cost_eur_mean
-            deltas.append({
-                "scenario": scen,
-                "delta_nervousness": d_nrv,
-                "delta_lead_time": d_lead,
-                "delta_wip": d_wip,
-                "delta_cost_eur": d_cost,
-                "detection_count": ev.deviations_detected_mean,
-                "causes": ev.causes_attached_mean,
-            })
-    if deltas:
-        lines.append("| Scénario | Δ nervosité | Δ lead time (j) | Δ WIP | Δ coût (€) | Écarts V3 |")
-        lines.append("|---|---|---|---|---|---|")
-        for d in deltas:
-            lines.append(
-                f"| {d['scenario']} | {d['delta_nervousness']:+.3f} | "
-                f"{d['delta_lead_time']:+.3f} | {d['delta_wip']:+.3f} | "
-                f"{d['delta_cost_eur']:+.0f} | {d['detection_count']:.1f} |"
-            )
+        if DOCTRINE_OF not in agg:
+            continue
+        of_cost = agg[DOCTRINE_OF].total_cost_eur_mean
+        cells = [f"| {scen} | {of_cost:.0f} €"]
+        for d_label, d in (("flux", DOCTRINE_FLUX),
+                            ("of_event", DOCTRINE_OF_EVENT),
+                            ("event", DOCTRINE_EVENT)):
+            if d in agg:
+                delta = agg[d].total_cost_eur_mean - of_cost
+                cells.append(f" | {delta:+.0f} €")
+            else:
+                cells.append(" | —")
+        lines.append("".join(cells) + " |")
     lines.append("")
-    lines.append("**Lecture** : une valeur Δ négative signifie que V3 fait mieux que FLUX. "
-                 "V3 doit montrer Δ nervosité < 0 et écarts détectés > 0 sur tous les scénarios pour "
-                 "que la doctrine soit validée.")
+    lines.append(
+        "**Lecture** : un Δ négatif signifie économie vs OF. La colonne « apport "
+        "flux seul » mesure ce que la contractualisation flux apporte sans event "
+        "sourcing ; la colonne « apport event seul » mesure ce que l'event sourcing "
+        "apporte sans contractualisation. Si **flux seul ≈ 0** et **event seul ≈ "
+        "event combiné**, on conclut que l'apport opérationnel réside dans l'event "
+        "sourcing, pas dans la contractualisation."
+    )
     lines.append("")
     return "\n".join(lines)

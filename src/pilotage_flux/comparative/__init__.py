@@ -36,6 +36,15 @@ from pilotage_flux.comparative.variance import (
     build_variance_report,
     run_variance_study,
 )
+from pilotage_flux.comparative.learning import (
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_N_ITERATIONS,
+    LearningIteration,
+    LearningRun,
+    auto_tune_thresholds,
+    build_learning_report,
+    run_learning_loop,
+)
 
 __all__ = [
     "ALL_SCENARIOS",
@@ -60,4 +69,11 @@ __all__ = [
     "aggregate_kpis",
     "build_variance_report",
     "run_variance_study",
+    "DEFAULT_LEARNING_RATE",
+    "DEFAULT_N_ITERATIONS",
+    "LearningIteration",
+    "LearningRun",
+    "auto_tune_thresholds",
+    "build_learning_report",
+    "run_learning_loop",
 ]

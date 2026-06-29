@@ -6,11 +6,12 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 ## État
 
-**V0 complet** (Lots L0.1 → L0.6) et **V1 complet** (Lots L1.1 → L1.7).
+**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7) et **V2** (L2.1 → L2.7) complets.
 
-- 146 tests pytest verts, dont deux tests d'acceptation end-to-end
-  (`test_acceptance_golden_path` V0 mono-niveau, `test_acceptance_v1`
-  multi-niveau avec contrats de flux + freeze + P3 inverse).
+- 201 tests pytest verts, dont trois tests d'acceptation end-to-end :
+  - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
+  - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
+  - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
 
 ## Setup (Windows, PowerShell)
 
@@ -109,12 +110,32 @@ tests/              146 tests : unitaires + intégration + acceptation
 | Event sourcing + reconstruction | `events/` | V0 ✓ |
 | Pegging multi-niveau | `aps/pegging.py` | V1 ✓ |
 
-## Reporté à V2 / V3
+## V2 — extensions livrées
 
-- V2 : MES complet (qualité, logistique, consommations matière), implantations
-  parallèle et hybride, stocks/achats projetables (R-P2-05 enrichi).
-- V3 : événements attendus vs réels, filtre dual de tolérances et de mémoire,
-  causes racines bayésiennes, apprentissage automatique des seuils.
+- **Stocks + achats ouverts** (`stocks_purchasing/`) : table `stocks`,
+  `purchase_orders`, helpers `project_available`, `reserve`, `receive_purchase`.
+  Évaluateur R-P2-05 enrichi : PASS si projection (stock libre + PO ouverts)
+  ≥ besoin pegging, sinon RISK ou BLOCK selon couverture.
+- **Consommations matière** (`mes/consumptions.py`) : `declare_consumption`
+  décrémente le stock + calcul d'écart via `compute_consumption_gaps` (réel
+  vs théorique BOM × OF.quantity).
+- **Qualité** (`quality/`) : plans de contrôle versionnés (`quality_controls`),
+  événements qualité (`quality_events`) avec workflow complet open NC →
+  rework → scrap → release, blocage critique.
+- **Logistique** (`logistics/`) : emplacements typés (stock, ws_in, ws_out,
+  shipping), événements `transfer`/`feed`/`evacuate`/`ship`/`receive`,
+  calcul de file `queue_at(location_id)`.
+- **Implantations parallèles/hybrides** (`aps/routing_alternatives.py`) :
+  table `routing_alternatives` permet de déclarer plusieurs postes pour
+  une même séquence d'opération, sélection par `pick_workstation` avec
+  stratégie 'preferred' ou 'fastest'.
+
+## Reporté à V3
+
+- Événements attendus vs réels (couche événementielle V3 complète).
+- Filtre dual de tolérances et de mémoire (cf. §7 bis.4 et §7 bis.5 du cadrage).
+- Causes racines bayésiennes pondérées.
+- Apprentissage automatique des seuils.
 
 ## Critères de succès validés par tests d'acceptation
 
@@ -131,3 +152,12 @@ tests/              146 tests : unitaires + intégration + acceptation
 8. P3 inverse forme A (retour négociable + OF annulé)
 9. P3 inverse forme B (fragmentation, conservation quantité, filiation)
 10. Traçabilité event_store (8 types d'événements) + gate_decisions_v1
+
+`tests/test_acceptance_v2.py` (V2) :
+11. Stocks initiaux + PO ouvert → P2 PASS quand projection couvre le besoin
+12. Réception PO incrémente le stock
+13. Consommations matière déclenchent décrément stock + écart matière nul
+    quand conso = BOM × OF.quantity
+14. Workflow qualité : contrôle PASS + libération tracés
+15. Workflow logistique : feed + ship + queue calculée correctement
+16. Routings alternatifs déclarables, pick_workstation déterministe

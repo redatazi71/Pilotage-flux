@@ -227,9 +227,16 @@ _register("bottleneck_capacity", eval_bottleneck_capacity)
 # -----------------------------------------------------------------------
 
 def eval_components_projectable(ctx: RuleContext) -> tuple[str, float | None, str]:
-    """V1.3 : pas de modelisation stocks/achats encore. On verifie juste que les
-    composants achetes existent dans le referentiel. Risk implicite tant que
-    la modelisation des approvisionnements n'est pas en place (V2)."""
+    """V2 : vraie evaluation. Pour chaque composant achete, on verifie que
+    stock libre + achats ouverts >= besoin pegging. Sinon RISK avec score
+    proportionnel a la couverture manquante.
+
+    Si la table stocks est totalement vide (run V1 sans donnees V2 importees),
+    on retombe sur le comportement V1.3 : RISK leger systematique (pour
+    preserver la retrocompatibilite des fixtures V1).
+    """
+    from pilotage_flux.stocks_purchasing import project_available
+
     cand = _fetch_candidate(ctx)
     if cand is None:
         return OUTCOME_BLOCK, None, "Candidate inconnu"
@@ -257,11 +264,56 @@ def eval_components_projectable(ctx: RuleContext) -> tuple[str, float | None, st
             f"Composant(s) inconnu(s) : {', '.join(missing)}",
         )
 
-    # V1.3 : pas de stock/achats modelises -> on signale un risk leger
+    # V2 : verifie projection (stock libre + open POs >= besoin)
+    # Si AUCUN stock n'a ete initialise (table vide), retour au comportement V1.3
+    stock_row_count = ctx.conn.execute(
+        "SELECT COUNT(*) AS n FROM stocks"
+    ).fetchone()
+    no_stock_data = int(stock_row_count["n"]) == 0
+    if no_stock_data:
+        po_row_count = ctx.conn.execute(
+            "SELECT COUNT(*) AS n FROM purchase_orders"
+        ).fetchone()
+        if int(po_row_count["n"]) == 0:
+            # Retro-compat V1.3
+            return (
+                OUTCOME_RISK,
+                0.3,
+                f"{len(purchased_components)} composants achetes "
+                f"(stocks/achats non importes - comportement V1.3)",
+            )
+
+    shortfalls: list[str] = []
+    total_required = 0.0
+    total_projected = 0.0
+    for link in purchased_components:
+        required = float(link.quantity)
+        projected = project_available(ctx.conn, link.article_id)
+        total_required += required
+        total_projected += projected
+        if projected < required:
+            shortfalls.append(
+                f"{link.article_id} need {required:g}, projete {projected:g}"
+            )
+
+    if not shortfalls:
+        return (
+            OUTCOME_PASS,
+            1.0,
+            f"Tous composants projetables : {len(purchased_components)} OK",
+        )
+
+    coverage = total_projected / total_required if total_required > 0 else 0.0
+    if coverage < 0.5:
+        return (
+            OUTCOME_BLOCK,
+            coverage,
+            f"Couverture composants {coverage:.0%} (< 50%) : {'; '.join(shortfalls)}",
+        )
     return (
         OUTCOME_RISK,
-        0.3,
-        f"{len(purchased_components)} composants achetes (stocks/achats non modelises en V1.3)",
+        1.0 - coverage,
+        f"Composants partiellement couverts ({coverage:.0%}) : {'; '.join(shortfalls)}",
     )
 
 

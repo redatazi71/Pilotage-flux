@@ -92,6 +92,7 @@ class RunResult:
     hazards_observed: list[dict[str, Any]] = field(default_factory=list)
     batch_id: str | None = None
     notes: list[str] = field(default_factory=list)
+    corrective_actions_applied: list[dict[str, Any]] = field(default_factory=list)
 
 
 # ----------------------------------------------------------------------
@@ -319,6 +320,8 @@ class HazardState:
     quality_nc_applied: bool = False
     urgent_order_id: str | None = None
     po_delays: dict[str, int] = field(default_factory=dict)
+    delayed_of_until: dict[str, int] = field(default_factory=dict)
+    # of_id -> jour minimum à partir duquel l'OF peut avancer sa prochaine op
 
 
 def _apply_hazard(
@@ -419,6 +422,76 @@ def _apply_hazard(
         # La gestion du replan est doctrine-specific (cf. boucle ci-dessous).
 
 
+def _apply_corrective_actions(
+    conn: sqlite3.Connection,
+    state: HazardState,
+    result: RunResult,
+    day: int,
+) -> None:
+    """Doctrine EVENT : applique les actions du filtre dual à la réalité physique.
+
+    Ferme la boucle planifier → exécuter → mesurer → **réguler** → apprendre.
+
+    Logique signature V3 : V3 voit le symptôme (déviation) et déclenche la
+    maintenance. Concrètement, dès qu'au moins une décision de niveau
+    correct_local ou supérieur est triggered ET qu'au moins un poste est
+    en panne dans le state, V3 clôt cette panne (intervention immédiate).
+
+    Idempotence : on suit les décisions déjà consommées via
+    run_metadata_applied_actions pour qu'une seule action V3 par cycle clôt
+    une panne (sinon le compteur exploserait).
+    """
+    _ensure_applied_actions_table(conn)
+    rows = conn.execute(
+        """
+        SELECT td.decision_id, td.action_level, td.candidate_id
+        FROM tolerance_filter_decisions td
+        WHERE td.triggered_at IS NOT NULL
+          AND td.action_level IN (
+              'correct_local', 'replan_local', 'escalate', 'replan_global'
+          )
+          AND td.decision_id NOT IN (
+            SELECT decision_id FROM run_metadata_applied_actions
+          )
+        ORDER BY td.decision_id ASC
+        """,
+    ).fetchall()
+
+    # Marque toutes ces décisions comme consommées d'abord
+    for r in rows:
+        conn.execute(
+            "INSERT INTO run_metadata_applied_actions (decision_id) VALUES (?)",
+            (int(r["decision_id"]),),
+        )
+
+    # Si V3 a au moins une action corrective+ et au moins un breakdown actif,
+    # déclencher la maintenance : clear breakdowns. Un seul cycle d'action
+    # par jour (premier passage suffit).
+    if rows and state.breakdown_ws:
+        for ws in list(state.breakdown_ws.keys()):
+            state.breakdown_ws.pop(ws, None)
+            state.breakdown_factor.pop(ws, None)
+            result.corrective_actions_applied.append({
+                "day": day,
+                "decision_id": int(rows[0]["decision_id"]),
+                "action_level": rows[0]["action_level"],
+                "workstation_id": ws,
+                "effect": "breakdown_cleared",
+            })
+
+
+def _ensure_applied_actions_table(conn: sqlite3.Connection) -> None:
+    """Table légère pour suivre les décisions filtre dual déjà appliquées
+    (idempotence : une décision ne déclenche un effet physique qu'une fois)."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS run_metadata_applied_actions (
+            decision_id INTEGER PRIMARY KEY
+        )
+        """
+    )
+
+
 def _decay_breakdowns(state: HazardState) -> None:
     expired = [ws for ws, d in state.breakdown_ws.items() if d <= 0]
     for ws in expired:
@@ -436,30 +509,41 @@ def _decay_breakdowns(state: HazardState) -> None:
 def _of_blocked_by_pending_component(
     conn: sqlite3.Connection, of_id: str
 ) -> bool:
-    """Renvoie True si l'OF utilise (BOM) un composant fabriqué dont l'OF
-    n'est pas encore clôturé.
+    """Renvoie True si l'OF utilise (via pegging) un composant fabriqué
+    dont l'OF dédié n'est pas encore clôturé.
 
-    On regarde les bom_lines de l'article + le statut des OFs sur le child_article.
+    Utilise pegging_links pour identifier précisément les OFs amont,
+    plutôt que de bloquer sur l'ensemble des SEMI-1 en cours (qui
+    sérialiserait artificiellement la production).
     """
-    children = conn.execute(
-        """
-        SELECT b.child_article FROM bom_lines b
-        JOIN articles a ON a.article_id = b.child_article
-        JOIN manufacturing_orders mo ON mo.of_id = ?
-        WHERE b.parent_article = mo.article_id AND a.is_purchased = 0
-        """,
+    row = conn.execute(
+        "SELECT candidate_id FROM manufacturing_orders WHERE of_id = ?",
         (of_id,),
-    ).fetchall()
-    if not children:
+    ).fetchone()
+    if not row or row["candidate_id"] is None:
         return False
-    for c in children:
+    cand_id = row["candidate_id"]
+    # Cherche les candidates amont (dépendances directes) via pegging
+    upstream = conn.execute(
+        """
+        SELECT target_id FROM pegging_links
+        WHERE source_type = 'candidate_order'
+          AND source_id = ?
+          AND target_type = 'candidate_order'
+        """,
+        (cand_id,),
+    ).fetchall()
+    if not upstream:
+        return False
+    for up in upstream:
+        # Y a-t-il un OF associé à cette candidate amont non encore clôturé ?
         pending = conn.execute(
             """
             SELECT COUNT(*) AS n FROM manufacturing_orders
-            WHERE article_id = ?
+            WHERE candidate_id = ?
               AND status IN ('created', 'launched', 'in_progress')
             """,
-            (c["child_article"],),
+            (up["target_id"],),
         ).fetchone()
         if pending and int(pending["n"]) > 0:
             return True
@@ -477,9 +561,12 @@ def _advance_one_day(
     actor: str,
     apply_quality_scrap_to_op: bool = False,
 ) -> None:
-    """Pour chaque OF en cours, exécute UNE opération.
+    """Pour chaque OF en cours, exécute UNE opération sous deux contraintes :
 
-    Respecte la chaîne BOM : un ART-A attend que son SEMI-1 soit clôturé.
+    1. Chaîne BOM : un ART-A attend que son SEMI-1 soit clôturé.
+    2. Sérialisation poste : un poste ne traite qu'UN OF par jour (capacité
+       finie). Si plusieurs OF veulent le même poste, les autres attendent.
+
     Si l'op tombe sur un poste en panne, end_day = day + 1 (1 jour de retard).
     """
     active = conn.execute(
@@ -489,9 +576,13 @@ def _advance_one_day(
         ORDER BY of_id ASC
         """
     ).fetchall()
+    busy_ws: set[str] = set()
     for row in active:
         of_id = row["of_id"]
         if _of_blocked_by_pending_component(conn, of_id):
+            continue
+        # OF retardé par un breakdown précédent : doit attendre 1 jour
+        if state.delayed_of_until.get(of_id, 0) > day:
             continue
         # Cherche la prochaine op pending
         op = conn.execute(
@@ -510,13 +601,17 @@ def _advance_one_day(
             (of_id,),
         ).fetchone()
         qty = float(qty_row["quantity"])
-        # Effet panne : on déplace l'op au jour suivant si le poste est en panne
         ws = op["workstation_id"]
+        # Sérialisation : un poste ne peut traiter qu'un OF par jour
+        if ws in busy_ws:
+            continue
+        busy_ws.add(ws)
+        # Effet panne : retard proportionnel au slowdown_factor.
+        # factor=1.5 -> +1 jour ; factor=2.0 -> +2 jours ; factor=3.0 -> +3 jours.
         if ws in state.breakdown_ws:
-            # Op effectuée au jour day mais end_day = day + 1 pour signaler
-            # un retard d'un jour (slowdown_factor sert seulement à indiquer
-            # qu'il y a effectivement panne).
-            end_day = day + 1
+            factor = state.breakdown_factor.get(ws, 1.5)
+            delay_days = max(1, int(round((factor - 1.0) * 2)))
+            end_day = day + delay_days
             # Apply scrap if a quality NC hazard hit this OF this turn
             base_scrap = max(0.0, round(qty * 0.05))
             scrap_extra = 0.0
@@ -536,6 +631,9 @@ def _advance_one_day(
                 start_day=day, end_day=end_day,
                 minutes_offset_start=0, minutes_offset_end=480,
             )
+            # L5.2 : un OF qui a subi un breakdown doit attendre `delay_days`
+            # avant que sa prochaine op puisse être avancée
+            state.delayed_of_until[of_id] = end_day
         else:
             base_scrap = max(0.0, round(qty * 0.05))
             scrap_extra = 0.0
@@ -559,7 +657,10 @@ def _advance_one_day(
             (of_id,),
         ).fetchone()
         if remaining and int(remaining["n"]) == 0:
-            close_day = day if ws not in state.breakdown_ws else (day + 1)
+            close_day = day
+            if ws in state.breakdown_ws:
+                factor = state.breakdown_factor.get(ws, 1.5)
+                close_day = day + max(1, int(round((factor - 1.0) * 2)))
             _close_of_at_day(
                 conn, of_id, horizon_start=scenario.horizon_start,
                 day=close_day, actor=actor,
@@ -889,6 +990,8 @@ def run_event_doctrine(
                 if not d.is_absorbed:
                     attach_causes_to_deviation(conn, d.deviation_id)
             evaluate_all_open_deviations(conn, batch_id=batch_id)
+            # L5.2 : action corrective sur la réalité physique
+            _apply_corrective_actions(conn, state, result, day)
 
         # Capture mémoire P4 sur les OF clôturés
         closed = conn.execute(

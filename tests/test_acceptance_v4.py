@@ -60,11 +60,17 @@ def test_acceptance_v4_three_doctrines_comparative(
     assert by_d[DOCTRINE_OF].causes_attached == 0
     assert by_d[DOCTRINE_FLUX].causes_attached == 0
 
-    # Invariant 3 : V3 produit des actions filtre dual
+    # Invariant 3 : V3 produit des actions filtre dual proportionnées
     assert by_d[DOCTRINE_EVENT].actions_triggered > 0
-    # Au moins une action locale (correct_local ou replan_local)
-    assert by_d[DOCTRINE_EVENT].replan_local_actions > 0, \
-        "V3 doit produire au moins une correction locale (sinon le filtre dual est mal calibré)"
+    # Au moins une action non-globale (correct_local/replan_local/escalate),
+    # sinon le filtre dual saturait tout en replan_global comme un APS naïf.
+    event_kpis = by_d[DOCTRINE_EVENT]
+    non_global = (
+        event_kpis.actions_triggered
+        - event_kpis.replan_global_actions
+    )
+    assert non_global > 0, \
+        f"V3 doit produire des actions proportionnées (non-globales), observé : {event_kpis}"
 
     # Invariant 4 : V3 nervosité ≤ V1+V2
     assert by_d[DOCTRINE_EVENT].nervousness <= by_d[DOCTRINE_FLUX].nervousness

@@ -6,14 +6,15 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 ## État
 
-**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7) et **V4** (L4.1 → L4.3) complets.
+**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3) et **V5** (L5.1 → L5.2) complets.
 
-- 253 tests pytest verts, dont cinq tests d'acceptation end-to-end :
+- 254 tests pytest verts, dont six tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
   - `test_acceptance_v3` couche événementielle (attendus / matching / CPM / causes / dual tolérance / mémoire)
   - `test_acceptance_v4` étude comparative (OF / FLUX / EVENT sur même scénario, KPIs §19)
+  - `test_acceptance_v5` variance multi-seeds + scénarios stress + V3 actionnel
 
 ## Setup (Windows, PowerShell)
 
@@ -118,6 +119,8 @@ tests/              146 tests : unitaires + intégration + acceptation
 | Filtre dual de tolérances | `events_v3/dual_tolerance.py` | V3 ✓ |
 | Filtre dual de mémoire (apprentissage) | `events_v3/dual_memory.py` | V3 ✓ |
 | Étude comparative doctrinale (OF/FLUX/EVENT) | `comparative/` | V4 ✓ |
+| V3 actionnel (close-loop physique) | `comparative/runner.py:_apply_corrective_actions` | V5 ✓ |
+| Étude étendue variance multi-seeds | `comparative/variance.py` | V5 ✓ |
 
 ## V2 — extensions livrées
 
@@ -182,20 +185,58 @@ Exécution :
 python -m pilotage_flux compare-doctrines --report-path data/runs/comparative_report.md
 ```
 
-Résultats sur le scénario `baseline` (10 jours, 3 SO ART-A, 4 aléas) :
+Résultats sur le scénario `baseline` (15 jours, 3 SO ART-A, 4 aléas) :
 
 | KPI | OF | FLUX | EVENT |
 |---|---|---|---|
 | Recalculs APS | 5 | 5 | **2** |
-| Nervosité (replan/jour) | 0.50 | 0.50 | **0.20** |
+| Nervosité (replan/jour) | 0.333 | 0.333 | **0.133** |
+| Lead time moyen (j) | 3.00 | 3.00 | **2.88** |
 | Écarts détectés | 0 | 0 | **24** |
-| Actions filtre dual (correct/replan local) | 0 | 0 | **3** |
-| Replans globaux | 0 | 0 | 0 |
 | Causes attachées | 0 | 0 | **72** |
-| Événements qualité | 0 | 2 | 2 |
 
-→ V3 divise la nervosité par 2.5 et apporte une traçabilité complète des
-écarts et des causes, sans dégrader le lead time ni le WIP.
+## V5 — boucle physique + étude étendue
+
+**L5.2 — V3 actionnel** : la doctrine V3 ferme la boucle planifier → exécuter
+→ mesurer → **réguler** → apprendre. Quand le filtre dual de tolérances
+déclenche une action de niveau `correct_local` ou supérieur ET qu'un poste
+est en panne, V3 ordonne immédiatement la maintenance (clear breakdown).
+Cela rend lead_time et WIP discriminants entre doctrines (cf. KPIs ci-dessous).
+
+**L5.1 — Étude comparative étendue** : `comparative/variance.py` joue chaque
+scénario sur N seeds avec jitter déterministe (timing ±1 jour, magnitudes ±20%)
+pour mesurer la stabilité doctrinale. Quatre scénarios canoniques :
+
+| Scénario | Description |
+|---|---|
+| `baseline` | 4 aléas mixtes (panne + NC + retard PO + urgence) |
+| `stress_double_breakdown` | 2 pannes simultanées WS-1 et WS-3 (le goulot) |
+| `stress_cascade_nc` | 3 NC qualité en cascade sur 3 jours |
+| `stress_demand_spike` | 3 urgences clients en pic |
+
+Exécution :
+
+```powershell
+python -m pilotage_flux compare-doctrines-extended --seeds "42,100,200,300,400"
+```
+
+Synthèse Δ V3 vs FLUX (5 seeds × 4 scénarios = 60 runs) :
+
+| Scénario | Δ nervosité | Δ lead time (j) | Δ WIP | Écarts V3 |
+|---|---|---|---|---|
+| baseline | -0.200 | -0.200 | -0.108 | 24.0 |
+| stress_double_breakdown | -0.111 | **-1.336** | 0 | 24.0 |
+| stress_cascade_nc | -0.200 | 0 | 0 | 24.0 |
+| stress_demand_spike | 0 | 0 | 0 | 24.0 |
+
+→ **V3 sauve 1.3 jours de lead time** sur la double panne (le scénario où
+le poste goulot WS-3 tombe en panne). V3 ne dégrade aucun scénario.
+V3 ne change rien sur `stress_demand_spike` — résultat honnête : la doctrine
+événementielle n'aide pas quand l'aléa est de la **demande nouvelle**, qui
+exige un APS replan quoi qu'il en soit.
+
+Rapports complets : `data/comparative_baseline_report.md` et
+`data/comparative_extended_report.md`.
 
 ## Critères de succès validés par tests d'acceptation
 
@@ -235,7 +276,14 @@ Résultats sur le scénario `baseline` (10 jours, 3 SO ART-A, 4 aléas) :
 24. Les 3 doctrines (OF/FLUX/EVENT) terminent le même scénario sans erreur
 25. Seul V3 détecte des écarts (deviations_detected > 0)
 26. Seul V3 attache des causes (causes_attached > 0)
-27. V3 produit au moins une correction locale (filtre dual calibré)
+27. V3 produit des actions proportionnées (non-globales)
 28. Nervosité V3 ≤ nervosité V1+V2 ≤ nervosité OF (par construction)
-29. Même nombre d'OF clôturés entre doctrines (la doctrine ne change pas la réalité physique)
+29. Même nombre d'OF clôturés entre doctrines
 30. Reproductibilité : 2 runs successifs même doctrine → mêmes KPIs
+
+`tests/test_acceptance_v5.py` (V5 — variance + boucle physique) :
+31. 4 scénarios × 3 doctrines × 3 seeds = 36 runs sans erreur
+32. V3 détecte des écarts et attache des causes sur les 4 scénarios
+33. V3 sauve du lead time vs FLUX sur `stress_double_breakdown` (boucle physique L5.2)
+34. V3 nervosité ≤ FLUX nervosité sur `baseline`
+35. Rapport étendu Markdown construit pour les 4 scénarios

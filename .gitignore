@@ -11,6 +11,9 @@ dist/
 venv/
 
 # Runtime databases
+data/runs/**/*.db
+data/runs/**/*.sqlite
+data/runs/**/*.sqlite3
 data/runs/*.db
 data/runs/*.sqlite
 data/runs/*.sqlite3

@@ -105,11 +105,14 @@ from pilotage_flux.mes import (
 )
 from pilotage_flux.visualization import of_detail_view, workstation_view
 from pilotage_flux.comparative import (
+    ALL_SCENARIOS,
     DOCTRINES,
     baseline_scenario,
     build_comparative_report,
+    build_variance_report,
     compute_kpis,
     run_doctrine,
+    run_variance_study,
 )
 
 
@@ -1847,6 +1850,74 @@ def compare_doctrines(
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
     console.print(f"[green]OK[/green] rapport écrit : [bold]{report_path}[/bold]")
+
+
+@app.command("compare-doctrines-extended")
+def compare_doctrines_extended(
+    seeds: str = typer.Option(
+        "42,100,200,300,400",
+        help="Liste de seeds (virgule séparée) pour la variance.",
+    ),
+    scenarios: str = typer.Option(
+        "baseline,stress_double_breakdown,stress_cascade_nc,stress_demand_spike",
+        help="Liste de scénarios (virgule séparée).",
+    ),
+    work_dir: Path = typer.Option(
+        Path("data/runs/variance"),
+        help="Dossier des bases SQLite par run.",
+    ),
+    fixtures: Path = typer.Option(
+        Path("data/fixtures_v1"), help="Fixtures référentiels (V1)."
+    ),
+    report_path: Path = typer.Option(
+        Path("data/comparative_extended_report.md"),
+        help="Chemin de sortie du rapport étendu.",
+    ),
+) -> None:
+    """Étude comparative étendue : N scénarios × 3 doctrines × M seeds."""
+    seed_list = [int(s) for s in seeds.split(",") if s.strip()]
+    scen_list = [s.strip() for s in scenarios.split(",") if s.strip()]
+    for s in scen_list:
+        if s not in ALL_SCENARIOS:
+            console.print(f"[red]ERR[/red] scénario inconnu : {s}")
+            raise typer.Exit(code=1)
+    total = len(scen_list) * len(DOCTRINES) * len(seed_list)
+    console.print(
+        f"[yellow]→[/yellow] étude étendue : {len(scen_list)} scénarios × "
+        f"{len(DOCTRINES)} doctrines × {len(seed_list)} seeds = [bold]{total}[/bold] runs"
+    )
+    study = run_variance_study(
+        scenarios=scen_list,
+        doctrines=list(DOCTRINES),
+        seeds=seed_list,
+        work_dir=work_dir,
+        fixtures_dir=fixtures,
+    )
+    report = build_variance_report(study)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    console.print(f"[green]OK[/green] rapport étendu : [bold]{report_path}[/bold]")
+
+    # Tableau de résumé par scénario
+    tbl = Table(title="Synthèse — Δ nervosité V3 vs FLUX par scénario")
+    tbl.add_column("Scénario")
+    tbl.add_column("Δ nervosité", justify="right")
+    tbl.add_column("Δ lead time", justify="right")
+    tbl.add_column("Δ WIP", justify="right")
+    tbl.add_column("Détections V3", justify="right")
+    for scen, by_doc in study.aggregates.items():
+        if "event" not in by_doc or "flux" not in by_doc:
+            continue
+        ev = by_doc["event"]
+        fx = by_doc["flux"]
+        tbl.add_row(
+            scen,
+            f"{ev.nervousness_mean - fx.nervousness_mean:+.3f}",
+            f"{ev.lead_time_avg_mean - fx.lead_time_avg_mean:+.3f}",
+            f"{ev.wip_mean - fx.wip_mean:+.3f}",
+            f"{ev.deviations_detected_mean:.1f}",
+        )
+    console.print(tbl)
 
 
 if __name__ == "__main__":

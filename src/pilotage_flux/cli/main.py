@@ -8,6 +8,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from pilotage_flux.aps import (
+    flatten_bom_for_article,
+    get_pegging_chain,
+    persist_flattened_bom,
+)
 from pilotage_flux.db import init_schema, db_session
 from pilotage_flux.events import (
     fetch_events,
@@ -284,6 +289,108 @@ def replay_cmd(
     for i, line in enumerate(state.timeline, start=1):
         timeline.add_row(str(i), line)
     console.print(timeline)
+
+
+@app.command("flatten-bom")
+def flatten_bom_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    article: str = typer.Option(
+        None, "--article", help="Article racine (defaut : tous les articles fabriques)."
+    ),
+) -> None:
+    """Aplatit les nomenclatures multi-niveau et persiste le resultat."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+
+    with db_session(path) as conn:
+        if article is None:
+            n = persist_flattened_bom(conn)
+            console.print(
+                f"[green]OK[/green] {n} lignes inserees dans flattened_bom_lines."
+            )
+            rows = conn.execute(
+                """
+                SELECT root_article, component_article, cumulative_quantity,
+                       depth_level, is_leaf, path
+                FROM flattened_bom_lines
+                ORDER BY root_article, depth_level, component_article
+                """
+            ).fetchall()
+        else:
+            nodes = flatten_bom_for_article(conn, article)
+            rows = [
+                {
+                    "root_article": article,
+                    "component_article": n.component_article,
+                    "cumulative_quantity": n.cumulative_quantity,
+                    "depth_level": n.depth_level,
+                    "is_leaf": 1 if n.is_leaf else 0,
+                    "path": n.path,
+                }
+                for n in nodes
+            ]
+
+    if not rows:
+        console.print("[yellow]Aucune ligne a afficher.[/yellow]")
+        return
+
+    tbl = Table(title=f"Aplatissement BOM ({'tous' if article is None else article})")
+    tbl.add_column("racine")
+    tbl.add_column("composant")
+    tbl.add_column("qte/unite", justify="right")
+    tbl.add_column("profondeur", justify="right")
+    tbl.add_column("feuille", justify="center")
+    tbl.add_column("path")
+    for r in rows:
+        is_leaf = bool(r["is_leaf"]) if not isinstance(r, dict) else bool(r["is_leaf"])
+        tbl.add_row(
+            r["root_article"],
+            r["component_article"],
+            f"{float(r['cumulative_quantity']):g}",
+            str(r["depth_level"]),
+            "oui" if is_leaf else "non",
+            r["path"],
+        )
+    console.print(tbl)
+
+
+@app.command("pegging")
+def pegging_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    sales_order: str = typer.Option(..., "--so", help="ID du sales_order (ex: SO-001)."),
+) -> None:
+    """Affiche la chaine de pegging issue d'un sales_order."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+
+    with db_session(path) as conn:
+        chain = get_pegging_chain(conn, "sales_order", sales_order)
+
+    if not chain:
+        console.print(f"[yellow]Aucun pegging pour {sales_order}[/yellow]")
+        return
+
+    tbl = Table(title=f"Pegging chain - {sales_order}")
+    tbl.add_column("depth", justify="right")
+    tbl.add_column("source")
+    tbl.add_column("->", justify="center")
+    tbl.add_column("target")
+    tbl.add_column("article")
+    tbl.add_column("qte", justify="right")
+    for link in chain:
+        tbl.add_row(
+            str(link.depth),
+            f"{link.source_type}/{link.source_id}",
+            "->",
+            f"{link.target_type}/{link.target_id}",
+            link.article_id or "-",
+            f"{link.quantity:g}",
+        )
+    console.print(tbl)
 
 
 @app.command("flow")

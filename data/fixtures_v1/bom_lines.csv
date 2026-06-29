@@ -1,0 +1,4 @@
+parent_article,child_article,quantity
+ART-A,SEMI-1,1
+ART-A,COMP-Y,1
+SEMI-1,COMP-X,2

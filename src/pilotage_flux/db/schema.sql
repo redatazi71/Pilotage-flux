@@ -189,6 +189,44 @@ CREATE TABLE IF NOT EXISTS gate_decisions (
 );
 
 -- ---------------------------------------------------------------------
+-- V1 : aplatissement BOM et pegging multi-niveau
+-- ---------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS flattened_bom_lines (
+    flat_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    root_article        TEXT NOT NULL REFERENCES articles(article_id),
+    component_article   TEXT NOT NULL REFERENCES articles(article_id),
+    cumulative_quantity REAL NOT NULL,
+    depth_level         INTEGER NOT NULL,
+    is_leaf             INTEGER NOT NULL DEFAULT 0,    -- 1 si composant achete
+    path                TEXT NOT NULL,                  -- /ART-A/SEMI-1/COMP-X
+    computed_at         TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (root_article, path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_flattened_bom_root
+    ON flattened_bom_lines (root_article);
+CREATE INDEX IF NOT EXISTS idx_flattened_bom_component
+    ON flattened_bom_lines (component_article);
+
+CREATE TABLE IF NOT EXISTS pegging_links (
+    pegging_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_type     TEXT NOT NULL,   -- 'sales_order' | 'candidate_order' | 'manufacturing_order'
+    source_id       TEXT NOT NULL,
+    target_type     TEXT NOT NULL,   -- 'candidate_order' | 'manufacturing_order' | 'component'
+    target_id       TEXT NOT NULL,
+    article_id      TEXT REFERENCES articles(article_id),
+    quantity        REAL NOT NULL,
+    depth           INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pegging_source
+    ON pegging_links (source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_pegging_target
+    ON pegging_links (target_type, target_id);
+
+-- ---------------------------------------------------------------------
 -- Metadata du run de simulation
 -- ---------------------------------------------------------------------
 

@@ -1,0 +1,14 @@
+article_id,label,unit,is_purchased
+ART-A,Produit fini A (premium),PCE,0
+ART-B,Produit fini B (standard),PCE,0
+ART-C,Produit fini C (économique),PCE,0
+ART-D,Produit fini D (export),PCE,0
+SEMI-1,Semi-fini 1 (chassis),PCE,0
+SEMI-2,Semi-fini 2 (sous-ens. électronique),PCE,0
+SEMI-3,Semi-fini 3 (sous-ens. mécanique),PCE,0
+SEMI-4,Semi-fini 4 (habillage),PCE,0
+COMP-X,Composant X (matière brute),PCE,1
+COMP-Y,Composant Y (carte),PCE,1
+COMP-Z,Composant Z (boîtier),PCE,1
+COMP-W,Composant W (visserie),PCE,1
+COMP-V,Composant V (câble),PCE,1

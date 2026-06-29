@@ -165,6 +165,210 @@ def stress_cascade_nc_scenario() -> Scenario:
     )
 
 
+def _default_xl_sales_orders() -> list[dict[str, Any]]:
+    """Set étendu : 6 SO sur 4 articles finis (ART-A/B/C/D)."""
+    return [
+        {"sales_order_id": "SO-001", "article_id": "ART-A",
+         "quantity": 80,  "due_date": "2026-07-20"},
+        {"sales_order_id": "SO-002", "article_id": "ART-A",
+         "quantity": 60,  "due_date": "2026-07-25"},
+        {"sales_order_id": "SO-003", "article_id": "ART-B",
+         "quantity": 120, "due_date": "2026-07-22"},
+        {"sales_order_id": "SO-004", "article_id": "ART-B",
+         "quantity": 90,  "due_date": "2026-07-28"},
+        {"sales_order_id": "SO-005", "article_id": "ART-C",
+         "quantity": 100, "due_date": "2026-07-25"},
+        {"sales_order_id": "SO-006", "article_id": "ART-D",
+         "quantity": 70,  "due_date": "2026-07-26"},
+    ]
+
+
+def _default_xl_stocks() -> dict[str, float]:
+    return {
+        "COMP-X": 600.0, "COMP-Y": 250.0, "COMP-Z": 500.0,
+        "COMP-W": 800.0, "COMP-V": 300.0,
+    }
+
+
+def _default_xl_pos() -> list[dict[str, Any]]:
+    return [
+        {"po_id": "PO-0001", "article_id": "COMP-X", "qty": 500, "expected_day": 5},
+        {"po_id": "PO-0002", "article_id": "COMP-Y", "qty": 200, "expected_day": 4},
+        {"po_id": "PO-0003", "article_id": "COMP-Z", "qty": 400, "expected_day": 6},
+        {"po_id": "PO-0004", "article_id": "COMP-W", "qty": 600, "expected_day": 3},
+        {"po_id": "PO-0005", "article_id": "COMP-V", "qty": 300, "expected_day": 7},
+    ]
+
+
+def baseline_xl_scenario() -> Scenario:
+    """Scénario étendu baseline : 6 SO sur 4 articles finis, 4 aléas variés.
+
+    Sur fixtures_extended (4 finis × 4 semi × 5 composants, 6 postes).
+    Exerce le multi-contrats P3 collective.
+    """
+    return Scenario(
+        name="baseline_xl",
+        seed=42,
+        horizon_days=20,
+        horizon_start="2026-07-06",
+        initial_sales_orders=_default_xl_sales_orders(),
+        initial_stocks=_default_xl_stocks(),
+        initial_purchase_orders=_default_xl_pos(),
+        hazards=[
+            HazardEvent(day=2, kind=HAZARD_BREAKDOWN,
+                        payload={"workstation_id": "WS-3",  # goulot
+                                 "slowdown_factor": 2.0,
+                                 "duration_days": 4}),
+            HazardEvent(day=3, kind=HAZARD_QUALITY_NC,
+                        payload={"article_id": "ART-A",
+                                 "qty_scrap": 20, "severity": "high"}),
+            HazardEvent(day=4, kind=HAZARD_PO_DELAY,
+                        payload={"po_id": "PO-0001", "delay_days": 7}),
+            HazardEvent(day=6, kind=HAZARD_URGENT_ORDER,
+                        payload={"sales_order_id": "SO-URG-XL",
+                                 "article_id": "ART-B",
+                                 "quantity": 40, "due_day": 12}),
+        ],
+    )
+
+
+def stress_double_breakdown_xl_scenario() -> Scenario:
+    """Stress XL : 2 pannes sur des postes critiques (WS-3 goulot + WS-4)."""
+    return Scenario(
+        name="stress_double_breakdown_xl",
+        seed=100,
+        horizon_days=22,
+        horizon_start="2026-07-06",
+        initial_sales_orders=_default_xl_sales_orders(),
+        initial_stocks=_default_xl_stocks(),
+        initial_purchase_orders=_default_xl_pos(),
+        hazards=[
+            HazardEvent(day=2, kind=HAZARD_BREAKDOWN,
+                        payload={"workstation_id": "WS-3",
+                                 "slowdown_factor": 2.0,
+                                 "duration_days": 5}),
+            HazardEvent(day=3, kind=HAZARD_BREAKDOWN,
+                        payload={"workstation_id": "WS-4",
+                                 "slowdown_factor": 2.0,
+                                 "duration_days": 5}),
+        ],
+    )
+
+
+def stress_cascade_nc_xl_scenario() -> Scenario:
+    """Stress XL : 4 NCs en cascade sur 3 articles."""
+    return Scenario(
+        name="stress_cascade_nc_xl",
+        seed=200,
+        horizon_days=20,
+        horizon_start="2026-07-06",
+        initial_sales_orders=_default_xl_sales_orders(),
+        initial_stocks=_default_xl_stocks(),
+        initial_purchase_orders=_default_xl_pos(),
+        hazards=[
+            HazardEvent(day=2, kind=HAZARD_QUALITY_NC,
+                        payload={"article_id": "SEMI-1",
+                                 "qty_scrap": 15, "severity": "high"}),
+            HazardEvent(day=3, kind=HAZARD_QUALITY_NC,
+                        payload={"article_id": "ART-A",
+                                 "qty_scrap": 18, "severity": "high"}),
+            HazardEvent(day=4, kind=HAZARD_QUALITY_NC,
+                        payload={"article_id": "ART-B",
+                                 "qty_scrap": 22, "severity": "critical"}),
+            HazardEvent(day=5, kind=HAZARD_QUALITY_NC,
+                        payload={"article_id": "ART-C",
+                                 "qty_scrap": 15, "severity": "high"}),
+        ],
+    )
+
+
+def stress_demand_spike_xl_scenario() -> Scenario:
+    """Stress XL : 5 urgences clients sur des articles variés."""
+    return Scenario(
+        name="stress_demand_spike_xl",
+        seed=300,
+        horizon_days=22,
+        horizon_start="2026-07-06",
+        initial_sales_orders=_default_xl_sales_orders(),
+        initial_stocks=_default_xl_stocks(),
+        initial_purchase_orders=_default_xl_pos(),
+        hazards=[
+            HazardEvent(day=2, kind=HAZARD_URGENT_ORDER,
+                        payload={"sales_order_id": "SO-URG-1",
+                                 "article_id": "ART-A",
+                                 "quantity": 30, "due_day": 9}),
+            HazardEvent(day=3, kind=HAZARD_URGENT_ORDER,
+                        payload={"sales_order_id": "SO-URG-2",
+                                 "article_id": "ART-B",
+                                 "quantity": 40, "due_day": 11}),
+            HazardEvent(day=5, kind=HAZARD_URGENT_ORDER,
+                        payload={"sales_order_id": "SO-URG-3",
+                                 "article_id": "ART-D",
+                                 "quantity": 25, "due_day": 13}),
+            HazardEvent(day=7, kind=HAZARD_URGENT_ORDER,
+                        payload={"sales_order_id": "SO-URG-4",
+                                 "article_id": "ART-C",
+                                 "quantity": 35, "due_day": 15}),
+            HazardEvent(day=9, kind=HAZARD_URGENT_ORDER,
+                        payload={"sales_order_id": "SO-URG-5",
+                                 "article_id": "ART-A",
+                                 "quantity": 50, "due_day": 17}),
+        ],
+    )
+
+
+def stress_multi_contract_overload_scenario() -> Scenario:
+    """Stress XL : forte demande simultanée sur les 4 articles finis avec
+    horizon serré, forçant la P3 collective à arbitrer entre contrats.
+
+    La charge cumulée sur le goulot WS-3 dépasse sa capacité d'horizon
+    (~7392 min sur 11 jours ouvrés × 960 × 0.70). Charge demandée :
+    1200 + 1500 + 800 + 1200 = 4700 min sur WS-3 — dans l'enveloppe.
+    Pour forcer PARTIAL_FREEZE, on raccourcit l'horizon à 7 jours (~5
+    jours ouvrés ≈ 3360 min de capacité).
+    """
+    return Scenario(
+        name="stress_multi_contract_overload",
+        seed=400,
+        horizon_days=7,   # horizon serré → capacité goulot réduite
+        horizon_start="2026-07-06",
+        initial_sales_orders=[
+            {"sales_order_id": "SO-A1", "article_id": "ART-A",
+             "quantity": 200, "due_date": "2026-07-13"},
+            {"sales_order_id": "SO-A2", "article_id": "ART-A",
+             "quantity": 150, "due_date": "2026-07-13"},
+            {"sales_order_id": "SO-B1", "article_id": "ART-B",
+             "quantity": 300, "due_date": "2026-07-13"},
+            {"sales_order_id": "SO-B2", "article_id": "ART-B",
+             "quantity": 200, "due_date": "2026-07-13"},
+            {"sales_order_id": "SO-C1", "article_id": "ART-C",
+             "quantity": 250, "due_date": "2026-07-13"},
+            {"sales_order_id": "SO-C2", "article_id": "ART-C",
+             "quantity": 200, "due_date": "2026-07-13"},
+            {"sales_order_id": "SO-D1", "article_id": "ART-D",
+             "quantity": 150, "due_date": "2026-07-13"},
+            {"sales_order_id": "SO-D2", "article_id": "ART-D",
+             "quantity": 100, "due_date": "2026-07-13"},
+        ],
+        initial_stocks={
+            "COMP-X": 2500.0, "COMP-Y": 1000.0, "COMP-Z": 2000.0,
+            "COMP-W": 3000.0, "COMP-V": 1200.0,
+        },
+        initial_purchase_orders=[
+            {"po_id": "PO-0001", "article_id": "COMP-X",
+             "qty": 1500, "expected_day": 4},
+            {"po_id": "PO-0002", "article_id": "COMP-Y",
+             "qty": 700, "expected_day": 3},
+        ],
+        hazards=[
+            HazardEvent(day=2, kind=HAZARD_BREAKDOWN,
+                        payload={"workstation_id": "WS-3",
+                                 "slowdown_factor": 1.5,
+                                 "duration_days": 2}),
+        ],
+    )
+
+
 def stress_demand_spike_scenario() -> Scenario:
     """Stress : 3 urgences clients en pic (jours 2, 4, 6)."""
     return Scenario(
@@ -201,6 +405,19 @@ ALL_SCENARIOS = {
     "stress_cascade_nc": stress_cascade_nc_scenario,
     "stress_demand_spike": stress_demand_spike_scenario,
 }
+
+
+# Scénarios étendus (fixtures_extended, multi-articles, multi-contrats)
+ALL_SCENARIOS_XL = {
+    "baseline_xl": baseline_xl_scenario,
+    "stress_double_breakdown_xl": stress_double_breakdown_xl_scenario,
+    "stress_cascade_nc_xl": stress_cascade_nc_xl_scenario,
+    "stress_demand_spike_xl": stress_demand_spike_xl_scenario,
+    "stress_multi_contract_overload": stress_multi_contract_overload_scenario,
+}
+
+
+ALL_SCENARIOS_ANY = {**ALL_SCENARIOS, **ALL_SCENARIOS_XL}
 
 
 def jitter_scenario(scenario: Scenario, seed: int) -> Scenario:

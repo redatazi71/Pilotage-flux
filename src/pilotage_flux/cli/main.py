@@ -118,6 +118,8 @@ from pilotage_flux.costing import (
 )
 from pilotage_flux.comparative import (
     ALL_SCENARIOS,
+    ALL_SCENARIOS_ANY,
+    ALL_SCENARIOS_XL,
     DOCTRINES,
     baseline_scenario,
     build_comparative_report,
@@ -2100,9 +2102,23 @@ def compare_doctrines_extended(
     seed_list = [int(s) for s in seeds.split(",") if s.strip()]
     scen_list = [s.strip() for s in scenarios.split(",") if s.strip()]
     for s in scen_list:
-        if s not in ALL_SCENARIOS:
-            console.print(f"[red]ERR[/red] scénario inconnu : {s}")
+        if s not in ALL_SCENARIOS_ANY:
+            console.print(
+                f"[red]ERR[/red] scénario inconnu : {s} "
+                f"(connus : {list(ALL_SCENARIOS_ANY)})"
+            )
             raise typer.Exit(code=1)
+    # Détecte si les scénarios sont XL (utilisent fixtures_extended) ou V1
+    is_xl_run = any(s in ALL_SCENARIOS_XL for s in scen_list)
+    if is_xl_run and any(s not in ALL_SCENARIOS_XL for s in scen_list):
+        console.print(
+            "[red]ERR[/red] mélange XL et V1 dans la même étude — choisis l'un ou l'autre."
+        )
+        raise typer.Exit(code=1)
+    if is_xl_run and str(fixtures).endswith("fixtures_v1"):
+        # auto-bascule sur fixtures_extended
+        fixtures = Path("data/fixtures_extended")
+        console.print(f"[dim]→ bascule auto fixtures: {fixtures}[/dim]")
     total = len(scen_list) * len(DOCTRINES) * len(seed_list)
     console.print(
         f"[yellow]→[/yellow] étude étendue : {len(scen_list)} scénarios × "

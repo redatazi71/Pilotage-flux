@@ -1,0 +1,7 @@
+workstation_id,label,sequence_idx
+WS-1,Poste 1 - Découpe matière,1
+WS-2,Poste 2 - Préparation,2
+WS-3,Poste 3 - Assemblage (goulot),3
+WS-4,Poste 4 - Câblage,4
+WS-5,Poste 5 - Contrôle,5
+WS-6,Poste 6 - Conditionnement,6

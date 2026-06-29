@@ -14,6 +14,8 @@ Mesure les KPI du §19 du cadrage et publie un rapport comparatif §24.
 
 from pilotage_flux.comparative.scenario import (
     ALL_SCENARIOS,
+    ALL_SCENARIOS_ANY,
+    ALL_SCENARIOS_XL,
     DOCTRINE_EVENT,
     DOCTRINE_FLUX,
     DOCTRINE_OF,
@@ -21,10 +23,15 @@ from pilotage_flux.comparative.scenario import (
     HazardEvent,
     Scenario,
     baseline_scenario,
+    baseline_xl_scenario,
     jitter_scenario,
     stress_cascade_nc_scenario,
+    stress_cascade_nc_xl_scenario,
     stress_demand_spike_scenario,
+    stress_demand_spike_xl_scenario,
     stress_double_breakdown_scenario,
+    stress_double_breakdown_xl_scenario,
+    stress_multi_contract_overload_scenario,
 )
 from pilotage_flux.comparative.runner import RunResult, run_doctrine
 from pilotage_flux.comparative.kpis import KpiSet, compute_kpis
@@ -48,6 +55,13 @@ from pilotage_flux.comparative.learning import (
 
 __all__ = [
     "ALL_SCENARIOS",
+    "ALL_SCENARIOS_ANY",
+    "ALL_SCENARIOS_XL",
+    "baseline_xl_scenario",
+    "stress_cascade_nc_xl_scenario",
+    "stress_demand_spike_xl_scenario",
+    "stress_double_breakdown_xl_scenario",
+    "stress_multi_contract_overload_scenario",
     "DOCTRINE_EVENT",
     "DOCTRINE_FLUX",
     "DOCTRINE_OF",

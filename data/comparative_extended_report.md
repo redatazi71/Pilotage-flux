@@ -21,9 +21,9 @@ Chaque scénario est rejoué avec un bruit déterministe (timing ±1 jour, magni
 | Replans globaux (moy.) | 0.0 | 0.0 | 0.0 |
 | Causes attachées (moy.) | 0.0 | 0.0 | 72.0 |
 | Événements qualité (moy.) | 0.0 | 2.0 | 2.0 |
-| Coût total (€) | 18759 ± 1501 | 18759 ± 1501 | 10897 ± 1509 |
-| Coût par OF (€) | 2345 | 2345 | 1362 |
-| Coût scrap (€) | 333 | 333 | 333 |
+| Coût total (€) | 18759 ± 1501 | 18759 ± 1501 | 10943 ± 1447 |
+| Coût par OF (€) | 2345 | 2345 | 1368 |
+| Coût scrap (€) | 333 | 333 | 380 |
 
 ## Scénario `stress_double_breakdown`
 
@@ -59,9 +59,9 @@ Chaque scénario est rejoué avec un bruit déterministe (timing ±1 jour, magni
 | Replans globaux (moy.) | 0.0 | 0.0 | 0.0 |
 | Causes attachées (moy.) | 0.0 | 0.0 | 72.0 |
 | Événements qualité (moy.) | 0.0 | 6.0 | 6.0 |
-| Coût total (€) | 7468 ± 0 | 7468 ± 0 | 7468 ± 0 |
-| Coût par OF (€) | 1245 | 1245 | 1245 |
-| Coût scrap (€) | 286 | 286 | 286 |
+| Coût total (€) | 7864 ± 134 | 7864 ± 134 | 7682 ± 80 |
+| Coût par OF (€) | 1311 | 1311 | 1280 |
+| Coût scrap (€) | 682 | 682 | 500 |
 
 ## Scénario `stress_demand_spike`
 
@@ -71,8 +71,8 @@ Chaque scénario est rejoué avec un bruit déterministe (timing ±1 jour, magni
 | Lead time max (j) | 5.0 | 5.0 | 5.0 |
 | WIP moyen | 1.73 ± 0.10 | 1.73 ± 0.10 | 1.73 ± 0.10 |
 | OF clôturés (moy.) | 12.0 | 12.0 | 12.0 |
-| Recalculs APS (moy.) | 4.0 | 4.0 | 4.0 |
-| Nervosité (replan/jour) | 0.267 | 0.267 | 0.267 |
+| Recalculs APS (moy.) | 4.0 | 4.0 | 2.0 |
+| Nervosité (replan/jour) | 0.267 | 0.267 | 0.133 |
 | Écarts détectés (moy.) | 0.0 | 0.0 | 24.0 |
 | Actions tolérance (moy.) | 0.0 | 0.0 | 24.0 |
 | Replans globaux (moy.) | 0.0 | 0.0 | 0.0 |
@@ -86,9 +86,9 @@ Chaque scénario est rejoué avec un bruit déterministe (timing ±1 jour, magni
 
 | Scénario | Δ nervosité | Δ lead time (j) | Δ WIP | Δ coût (€) | Écarts V3 |
 |---|---|---|---|---|---|
-| baseline | -0.200 | -0.200 | -0.108 | -7862 | 24.0 |
+| baseline | -0.200 | -0.200 | -0.108 | -7816 | 24.0 |
 | stress_double_breakdown | -0.111 | -1.336 | +0.000 | -7925 | 24.0 |
-| stress_cascade_nc | -0.200 | +0.000 | +0.000 | +0 | 24.0 |
-| stress_demand_spike | +0.000 | +0.000 | +0.000 | +0 | 24.0 |
+| stress_cascade_nc | -0.200 | +0.000 | +0.000 | -182 | 24.0 |
+| stress_demand_spike | -0.134 | +0.000 | +0.000 | +0 | 24.0 |
 
 **Lecture** : une valeur Δ négative signifie que V3 fait mieux que FLUX. V3 doit montrer Δ nervosité < 0 et écarts détectés > 0 sur tous les scénarios pour que la doctrine soit validée.

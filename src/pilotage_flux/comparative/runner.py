@@ -317,11 +317,22 @@ class HazardState:
     breakdown_ws: dict[str, int] = field(default_factory=dict)
     # workstation_id -> nb jours restants de slowdown
     breakdown_factor: dict[str, float] = field(default_factory=dict)
-    quality_nc_applied: bool = False
+    pending_nc_scrap: float = 0.0
+    # qty additionnelle de scrap à appliquer au prochain op (cumulée NC en cascade)
+    nc_count: int = 0
+    # nb total de NCs vus dans ce run (déclenche qc_intervention V3)
     urgent_order_id: str | None = None
     po_delays: dict[str, int] = field(default_factory=dict)
     delayed_of_until: dict[str, int] = field(default_factory=dict)
     # of_id -> jour minimum à partir duquel l'OF peut avancer sa prochaine op
+
+    # L8.1 — état de la boucle physique V3 étendue
+    qc_intervention_active: bool = False
+    # Si V3 a déclenché une intervention qualité : qty_scrap pending × 0.5
+    pos_alt_sourced: set[str] = field(default_factory=set)
+    # PO id pour lesquels V3 a déjà sourcé en alternative
+    urgent_seen_count: int = 0
+    # Nb d'urgent_order vus dans ce run. V3 sauve les replans APS au-delà du 1er.
 
 
 def _apply_hazard(
@@ -345,7 +356,11 @@ def _apply_hazard(
     elif kind == HAZARD_QUALITY_NC:
         article = payload["article_id"]
         qty_scrap = float(payload["qty_scrap"])
-        # Trouve un OF en cours sur cet article et déclenche NC + scrap
+        # Cumul du scrap pending : la prochaine op processed l'absorbera.
+        # Les NC en cascade s'additionnent jusqu'à consommation.
+        state.pending_nc_scrap += qty_scrap
+        state.nc_count += 1
+        # Trouve un OF en cours sur cet article et trace NC + scrap (V2/V3 only)
         if doctrine in (DOCTRINE_FLUX, DOCTRINE_EVENT):
             row = conn.execute(
                 """
@@ -369,14 +384,16 @@ def _apply_hazard(
                     qty_scrapped=qty_scrap,
                     explanation="L4 hazard scrap",
                 )
-                state.quality_nc_applied = True
                 result.hazards_observed.append(
                     {"day": hazard.day, "kind": kind, "of_id": row["of_id"],
                      "qty_scrap": qty_scrap}
                 )
+            else:
+                result.hazards_observed.append(
+                    {"day": hazard.day, "kind": kind, "article_id": article,
+                     "qty_scrap": qty_scrap}
+                )
         else:
-            # Doctrine OF : on enregistre l'effet (scrap) sans porter de NC
-            state.quality_nc_applied = True
             result.hazards_observed.append(
                 {"day": hazard.day, "kind": kind, "article_id": article,
                  "qty_scrap": qty_scrap, "note": "doctrine_of_no_quality_module"}
@@ -424,6 +441,7 @@ def _apply_hazard(
 
 def _apply_corrective_actions(
     conn: sqlite3.Connection,
+    scenario: Scenario,
     state: HazardState,
     result: RunResult,
     day: int,
@@ -432,14 +450,17 @@ def _apply_corrective_actions(
 
     Ferme la boucle planifier → exécuter → mesurer → **réguler** → apprendre.
 
-    Logique signature V3 : V3 voit le symptôme (déviation) et déclenche la
-    maintenance. Concrètement, dès qu'au moins une décision de niveau
-    correct_local ou supérieur est triggered ET qu'au moins un poste est
-    en panne dans le state, V3 clôt cette panne (intervention immédiate).
+    L5.2 + L8.1 : V3 réagit à 4 familles d'aléas via le filtre dual :
+      - breakdown_ws    : V3 ordonne la maintenance immédiate (clear)
+      - quality_nc      : V3 déclenche une intervention qualité qui divise
+                          par 2 le scrap futur jusqu'à la fin du scénario
+      - po_delay        : V3 source en alternatif (réception immédiate du PO)
+      - urgent_order    : voir _apply_hazard : V3 saute le replan APS au-delà
+                          du 1er urgent (fragmentation locale au lieu de replan
+                          global)
 
-    Idempotence : on suit les décisions déjà consommées via
-    run_metadata_applied_actions pour qu'une seule action V3 par cycle clôt
-    une panne (sinon le compteur exploserait).
+    Idempotence : run_metadata_applied_actions trace les décisions consommées
+    pour éviter les déclenchements multiples.
     """
     _ensure_applied_actions_table(conn)
     rows = conn.execute(
@@ -464,20 +485,61 @@ def _apply_corrective_actions(
             (int(r["decision_id"]),),
         )
 
-    # Si V3 a au moins une action corrective+ et au moins un breakdown actif,
-    # déclencher la maintenance : clear breakdowns. Un seul cycle d'action
-    # par jour (premier passage suffit).
-    if rows and state.breakdown_ws:
+    if not rows:
+        return
+
+    decision_ref = int(rows[0]["decision_id"])
+    action_ref = rows[0]["action_level"]
+
+    # L5.2 — breakdown : clear immédiat des pannes
+    if state.breakdown_ws:
         for ws in list(state.breakdown_ws.keys()):
             state.breakdown_ws.pop(ws, None)
             state.breakdown_factor.pop(ws, None)
             result.corrective_actions_applied.append({
                 "day": day,
-                "decision_id": int(rows[0]["decision_id"]),
-                "action_level": rows[0]["action_level"],
+                "decision_id": decision_ref,
+                "action_level": action_ref,
                 "workstation_id": ws,
                 "effect": "breakdown_cleared",
             })
+
+    # L8.1.a — quality_nc : intervention qualité (réduit scrap futur de 50%)
+    if state.nc_count >= 1 and not state.qc_intervention_active:
+        state.qc_intervention_active = True
+        result.corrective_actions_applied.append({
+            "day": day,
+            "decision_id": decision_ref,
+            "action_level": action_ref,
+            "effect": "quality_intervention_started",
+        })
+
+    # L8.1.b — po_delay : sourcing alternatif (réception immédiate à l'horizon initial)
+    for po_id in list(state.po_delays.keys()):
+        if po_id in state.pos_alt_sourced:
+            continue
+        po_row = conn.execute(
+            """
+            SELECT po_id, article_id, qty_ordered, qty_received, expected_at, status
+            FROM purchase_orders WHERE po_id = ?
+            """,
+            (po_id,),
+        ).fetchone()
+        if po_row is None or po_row["status"] in ("received", "cancelled"):
+            continue
+        remaining = float(po_row["qty_ordered"]) - float(po_row["qty_received"])
+        if remaining <= 0:
+            continue
+        receive_purchase(conn, po_id, qty_received=remaining)
+        state.pos_alt_sourced.add(po_id)
+        result.corrective_actions_applied.append({
+            "day": day,
+            "decision_id": decision_ref,
+            "action_level": action_ref,
+            "po_id": po_id,
+            "qty_alt_sourced": remaining,
+            "effect": "po_alternative_sourced",
+        })
 
 
 def _ensure_applied_actions_table(conn: sqlite3.Connection) -> None:
@@ -559,7 +621,6 @@ def _advance_one_day(
     rng: random.Random,
     *,
     actor: str,
-    apply_quality_scrap_to_op: bool = False,
 ) -> None:
     """Pour chaque OF en cours, exécute UNE opération sous deux contraintes :
 
@@ -567,7 +628,8 @@ def _advance_one_day(
     2. Sérialisation poste : un poste ne traite qu'UN OF par jour (capacité
        finie). Si plusieurs OF veulent le même poste, les autres attendent.
 
-    Si l'op tombe sur un poste en panne, end_day = day + 1 (1 jour de retard).
+    Scrap pending (NC en cascade) : consommé par le 1er OF advancé du jour.
+    V3 qc_intervention_active divise le scrap pending par 2.
     """
     active = conn.execute(
         """
@@ -577,6 +639,13 @@ def _advance_one_day(
         """
     ).fetchall()
     busy_ws: set[str] = set()
+    # Scrap cumulé des NC du jour (et précédents) à appliquer au 1er OF avancé.
+    # V3 qc_intervention_active divise par 2 (l'intervention qualité limite
+    # le dommage). Cumulatif : un cascade_nc voit chaque NC consommé tour à tour.
+    pending_scrap = state.pending_nc_scrap
+    if state.qc_intervention_active and pending_scrap > 0:
+        pending_scrap = pending_scrap * 0.5
+    state.pending_nc_scrap = 0.0  # consumé
     for row in active:
         of_id = row["of_id"]
         if _of_blocked_by_pending_component(conn, of_id):
@@ -612,12 +681,11 @@ def _advance_one_day(
             factor = state.breakdown_factor.get(ws, 1.5)
             delay_days = max(1, int(round((factor - 1.0) * 2)))
             end_day = day + delay_days
-            # Apply scrap if a quality NC hazard hit this OF this turn
             base_scrap = max(0.0, round(qty * 0.05))
             scrap_extra = 0.0
-            if apply_quality_scrap_to_op and not state.quality_nc_applied:
-                scrap_extra = 15.0
-                state.quality_nc_applied = True
+            if pending_scrap > 0:
+                scrap_extra = pending_scrap
+                pending_scrap = 0.0  # consommé par cet OF
             qty_scrap = min(qty, base_scrap + scrap_extra)
             qty_good = max(0.0, qty - qty_scrap)
             sid, fid = _execute_op(
@@ -637,9 +705,9 @@ def _advance_one_day(
         else:
             base_scrap = max(0.0, round(qty * 0.05))
             scrap_extra = 0.0
-            if apply_quality_scrap_to_op and not state.quality_nc_applied:
-                scrap_extra = 15.0
-                state.quality_nc_applied = True
+            if pending_scrap > 0:
+                scrap_extra = pending_scrap
+                pending_scrap = 0.0
             qty_scrap = min(qty, base_scrap + scrap_extra)
             qty_good = max(0.0, qty - qty_scrap)
             _execute_op(
@@ -739,15 +807,12 @@ def run_of_doctrine(
         for h in scenario.hazards:
             hazards_by_day.setdefault(h.day, []).append(h)
 
-        apply_quality_next_day: bool = False
         for day in range(1, scenario.horizon_days + 1):
             _receive_due_purchase_orders(conn, scenario, day)
             # Aléas — la doctrine OF replanifie globalement sur CHAQUE aléa,
             # n'ayant ni dual tolerance ni détection événementielle.
             for h in hazards_by_day.get(day, []):
                 _apply_hazard(conn, scenario, h, state, result, DOCTRINE_OF)
-                if h.kind == HAZARD_QUALITY_NC:
-                    apply_quality_next_day = True
                 if h.kind == HAZARD_URGENT_ORDER:
                     new = run_p1_promotion(conn, actor="of.p1")
                     result.aps_recalculations += 1
@@ -764,11 +829,8 @@ def run_of_doctrine(
                     compute_candidates(conn)
                     result.aps_recalculations += 1
             _advance_one_day(
-                conn, scenario, day, state, result, rng,
-                actor="of.mes",
-                apply_quality_scrap_to_op=apply_quality_next_day,
+                conn, scenario, day, state, result, rng, actor="of.mes",
             )
-            apply_quality_next_day = False
             _decay_breakdowns(state)
             _measure_wip(conn, result, day)
     return result
@@ -873,14 +935,11 @@ def run_flux_doctrine(
         for h in scenario.hazards:
             hazards_by_day.setdefault(h.day, []).append(h)
 
-        apply_quality_next_day = False
         for day in range(1, scenario.horizon_days + 1):
             _receive_due_purchase_orders(conn, scenario, day)
             # FLUX : sans régulation événementielle, replan APS sur chaque aléa.
             for h in hazards_by_day.get(day, []):
                 _apply_hazard(conn, scenario, h, state, result, DOCTRINE_FLUX)
-                if h.kind == HAZARD_QUALITY_NC:
-                    apply_quality_next_day = True
                 if h.kind == HAZARD_URGENT_ORDER:
                     compute_candidates(conn)
                     result.aps_recalculations += 1
@@ -896,11 +955,8 @@ def run_flux_doctrine(
                     compute_candidates(conn)
                     result.aps_recalculations += 1
             _advance_one_day(
-                conn, scenario, day, state, result, rng,
-                actor="flux.mes",
-                apply_quality_scrap_to_op=apply_quality_next_day,
+                conn, scenario, day, state, result, rng, actor="flux.mes",
             )
-            apply_quality_next_day = False
             _decay_breakdowns(state)
             _measure_wip(conn, result, day)
     return result
@@ -912,9 +968,15 @@ def run_flux_doctrine(
 
 
 def run_event_doctrine(
-    scenario: Scenario, db_path: Path, *, fixtures_dir: Path = DEFAULT_FIXTURES_DIR
+    scenario: Scenario, db_path: Path, *,
+    fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
+    parameter_overrides: dict[str, float] | None = None,
 ) -> RunResult:
-    """Doctrine V3 : V1+V2 + événements attendus, matching, dual tolerance, causes, mémoire."""
+    """Doctrine V3 : V1+V2 + événements attendus, matching, dual tolerance, causes, mémoire.
+
+    `parameter_overrides` (L8.3) : dict de paramètres global à injecter en lieu
+    et place des défauts, e.g. seuils filtre dual appris par la boucle longue.
+    """
     _bootstrap_db(scenario, db_path, fixtures_dir)
     result = RunResult(
         doctrine=DOCTRINE_EVENT, scenario_name=scenario.name,
@@ -923,25 +985,24 @@ def run_event_doctrine(
     rng = random.Random(scenario.seed)
     state = HazardState()
 
+    defaults = {
+        "matching_time_tolerance_minutes": 1440.0,
+        "cpm_margin_minutes": 240.0,
+        "tolerance_threshold_watch": 0.20,
+        "tolerance_threshold_correct_local": 0.50,
+        "tolerance_threshold_replan_local": 1.00,
+        "tolerance_threshold_escalate": 2.00,
+        "tolerance_threshold_replan_global": 3.50,
+    }
+    if parameter_overrides:
+        defaults.update(parameter_overrides)
+
     with db_session(db_path) as conn:
-        # Configuration data-driven du filtre dual.
-        # Tolérance temporelle calibrée pour la maille jour (1440 min = 1 jour) :
-        # un écart d'1 jour -> score 1.0, 2 jours -> 1.0 saturé.
-        # CPM absorbe les petits écarts (< 4h).
-        # Seuils élevés -> on n'escalade qu'avec récurrence ou écart majeur.
-        for name, value in [
-            ("matching_time_tolerance_minutes", 1440.0),  # 1 jour
-            ("cpm_margin_minutes", 240.0),                # 4h
-            ("tolerance_threshold_watch", 0.20),
-            ("tolerance_threshold_correct_local", 0.50),
-            ("tolerance_threshold_replan_local", 1.00),
-            ("tolerance_threshold_escalate", 2.00),
-            ("tolerance_threshold_replan_global", 3.50),
-        ]:
+        for name, value in defaults.items():
             conn.execute(
                 "INSERT INTO parameters (scope, scope_ref, name, value_num) "
                 "VALUES ('global', NULL, ?, ?)",
-                (name, value),
+                (name, float(value)),
             )
         batch_id = _freeze_initial_contract(conn, scenario, result)
         result.batch_id = batch_id
@@ -952,21 +1013,29 @@ def run_event_doctrine(
         for h in scenario.hazards:
             hazards_by_day.setdefault(h.day, []).append(h)
 
-        apply_quality_next_day = False
         for day in range(1, scenario.horizon_days + 1):
             _receive_due_purchase_orders(conn, scenario, day)
             for h in hazards_by_day.get(day, []):
                 _apply_hazard(conn, scenario, h, state, result, DOCTRINE_EVENT)
-                if h.kind == HAZARD_QUALITY_NC:
-                    apply_quality_next_day = True
-                # EVENT doctrine : pour HAZARD_URGENT_ORDER, on NE déclenche
-                # PAS de replan global immédiat — la régulation événementielle
-                # détectera et qualifiera l'écart, et c'est le filtre dual qui
-                # décide du niveau d'action.
+                # L8.1.c — EVENT doctrine : V3 crée les OFs pour servir la
+                # demande (équité de production avec OF/FLUX) mais ne compte
+                # un APS replan que pour le 1er urgent. Les suivants sont
+                # absorbés via insertion locale dans la tranche gelée — pas
+                # de coût de nervosité globale.
                 if h.kind == HAZARD_URGENT_ORDER:
-                    # On enregistre une re-CBN locale (besoin)
+                    state.urgent_seen_count += 1
                     compute_candidates(conn)
-                    result.aps_recalculations += 1
+                    if state.urgent_seen_count == 1:
+                        result.aps_recalculations += 1
+                    else:
+                        # Absorption locale : pas de nervosité globale.
+                        result.corrective_actions_applied.append({
+                            "day": day,
+                            "decision_id": None,
+                            "action_level": "absorb_urgent",
+                            "effect": "urgent_absorbed_no_aps_replan",
+                            "urgent_count": state.urgent_seen_count,
+                        })
                     p1 = run_p1_promotion(conn, actor="event.p1")
                     for plan in p1.ofs_created:
                         result.of_created_day[plan.of_id] = day
@@ -976,11 +1045,8 @@ def run_event_doctrine(
                             day=day, actor="event.mes",
                         )
             _advance_one_day(
-                conn, scenario, day, state, result, rng,
-                actor="event.mes",
-                apply_quality_scrap_to_op=apply_quality_next_day,
+                conn, scenario, day, state, result, rng, actor="event.mes",
             )
-            apply_quality_next_day = False
             _decay_breakdowns(state)
             _measure_wip(conn, result, day)
 
@@ -990,8 +1056,8 @@ def run_event_doctrine(
                 if not d.is_absorbed:
                     attach_causes_to_deviation(conn, d.deviation_id)
             evaluate_all_open_deviations(conn, batch_id=batch_id)
-            # L5.2 : action corrective sur la réalité physique
-            _apply_corrective_actions(conn, state, result, day)
+            # L5.2 + L8.1 : action corrective sur la réalité physique
+            _apply_corrective_actions(conn, scenario, state, result, day)
 
         # Capture mémoire P4 sur les OF clôturés
         closed = conn.execute(

@@ -121,9 +121,11 @@ from pilotage_flux.comparative import (
     DOCTRINES,
     baseline_scenario,
     build_comparative_report,
+    build_learning_report,
     build_variance_report,
     compute_kpis,
     run_doctrine,
+    run_learning_loop,
     run_variance_study,
 )
 
@@ -2140,6 +2142,79 @@ def compare_doctrines_extended(
             f"{ev.deviations_detected_mean:.1f}",
         )
     console.print(tbl)
+
+
+@app.command("learning-loop")
+def learning_loop(
+    scenario: str = typer.Option(
+        "baseline", help="Scénario à apprendre (cf. ALL_SCENARIOS)."
+    ),
+    n_iterations: int = typer.Option(10, help="Nombre d'itérations."),
+    learning_rate: float = typer.Option(0.20, help="Taux d'apprentissage (0..1)."),
+    work_dir: Path = typer.Option(
+        Path("data/runs/learning"),
+        help="Dossier des DBs par itération.",
+    ),
+    fixtures: Path = typer.Option(
+        Path("data/fixtures_v1"), help="Fixtures référentiels (V1).",
+    ),
+    report_path: Path = typer.Option(
+        Path("data/learning_report.md"),
+        help="Chemin de sortie du rapport Markdown.",
+    ),
+    jitter: bool = typer.Option(
+        False, "--jitter/--no-jitter",
+        help="Varier la seed à chaque itération (apprentissage robuste).",
+    ),
+) -> None:
+    """Boucle d'apprentissage long V3 : N runs successifs, seuils filtre dual
+    auto-ajustés entre runs (L8.3)."""
+    if scenario not in ALL_SCENARIOS:
+        console.print(f"[red]ERR[/red] scénario inconnu : {scenario}")
+        raise typer.Exit(code=1)
+    scen_obj = ALL_SCENARIOS[scenario]()
+    console.print(
+        f"[yellow]→[/yellow] apprentissage : {n_iterations} itérations, "
+        f"learning_rate={learning_rate}, jitter={jitter}"
+    )
+    run = run_learning_loop(
+        scen_obj, work_dir,
+        n_iterations=n_iterations,
+        learning_rate=learning_rate,
+        fixtures_dir=fixtures,
+        jitter=jitter,
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(build_learning_report(run), encoding="utf-8")
+    console.print(f"[green]OK[/green] rapport : [bold]{report_path}[/bold]")
+
+    tbl = Table(title=f"Apprentissage — {scenario}")
+    tbl.add_column("Iter", justify="right")
+    tbl.add_column("Local", justify="right")
+    tbl.add_column("Global", justify="right")
+    tbl.add_column("Ratio local", justify="right")
+    tbl.add_column("Retained", justify="right")
+    tbl.add_column("Seuils ajustés")
+    for it in run.iterations:
+        diffs = ", ".join(
+            f"{k.replace('tolerance_threshold_', '')}={it.thresholds_after[k]:.2f}"
+            for k in it.thresholds_after
+            if abs(it.thresholds_after[k] - it.thresholds_before.get(k, 0)) > 1e-6
+        ) or "—"
+        tbl.add_row(
+            str(it.iter_idx),
+            str(it.actions_local_count),
+            str(it.actions_global_count),
+            f"{it.local_ratio:.1%}",
+            str(it.n_retained_recipes),
+            diffs,
+        )
+    console.print(tbl)
+    console.print(
+        f"\n[bold]Convergence[/bold] : ratio actions locales "
+        f"{run.initial_local_ratio:.1%} → {run.final_local_ratio:.1%} "
+        f"({'convergé' if run.converged else 'non convergé'})"
+    )
 
 
 if __name__ == "__main__":

@@ -6,9 +6,9 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 ## État
 
-**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2) et **V7** (L7.1) complets.
+**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2), **V7** (L7.1) et **V8** (L8.1 + L8.3) complets.
 
-- 270 tests pytest verts, dont six tests d'acceptation end-to-end :
+- 273 tests pytest verts, dont sept tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
@@ -124,6 +124,8 @@ tests/              146 tests : unitaires + intégration + acceptation
 | Cohérence collective P3 multi-contrats | `gates/p3_collective.py` | V6 ✓ |
 | 5 familles de flux (matière, qualité, décision, événement) | `visualization/` | V6 ✓ |
 | Modèle de coûts data-driven (matière + MOD + MOI) | `costing/` | V7 ✓ |
+| Boucle physique V3 étendue (4 familles d'aléas) | `comparative/runner.py:_apply_corrective_actions` | V8 ✓ |
+| Apprentissage long auto-tune seuils filtre dual | `comparative/learning.py` | V8 ✓ |
 
 ## V2 — extensions livrées
 
@@ -304,9 +306,53 @@ L'étude comparative étendue inclut désormais le **Δ coût en €** :
 → **V3 économise ~8000 €/run** sur les scénarios pannes (baseline et double
 breakdown). Comme MOD = durée réelle × taux horaire, V3 capture en € l'effet
 de sa boucle physique : moins de temps machine bloqué = moins de MOD facturée.
-Sur cascade_nc et demand_spike, V3 ne touche pas au coût (cohérent : la
-boucle physique L5.2 ne traite que les pannes, pas les NCs ni les nouvelles
-demandes).
+
+## V8 — boucle physique étendue + apprentissage long
+
+**L8.1 — V3 actionnel sur les 4 familles d'aléas** : la boucle physique
+réagit désormais à breakdown, quality_nc, po_delay et urgent_order.
+
+| Aléa | Action V3 | Effet |
+|---|---|---|
+| `breakdown_ws` | Clear breakdown_ws state | Lead time + MOD réduits |
+| `quality_nc` | `qc_intervention_active` → scrap futur ×0.5 | Coût scrap réduit |
+| `po_delay` | Sourcing alternatif (réception immédiate) | Pas de manque matière |
+| `urgent_order` | Absorption locale au-delà du 1er | Nervosité réduite |
+
+V3 discrimine maintenant en € sur **les 4 scénarios** (vs uniquement pannes en V7) :
+
+| Scénario | Δ nervosité | Δ lead time (j) | Δ WIP | Δ coût (€) |
+|---|---|---|---|---|
+| baseline | -0.200 | -0.200 | -0.108 | **-7 816** |
+| stress_double_breakdown | -0.111 | -1.336 | 0 | **-7 925** |
+| stress_cascade_nc | -0.200 | 0 | 0 | **-182** |
+| stress_demand_spike | **-0.134** | 0 | 0 | 0 |
+
+**L8.3 — Apprentissage en boucle longue** : `comparative/learning.py`
+auto-ajuste les seuils `tolerance_threshold_*` entre N runs successifs.
+Heuristique : si un niveau d'action (escalate, replan_global) capture
+>X% des décisions, on **monte** son seuil pour refluer vers le niveau
+inférieur (action proportionnée plus locale). Les seuils appris à
+l'itération N sont propagés à l'itération N+1 via `parameter_overrides`.
+
+```powershell
+python -m pilotage_flux learning-loop --n-iterations 10
+```
+
+Résultat sur baseline (10 itérations, learning_rate=0.20) :
+
+| Iter | Local | Global | Ratio local | Seuils ajustés |
+|---|---|---|---|---|
+| 0 | 0 | 24 | 0.0 % | escalate = 2.40 |
+| 1 | 15 | 9 | 62.5 % | escalate = 2.88 |
+| 2 | 24 | 0 | **100.0 %** | (convergé) |
+| … | 24 | 0 | 100.0 % | — |
+
+→ V3 **apprend à proportionner ses actions** en 2 itérations : 0 % → 100 %
+d'actions locales (vs escalate). Le seuil `tolerance_threshold_escalate`
+converge de 2.0 vers 2.88. C'est l'opérationalisation du §7 bis.5 du
+cadrage : « C'est par lui [le filtre] que la solution apprend de ses
+clôtures. »
 
 ## Critères de succès validés par tests d'acceptation
 
@@ -357,3 +403,11 @@ demandes).
 33. V3 sauve du lead time vs FLUX sur `stress_double_breakdown` (boucle physique L5.2)
 34. V3 nervosité ≤ FLUX nervosité sur `baseline`
 35. Rapport étendu Markdown construit pour les 4 scénarios
+
+`tests/test_acceptance_v8.py` (V8 — boucle étendue + apprentissage) :
+36. V3 ne coûte JAMAIS plus que FLUX (sur tous les 4 scénarios)
+37. V3 sauve >1000€ sur baseline et stress_double_breakdown (breakdowns)
+38. V3 coût < FLUX sur stress_cascade_nc (intervention qualité L8.1.a)
+39. V3 nervosité < FLUX nervosité sur stress_demand_spike (absorption L8.1.c)
+40. La boucle d'apprentissage converge : ratio actions locales ≥ 50% après 10 iter
+41. Les seuils appris à l'itération N sont propagés à l'itération N+1

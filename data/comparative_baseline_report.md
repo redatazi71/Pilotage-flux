@@ -30,6 +30,9 @@ Trois doctrines exécutent le même scénario (mêmes commandes, mêmes aléas, 
 | Replans globaux | 0 | 0 | 0 |
 | Causes attachées | 0 | 0 | 72 |
 | Événements qualité | 0 | 2 | 2 |
+| Coût total (€) | 20446.00 | 20446.00 | 12022.00 |
+| Coût par OF (€) | 2555.75 | 2555.75 | 1502.75 |
+| Coût scrap (€) | 338.00 | 338.00 | 338.00 |
 
 ## Lecture
 

@@ -26,6 +26,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from pilotage_flux.costing import compute_run_cost_report, seed_default_unit_costs
 from pilotage_flux.db import db_session
 
 from pilotage_flux.comparative.runner import RunResult
@@ -54,6 +55,9 @@ class KpiSet:
     causes_attached: int
     quality_events: int
     nervousness: float
+    total_cost_eur: float = 0.0
+    cost_per_of_eur: float = 0.0
+    cost_scrap_eur: float = 0.0
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -95,7 +99,18 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
     causes_attached = 0
     quality_events = 0
 
+    total_cost_eur = 0.0
+    cost_per_of_eur = 0.0
+    cost_scrap_eur = 0.0
+
     with db_session(result.db_path) as conn:
+        # Seed des prix unitaires (idempotent) pour valoriser le run
+        seed_default_unit_costs(conn)
+        cost_report = compute_run_cost_report(conn)
+        total_cost_eur = round(cost_report.grand_total, 2)
+        cost_per_of_eur = round(cost_report.cost_per_of, 2)
+        cost_scrap_eur = round(cost_report.total_scrap, 2)
+
         qe_row = conn.execute(
             "SELECT COUNT(*) AS n FROM quality_events"
         ).fetchone()
@@ -145,6 +160,9 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
             round(avg_time_dev, 2) if avg_time_dev is not None else None
         ),
         actions_triggered=actions_triggered,
+        total_cost_eur=total_cost_eur,
+        cost_per_of_eur=cost_per_of_eur,
+        cost_scrap_eur=cost_scrap_eur,
         replan_local_actions=replan_local_actions,
         replan_global_actions=replan_global_actions,
         causes_attached=causes_attached,

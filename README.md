@@ -6,9 +6,9 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 ## État
 
-**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2) et **V6** (L6.1 → L6.2) complets.
+**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2) et **V7** (L7.1) complets.
 
-- 265 tests pytest verts, dont six tests d'acceptation end-to-end :
+- 270 tests pytest verts, dont six tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
@@ -123,6 +123,7 @@ tests/              146 tests : unitaires + intégration + acceptation
 | Étude étendue variance multi-seeds | `comparative/variance.py` | V5 ✓ |
 | Cohérence collective P3 multi-contrats | `gates/p3_collective.py` | V6 ✓ |
 | 5 familles de flux (matière, qualité, décision, événement) | `visualization/` | V6 ✓ |
+| Modèle de coûts data-driven (matière + MOD + MOI) | `costing/` | V7 ✓ |
 
 ## V2 — extensions livrées
 
@@ -276,6 +277,36 @@ python -m pilotage_flux flow-quality   --run v1
 python -m pilotage_flux flow-decision  --run v1
 python -m pilotage_flux flow-events    --run v1 --batch FZ-0001
 ```
+
+## V7 — modèle de coûts (matière + MOD + MOI)
+
+`costing/engine.py` chiffre chaque OF : matière (BOM × prix unitaire),
+MOD (durée réelle d'op × taux horaire poste), MOI (overhead %), scrap
+(qté × prix unitaire perdue). Tous les paramètres sont data-driven dans
+la table `parameters` (`unit_cost`, `hourly_rate`, `moi_overhead_rate`,
+`moi_fixed_per_of`). Un helper `seed_default_unit_costs(conn)` pose les
+valeurs indicatives pour les fixtures V1 (idempotent).
+
+```powershell
+python -m pilotage_flux costs --run v1                  # breakdown par OF
+python -m pilotage_flux costs --run v1 --of-id OF-0001  # détail d'un OF
+```
+
+L'étude comparative étendue inclut désormais le **Δ coût en €** :
+
+| Scénario | Δ nervosité | Δ lead time (j) | Δ WIP | Δ coût (€) | Détections V3 |
+|---|---|---|---|---|---|
+| baseline | -0.200 | -0.200 | -0.108 | **-7862** | 24.0 |
+| stress_double_breakdown | -0.111 | -1.336 | 0 | **-7925** | 24.0 |
+| stress_cascade_nc | -0.200 | 0 | 0 | 0 | 24.0 |
+| stress_demand_spike | 0 | 0 | 0 | 0 | 24.0 |
+
+→ **V3 économise ~8000 €/run** sur les scénarios pannes (baseline et double
+breakdown). Comme MOD = durée réelle × taux horaire, V3 capture en € l'effet
+de sa boucle physique : moins de temps machine bloqué = moins de MOD facturée.
+Sur cascade_nc et demand_spike, V3 ne touche pas au coût (cohérent : la
+boucle physique L5.2 ne traite que les pannes, pas les NCs ni les nouvelles
+demandes).
 
 ## Critères de succès validés par tests d'acceptation
 

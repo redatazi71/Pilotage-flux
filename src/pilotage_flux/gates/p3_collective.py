@@ -23,6 +23,13 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from pilotage_flux.events import EventType, append_event
+from pilotage_flux.flux.buffers import (
+    BufferSpec,
+    apply_buffer_to_capacity,
+    get_safety_factor,
+    get_saturation_limits,
+    little_buffer_for_bottleneck,
+)
 from pilotage_flux.flux.contracts import (
     fetch_contract,
     fetch_version,
@@ -62,9 +69,18 @@ class CollectiveResult:
     deferred_contracts: list[str] = field(default_factory=list)
     rejected_contracts: list[tuple[str, str]] = field(default_factory=list)
     # (contract_id, reason) pour les contrats refusés sur critère individuel
-    bottleneck_workstation: str | None = None
+    bottleneck_workstation: str | None = None  # Le goulot principal
     bottleneck_load: float = 0.0
     bottleneck_capacity: float = 0.0
+    # L10.3 — multi-goulot : tous les postes saturés (ratio ≥ threshold)
+    bottleneck_workstations: list[tuple[str, float, float, float]] = field(
+        default_factory=list
+    )
+    # liste de (ws_id, load, capacity, ratio) sorted desc par ratio
+    # L10.5 — tampons + classification Little
+    buffers: list[BufferSpec] = field(default_factory=list)
+    saturation_classes: dict[str, str] = field(default_factory=dict)
+    # workstation_id -> 'safe' | 'warn' | 'block' | 'defer'
     batch_id: str | None = None
 
 
@@ -139,27 +155,43 @@ def _bottleneck_workstation_from_profiles(
     horizon_end: str,
 ) -> str | None:
     """Identifie le poste avec le taux d'utilisation cumulé le plus élevé
-    (load_cumulé / capacité). C'est le vrai goulot collectif, pas
-    nécessairement celui de plus forte charge brute."""
+    (load_cumulé / capacité)."""
+    ranked = identify_bottlenecks(
+        conn, profiles, horizon_start, horizon_end, threshold_ratio=0.0,
+    )
+    return ranked[0][0] if ranked else None
+
+
+def identify_bottlenecks(
+    conn: sqlite3.Connection,
+    profiles: list[ContractLoadProfile],
+    horizon_start: str,
+    horizon_end: str,
+    *,
+    threshold_ratio: float = 0.8,
+) -> list[tuple[str, float, float, float]]:
+    """L10.3 — Renvoie TOUS les postes saturés sur l'horizon, ordonnés par
+    ratio load/capacity décroissant.
+
+    Format : liste de (ws_id, load_min, capacity_min, ratio). Filtré sur
+    `ratio >= threshold_ratio` (défaut 0.8 = 80% d'utilisation).
+    """
     cumul: dict[str, float] = {}
     for p in profiles:
         for ws, load in p.load_by_workstation.items():
             cumul.setdefault(ws, 0.0)
             cumul[ws] += load
-    if not cumul:
-        return None
-    best_ws = None
-    best_ratio = -1.0
+    out: list[tuple[str, float, float, float]] = []
     for ws, load in cumul.items():
         capa = _horizon_capacity_minutes(conn, ws, horizon_start, horizon_end)
         if capa <= 0:
             ratio = float("inf")
         else:
             ratio = load / capa
-        if ratio > best_ratio:
-            best_ratio = ratio
-            best_ws = ws
-    return best_ws
+        if ratio >= threshold_ratio:
+            out.append((ws, float(load), float(capa), float(ratio)))
+    out.sort(key=lambda t: t[3], reverse=True)
+    return out
 
 
 def evaluate_p3_collective(
@@ -221,6 +253,37 @@ def evaluate_p3_collective(
                 conn, bottleneck, horizon_start, horizon_end
             )
     return per_contract, profiles, bottleneck or "", cumul_load, capacity
+
+
+def evaluate_p3_collective_with_multi_bottlenecks(
+    conn: sqlite3.Connection,
+    contract_ids: list[str],
+    *,
+    bottleneck_threshold_ratio: float = 0.8,
+) -> tuple[
+    list[tuple[str, list[P3CriterionResult]]],
+    list[ContractLoadProfile],
+    list[tuple[str, float, float, float]],
+]:
+    """Variante de evaluate_p3_collective qui renvoie TOUS les postes saturés.
+
+    Renvoie (per_contract, profiles, bottlenecks) où bottlenecks est la liste
+    de (ws_id, load, capacity, ratio) triée par ratio décroissant.
+    """
+    per_contract, profiles, _, _, _ = evaluate_p3_collective(conn, contract_ids)
+    if not profiles:
+        return per_contract, profiles, []
+    horizon_start, horizon_end = "", ""
+    for cid in contract_ids:
+        c = fetch_contract(conn, cid)
+        if c is not None:
+            horizon_start, horizon_end = c.horizon_start, c.horizon_end
+            break
+    bottlenecks = identify_bottlenecks(
+        conn, profiles, horizon_start, horizon_end,
+        threshold_ratio=bottleneck_threshold_ratio,
+    )
+    return per_contract, profiles, bottlenecks
 
 
 def run_p3_collective_freeze(
@@ -315,20 +378,53 @@ def run_p3_collective_freeze(
 
         profiles_sorted = sorted(profiles, key=_priority_key)
 
-        # Si pas de goulot identifié OU charge sous capacité → freeze all
-        if not bottleneck or capacity <= 0 or cumul_load <= capacity:
+        # L10.3 : identifie les goulots (top contenders à ≥10%)
+        multi_bottlenecks = identify_bottlenecks(
+            conn, profiles, horizon_start, horizon_end,
+            threshold_ratio=0.10,
+        )
+
+        # L10.5 — Décision Little-aware avec tampons sur les goulots
+        limits = get_saturation_limits(conn)
+        safety = get_safety_factor(conn)
+
+        # Calcule capacité effective (tampon réservé) pour chaque WS goulot
+        # Un poste est "goulot" si son ratio brut ≥ warn threshold
+        buffer_specs: list[BufferSpec] = []
+        sat_classes: dict[str, str] = {}
+        effective_capa_by_ws: dict[str, float] = {}
+        for ws, load, raw_capa, ratio_raw in multi_bottlenecks:
+            is_bn = ratio_raw >= limits.warn
+            eff_capa = apply_buffer_to_capacity(raw_capa, is_bn, safety)
+            effective_capa_by_ws[ws] = eff_capa
+            eff_ratio = (load / eff_capa) if eff_capa > 0 else float("inf")
+            sat_classes[ws] = limits.classify(eff_ratio)
+            if is_bn:
+                buffer_specs.append(
+                    little_buffer_for_bottleneck(ws, raw_capa, safety)
+                )
+
+        # Ratio effectif au goulot principal après tampon
+        eff_capacity = effective_capa_by_ws.get(bottleneck, capacity) if bottleneck else capacity
+        eff_ratio_main = (
+            (cumul_load / eff_capacity) if eff_capacity > 0 else float("inf")
+        )
+        main_class = limits.classify(eff_ratio_main) if bottleneck else "safe"
+
+        if main_class in ("safe", "warn") or not bottleneck:
+            # safe ou warn → FREEZE_ALL (warn est tracé mais ne refuse pas)
             decision = DECISION_FREEZE_ALL
             frozen = [p.contract_id for p in profiles_sorted]
             deferred: list[str] = []
         else:
-            # Saturation : inclure jusqu'à saturation
+            # block / defer → PARTIAL_FREEZE jusqu'à effective_capacity
             decision = DECISION_PARTIAL_FREEZE
             running_load = 0.0
             frozen = []
             deferred = []
             for p in profiles_sorted:
                 p_load = p.load_by_workstation.get(bottleneck, 0.0)
-                if running_load + p_load <= capacity:
+                if running_load + p_load <= eff_capacity:
                     running_load += p_load
                     frozen.append(p.contract_id)
                 else:
@@ -345,11 +441,15 @@ def run_p3_collective_freeze(
             bottleneck_workstation=bottleneck or None,
             bottleneck_load=cumul_load,
             bottleneck_capacity=capacity,
+            bottleneck_workstations=multi_bottlenecks,
+            buffers=buffer_specs,
+            saturation_classes=sat_classes,
         )
 
         explanation = (
             f"bottleneck={bottleneck or 'n/a'} "
             f"load={cumul_load:.1f} capacity={capacity:.1f} "
+            f"multi_bottlenecks={len(multi_bottlenecks)} "
             f"frozen={frozen} deferred={deferred} rejected={rejected}"
         )
 

@@ -21,6 +21,18 @@ from pilotage_flux.flux.smoothing import (
     compute_smoothing,
     get_smoothed_launches,
 )
+from pilotage_flux.flux.buffers import (
+    BufferSpec,
+    DEFAULT_BUFFER_SAFETY_FACTOR,
+    DEFAULT_SATURATION_BLOCK,
+    DEFAULT_SATURATION_DEFER,
+    DEFAULT_SATURATION_WARN,
+    SaturationLimits,
+    apply_buffer_to_capacity,
+    get_safety_factor,
+    get_saturation_limits,
+    little_buffer_for_bottleneck,
+)
 from pilotage_flux.flux.freeze import (
     FreezeBatch,
     FreezeBatchContract,
@@ -56,4 +68,14 @@ __all__ = [
     "get_frozen_contract_ids",
     "list_freeze_batches",
     "overlapping_freeze_batches",
+    "BufferSpec",
+    "DEFAULT_BUFFER_SAFETY_FACTOR",
+    "DEFAULT_SATURATION_BLOCK",
+    "DEFAULT_SATURATION_DEFER",
+    "DEFAULT_SATURATION_WARN",
+    "SaturationLimits",
+    "apply_buffer_to_capacity",
+    "get_safety_factor",
+    "get_saturation_limits",
+    "little_buffer_for_bottleneck",
 ]

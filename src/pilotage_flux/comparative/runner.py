@@ -973,12 +973,14 @@ def _freeze_initial_contract(
     collective = run_p3_collective_freeze(
         conn, contract_ids, actor="flux.p3.collective"
     )
-    # Trace la décision dans le RunResult
+    # Trace la décision dans le RunResult avec multi-goulot (L10.3)
+    multi = collective.bottleneck_workstations
+    multi_str = ",".join(f"{ws}={ratio:.0%}" for ws, _, _, ratio in multi[:3])
     result.notes.append(
         f"P3 collective: {collective.decision}, "
         f"frozen={len(collective.frozen_contracts)}, "
         f"deferred={len(collective.deferred_contracts)}, "
-        f"bottleneck={collective.bottleneck_workstation}"
+        f"bottlenecks=[{multi_str}]"
     )
     if collective.batch_id is None:
         raise RuntimeError(

@@ -8,7 +8,7 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 **V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2), **V7** (L7.1), **V8** (L8.1 + L8.3 + L8.4) et **V9** (L9.1 → L9.5) complets.
 
-- 282 tests pytest verts, dont neuf tests d'acceptation end-to-end :
+- 293 tests pytest verts, dont onze tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
@@ -409,6 +409,88 @@ Trois mécanismes flux ne sont pas exercés par ces scénarios :
 Sur des scénarios qui exerceraient ces mécanismes (multi-contrats, ≥10 OF
 concurrents J0, urgences nombreuses), **EVENT > OF+EVENT** est attendu.
 (Mesuré en V9.)
+
+## V10 phase A — fixtures + scénarios aléatoires + multi-goulots
+
+**L10.1 — Générateur de fixtures aléatoires** (`data_factory/random_fixtures.py`) :
+`generate_random_fixtures(spec, seed, out_dir)` produit les 7 CSVs depuis
+un `FixtureSpec` paramétrable (nb articles, postes, ops, BOM, distributions,
+goulots forcés). Reproductible par seed.
+
+**L10.2 — Scénarios aléatoires** (`comparative/random_scenario.py`) :
+`generate_random_scenario(spec, seed, fixtures_dir)` construit un `Scenario`
+cohérent avec les fixtures (SOs sur les bons finis, NCs sur les bons articles,
+breakdowns sur les bons postes). Mix d'aléas pondéré.
+
+**L10.3 — Multi-goulots** (`gates/p3_collective.py:identify_bottlenecks`) :
+remplace l'identification d'un seul goulot par une liste ordonnée par ratio
+load/capacity décroissant. `CollectiveResult.bottleneck_workstations` expose
+TOP-N (seuil 10%). Tracé dans les notes runner et le rapport.
+
+**L10.4 — CLI random-study** :
+
+```powershell
+python -m pilotage_flux random-study `
+    --fixture-seeds "1,2,3,4,5" `
+    --scenario-seeds "100,200,300,400,500" `
+    --n-finished-articles 6 --n-workstations 8 `
+    --bottleneck-indices "3,6"
+```
+
+→ 5 fixtures × 5 scénarios × 4 doctrines = 100 runs aléatoires.
+
+Résultats agrégés (16 runs de validation, fixtures à 5 articles × 8 postes) :
+
+| Doctrine | Lead time | Coût total | Δ vs OF |
+|---|---|---|---|
+| OF | 6.74 ± 0.74 | 168 030 € | +0 |
+| FLUX | 3.96 ± 0.75 | 142 353 € | **−25 677** |
+| OF+EVENT | 6.74 ± 0.74 | 167 857 € | −173 |
+| EVENT | 3.96 ± 0.75 | 142 192 € | **−25 838** |
+
+**Lecture** : sur des configurations industrielles aléatoires plus chargées,
+le **smoothing flux divise le lead time par 1.7** et fait l'essentiel du gain
+(−25 677 €). L'event sourcing seul (sans flux) ne trouve presque rien
+(−173 €) — parce que sans contrat, l'attendu est trop proche du réel.
+
+### L10.5 — Seuils Little + tampons goulots (DBR)
+
+`flux/buffers.py` implémente la doctrine Drum-Buffer-Rope (Goldratt) :
+
+- **`SaturationLimits`** : seuils data-driven (warn 80%, block 90%, defer
+  110%). Classification `safe`/`warn`/`block`/`defer` selon le ratio
+  load/capacity.
+- **`BufferSpec`** : tampon dimensionné via loi de Little —
+  `safety_factor%` de la capacité brute réservée pour absorber la
+  variabilité au goulot (défaut 15%).
+- **`apply_buffer_to_capacity(raw, is_bottleneck, safety)`** : capacité
+  effective = raw si non-goulot, raw × (1 − safety) si goulot.
+
+P3 collective utilise désormais ces seuils pour décider :
+`safe`/`warn` → FREEZE_ALL ; `block`/`defer` → PARTIAL_FREEZE jusqu'à
+capacité effective.
+
+### L10.6 — Progress bar live
+
+`run_variance_study` et `run_random_study` exposent un callback
+`on_run_complete(scen, doctrine, seed)`. La CLI consomme via
+`rich.progress` : barre, ETA, temps écoulé, MofN.
+
+### L10.7 — Validation multi-goulot serré
+
+5 fixtures × 5 scénarios × 4 doctrines = **100 runs**, fixtures à 8 finis
+× 10 postes × 4 goulots forts (capacité 0.35-0.50). Résultat :
+
+| Doctrine | Coût | Δ vs OF |
+|---|---|---|
+| OF | 262 407 ± 78 761 € | +0 |
+| FLUX | 203 812 ± 60 847 € | **−58 595** |
+| OF+EVENT | 259 482 ± 79 035 € | −2 925 |
+| EVENT | 197 606 ± 58 725 € | **−64 801** |
+
+**Sur multi-goulot serré, l'apport doctrinal est multiplié par 2.5** vs
+config légère. L'event sourcing marginal passe de −161 € à **−6 206 €**
+— sous tension, V3 fait plus de différence.
 
 ## V9 — fixtures étendues + multi-contrats + smoothing actif
 

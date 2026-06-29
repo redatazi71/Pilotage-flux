@@ -6,9 +6,9 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 ## État
 
-**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3) et **V5** (L5.1 → L5.2) complets.
+**V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2) et **V6** (L6.1 → L6.2) complets.
 
-- 254 tests pytest verts, dont six tests d'acceptation end-to-end :
+- 265 tests pytest verts, dont six tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
@@ -121,6 +121,8 @@ tests/              146 tests : unitaires + intégration + acceptation
 | Étude comparative doctrinale (OF/FLUX/EVENT) | `comparative/` | V4 ✓ |
 | V3 actionnel (close-loop physique) | `comparative/runner.py:_apply_corrective_actions` | V5 ✓ |
 | Étude étendue variance multi-seeds | `comparative/variance.py` | V5 ✓ |
+| Cohérence collective P3 multi-contrats | `gates/p3_collective.py` | V6 ✓ |
+| 5 familles de flux (matière, qualité, décision, événement) | `visualization/` | V6 ✓ |
 
 ## V2 — extensions livrées
 
@@ -237,6 +239,43 @@ exige un APS replan quoi qu'il en soit.
 
 Rapports complets : `data/comparative_baseline_report.md` et
 `data/comparative_extended_report.md`.
+
+## V6 — cohérence collective P3 + 5 familles de flux
+
+**L6.1 — P3 collective multi-contrats** (`gates/p3_collective.py`, §180.g) :
+`run_p3_collective_freeze(conn, [c1, c2, ...])` évalue plusieurs contrats
+sur le même horizon, calcule le **vrai goulot collectif** (= poste avec
+plus haut ratio charge/capacité cumulée), puis décide :
+
+| Décision | Condition |
+|---|---|
+| `FREEZE_ALL` | charge cumulée sur goulot ≤ capacité horizon |
+| `PARTIAL_FREEZE` | surcharge → freeze par priorité (FIFO entrée négociable) jusqu'à saturation |
+| `DEFER_ALL` | aucun contrat ne tient seul |
+
+Une seule tranche gelée pour N contrats, traçabilité complète via
+`gate_decisions_v1` (gate='P3_COLLECTIVE') et event_store.
+
+```powershell
+python -m pilotage_flux p3-collective --run v1 --contracts FX-0001,FX-0002
+```
+
+**L6.2 — 5 familles de flux** (`visualization/`, §12 cadrage) :
+
+| # | Famille | Module | KPIs principaux |
+|---|---|---|---|
+| 1 | physique | `flow.py` (existant) | WIP, pending/running/done par poste |
+| 2 | matière | `material.py` | stock + PO ouv. + conso vs théo BOM + écart |
+| 3 | qualité | `quality.py` | yield rate, NCs, blocages, libérations |
+| 4 | décisionnel | `decision.py` | décisions portes + zones + filtre dual |
+| 5 | événementiel | `event.py` | attendus/réels matched, qualif, causes |
+
+```powershell
+python -m pilotage_flux flow-material  --run v1
+python -m pilotage_flux flow-quality   --run v1
+python -m pilotage_flux flow-decision  --run v1
+python -m pilotage_flux flow-events    --run v1 --batch FZ-0001
+```
 
 ## Critères de succès validés par tests d'acceptation
 

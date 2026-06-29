@@ -17,7 +17,15 @@ def tmp_db(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def fixtures_dir() -> Path:
-    """Chemin vers data/fixtures/ depuis la racine projet."""
+    """Chemin vers data/fixtures/ (golden path V0 mono-niveau)."""
     here = Path(__file__).resolve().parent
     root = here.parent
     return root / "data" / "fixtures"
+
+
+@pytest.fixture
+def fixtures_v1_dir() -> Path:
+    """Chemin vers data/fixtures_v1/ (golden path V1 multi-niveau)."""
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    return root / "data" / "fixtures_v1"

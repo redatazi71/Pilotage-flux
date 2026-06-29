@@ -36,6 +36,8 @@ from pilotage_flux.gates.p3_collective import (
     CollectiveResult,
     ContractLoadProfile,
     evaluate_p3_collective,
+    evaluate_p3_collective_with_multi_bottlenecks,
+    identify_bottlenecks,
     run_p3_collective_freeze,
 )
 
@@ -70,5 +72,7 @@ __all__ = [
     "CollectiveResult",
     "ContractLoadProfile",
     "evaluate_p3_collective",
+    "evaluate_p3_collective_with_multi_bottlenecks",
+    "identify_bottlenecks",
     "run_p3_collective_freeze",
 ]

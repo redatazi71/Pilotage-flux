@@ -61,7 +61,8 @@ def test_l92_multi_contracts_triggered_on_multi_articles(
     notes = " ".join(result.notes)
     assert "P3 collective" in notes
     assert "frozen=4" in notes
-    assert "bottleneck=WS-3" in notes
+    # L10.3 : format multi-goulot dans les notes
+    assert "WS-3" in notes
 
 
 def test_l92_partial_freeze_on_overload(

@@ -121,15 +121,19 @@ from pilotage_flux.comparative import (
     ALL_SCENARIOS_ANY,
     ALL_SCENARIOS_XL,
     DOCTRINES,
+    RandomScenarioSpec,
     baseline_scenario,
     build_comparative_report,
     build_learning_report,
+    build_random_study_report,
     build_variance_report,
     compute_kpis,
     run_doctrine,
     run_learning_loop,
+    run_random_study,
     run_variance_study,
 )
+from pilotage_flux.data_factory import FixtureSpec
 
 
 app = typer.Typer(
@@ -2253,6 +2257,100 @@ def learning_loop(
         f"{run.initial_local_ratio:.1%} → {run.final_local_ratio:.1%} "
         f"({'convergé' if run.converged else 'non convergé'})"
     )
+
+
+@app.command("random-study")
+def random_study(
+    fixture_seeds: str = typer.Option(
+        "1,2,3,4,5",
+        help="Seeds des fixtures aléatoires (virgule séparée).",
+    ),
+    scenario_seeds: str = typer.Option(
+        "100,200,300,400,500",
+        help="Seeds des scénarios aléatoires (virgule séparée).",
+    ),
+    n_finished_articles: int = typer.Option(
+        6, help="Nb d'articles finis dans chaque fixture set.",
+    ),
+    n_semi_articles: int = typer.Option(
+        6, help="Nb de semi-finis.",
+    ),
+    n_components: int = typer.Option(8, help="Nb de composants achetés."),
+    n_workstations: int = typer.Option(8, help="Nb de postes de travail."),
+    bottleneck_indices: str = typer.Option(
+        "3,6", help="Indices (1-based) des postes-goulots."
+    ),
+    n_sales_orders: int = typer.Option(8, help="Nb de SO initiaux."),
+    n_hazards: int = typer.Option(5, help="Nb d'aléas."),
+    horizon_days: int = typer.Option(18, help="Horizon en jours."),
+    work_dir: Path = typer.Option(
+        Path("data/runs/random"), help="Dossier de travail."
+    ),
+    report_path: Path = typer.Option(
+        Path("data/random_study_report.md"),
+        help="Chemin de sortie du rapport.",
+    ),
+) -> None:
+    """L10 — Étude comparative sur fixtures + scénarios aléatoires.
+
+    Génère N fixtures aléatoires × M scénarios × 4 doctrines = N×M×4 runs.
+    Mesure la robustesse doctrinale à la variabilité des configurations
+    industrielles (postes, BOM, gammes) et des profils d'aléas.
+    """
+    fix_list = [int(s) for s in fixture_seeds.split(",") if s.strip()]
+    scen_list = [int(s) for s in scenario_seeds.split(",") if s.strip()]
+    bn_indices = [int(s) for s in bottleneck_indices.split(",") if s.strip()]
+
+    fixture_spec = FixtureSpec(
+        n_finished_articles=n_finished_articles,
+        n_semi_articles=n_semi_articles,
+        n_components=n_components,
+        n_workstations=n_workstations,
+        bottleneck_workstation_indices=bn_indices,
+    )
+    scenario_spec = RandomScenarioSpec(
+        n_sales_orders=n_sales_orders,
+        n_hazards=n_hazards,
+        horizon_days=horizon_days,
+    )
+    total = len(fix_list) * len(scen_list) * len(DOCTRINES)
+    console.print(
+        f"[yellow]→[/yellow] étude aléatoire : "
+        f"{len(fix_list)} fixtures × {len(scen_list)} scénarios × "
+        f"{len(DOCTRINES)} doctrines = [bold]{total}[/bold] runs"
+    )
+
+    study = run_random_study(
+        fixture_seeds=fix_list,
+        scenario_seeds=scen_list,
+        work_dir=work_dir,
+        fixture_spec=fixture_spec,
+        scenario_spec=scenario_spec,
+    )
+    report = build_random_study_report(study)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    console.print(f"[green]OK[/green] rapport : [bold]{report_path}[/bold]")
+
+    # Table CLI
+    tbl = Table(title="Étude aléatoire — décomposition 2×2 (Δ coût vs OF)")
+    tbl.add_column("Doctrine")
+    tbl.add_column("Lead time", justify="right")
+    tbl.add_column("Coût total", justify="right")
+    tbl.add_column("Δ vs OF", justify="right")
+    of_cost = (
+        study.aggregates["of"].total_cost_eur_mean
+        if "of" in study.aggregates else 0.0
+    )
+    for d, a in study.aggregates.items():
+        delta = a.total_cost_eur_mean - of_cost
+        tbl.add_row(
+            d.upper(),
+            f"{a.lead_time_avg_mean:.2f} ± {a.lead_time_avg_std:.2f}",
+            f"{a.total_cost_eur_mean:.0f} ± {a.total_cost_eur_std:.0f} €",
+            f"{delta:+.0f} €",
+        )
+    console.print(tbl)
 
 
 if __name__ == "__main__":

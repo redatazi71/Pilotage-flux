@@ -43,6 +43,15 @@ from pilotage_flux.comparative.variance import (
     build_variance_report,
     run_variance_study,
 )
+from pilotage_flux.comparative.random_scenario import (
+    RandomScenarioSpec,
+    generate_random_scenario,
+)
+from pilotage_flux.comparative.random_study import (
+    RandomStudy,
+    build_random_study_report,
+    run_random_study,
+)
 from pilotage_flux.comparative.learning import (
     DEFAULT_LEARNING_RATE,
     DEFAULT_N_ITERATIONS,
@@ -83,6 +92,11 @@ __all__ = [
     "aggregate_kpis",
     "build_variance_report",
     "run_variance_study",
+    "RandomScenarioSpec",
+    "generate_random_scenario",
+    "RandomStudy",
+    "build_random_study_report",
+    "run_random_study",
     "DEFAULT_LEARNING_RATE",
     "DEFAULT_N_ITERATIONS",
     "LearningIteration",

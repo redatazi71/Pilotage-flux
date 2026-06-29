@@ -1,6 +1,9 @@
 scope,scope_ref,name,value_num,value_text
 global,,planning_horizon_days,30,
 global,,replan_interval_days,7,
+global,,p2_capacity_risk_ratio,1.0,
+global,,p2_capacity_block_ratio,1.5,
+global,,risk_debt_default_deadline_days,7,
 workstation,WS-1,capacity_factor,0.85,
 workstation,WS-2,capacity_factor,0.80,
 workstation,WS-3,capacity_factor,0.95,

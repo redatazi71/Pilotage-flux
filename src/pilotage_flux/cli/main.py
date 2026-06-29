@@ -14,6 +14,47 @@ from pilotage_flux.aps import (
     persist_flattened_bom,
 )
 from pilotage_flux.db import init_schema, db_session
+from pilotage_flux.flux import (
+    add_candidate_to_contract,
+    compute_coherence,
+    compute_smoothing,
+    create_contract,
+    fetch_contract,
+    fetch_freeze_batch,
+    fetch_version,
+    get_batch_contracts,
+    get_candidates_in_version,
+    get_smoothed_launches,
+    list_contracts,
+    list_freeze_batches,
+    remove_candidate_from_contract,
+)
+from pilotage_flux.gates import (
+    evaluate_p3_for_contract,
+    fragment_of,
+    get_lineage,
+    return_to_negociable,
+    run_p2_on_libre_zone,
+    run_p3_freeze,
+)
+from pilotage_flux.risk_debt import (
+    expire_overdue_risk_debts,
+    extinguish_risk_debt,
+    list_risk_debts,
+)
+from pilotage_flux.rules import load_active_rules
+from pilotage_flux.zones import (
+    ZONE_GELEE,
+    ZONE_LIBRE,
+    ZONE_NEGOCIABLE,
+    close_cycle,
+    create_cycle,
+    fetch_in_zone,
+    list_cycles,
+    move_candidate_to_zone,
+    open_cycle,
+    transitions_for,
+)
 from pilotage_flux.events import (
     fetch_events,
     EventType,
@@ -289,6 +330,726 @@ def replay_cmd(
     for i, line in enumerate(state.timeline, start=1):
         timeline.add_row(str(i), line)
     console.print(timeline)
+
+
+@app.command("flux-create")
+def flux_create_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    horizon_label: str = typer.Option(..., "--horizon", help="Etiquette horizon (ex: 2026-W27)."),
+    horizon_start: str = typer.Option(..., "--start", help="Debut horizon (ISO date)."),
+    horizon_end: str = typer.Option(..., "--end", help="Fin horizon (ISO date)."),
+    candidates: str = typer.Option(..., "--candidates", help="Liste CSV des candidate_id."),
+    notes: str = typer.Option(None, "--notes"),
+) -> None:
+    """Cree un contrat de flux v1 regroupant des candidates negociables."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        cand_ids = [c.strip() for c in candidates.split(",") if c.strip()]
+        contract = create_contract(
+            conn,
+            horizon_label=horizon_label,
+            horizon_start=horizon_start,
+            horizon_end=horizon_end,
+            candidate_ids=cand_ids,
+            notes=notes,
+        )
+    console.print(
+        f"[green]OK[/green] {contract.contract_id} cree "
+        f"({len(cand_ids)} candidates, horizon {horizon_label}, v1)"
+    )
+
+
+@app.command("flux-list")
+def flux_list_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    status: str = typer.Option(None, "--status"),
+) -> None:
+    """Liste les contrats de flux."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        contracts = list_contracts(conn, status=status)
+    if not contracts:
+        console.print("[yellow]Aucun contrat.[/yellow]")
+        return
+    tbl = Table(title=f"Contrats de flux ({len(contracts)})")
+    tbl.add_column("id")
+    tbl.add_column("horizon")
+    tbl.add_column("v courante", justify="right")
+    tbl.add_column("status")
+    tbl.add_column("created")
+    for c in contracts:
+        tbl.add_row(
+            c.contract_id, c.horizon_label, str(c.current_version),
+            c.status, c.created_at,
+        )
+    console.print(tbl)
+
+
+@app.command("flux-detail")
+def flux_detail_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    contract_id: str = typer.Option(..., "--id"),
+    version: int = typer.Option(None, "--version", help="Defaut : version courante."),
+) -> None:
+    """Detail d'un contrat (entete + version + candidates)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        contract = fetch_contract(conn, contract_id)
+        if contract is None:
+            console.print(f"[red]ERR[/red] contrat inconnu : {contract_id}")
+            raise typer.Exit(code=1)
+        v = version if version is not None else contract.current_version
+        ver = fetch_version(conn, contract_id, v)
+        if ver is None:
+            console.print(f"[red]ERR[/red] version {v} introuvable")
+            raise typer.Exit(code=1)
+        cands = get_candidates_in_version(conn, contract_id, v)
+
+    header = Table(title=f"{contract.contract_id} - v{v}")
+    header.add_column("champ")
+    header.add_column("valeur")
+    header.add_row("horizon", f"{contract.horizon_label} ({contract.horizon_start} -> {contract.horizon_end})")
+    header.add_row("status", contract.status)
+    header.add_row("version courante", str(contract.current_version))
+    header.add_row("takt cible (min/piece)", f"{ver.takt_target_min:.2f}" if ver.takt_target_min else "-")
+    header.add_row("WIP cible", f"{ver.wip_target:.0f}" if ver.wip_target else "-")
+    header.add_row("quantite totale", f"{ver.total_quantity:.0f}")
+    header.add_row("coherent", "oui" if ver.is_coherent else "non")
+    console.print(header)
+
+    tbl = Table(title=f"Candidates v{v} ({len(cands)})")
+    tbl.add_column("seq", justify="right")
+    tbl.add_column("candidate")
+    tbl.add_column("article")
+    tbl.add_column("qty", justify="right")
+    tbl.add_column("zone")
+    for c in cands:
+        tbl.add_row(
+            str(c["sequence_idx"]), c["candidate_id"],
+            c["article_id"], f"{c['qty_in_contract']:g}", c["zone"],
+        )
+    console.print(tbl)
+
+
+@app.command("flux-add")
+def flux_add_cmd(
+    run: str = typer.Option("default"),
+    contract_id: str = typer.Option(..., "--id"),
+    candidate_id: str = typer.Option(..., "--candidate"),
+    notes: str = typer.Option(None, "--notes"),
+) -> None:
+    """Ajoute un candidate au contrat -> nouvelle version."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        new_v = add_candidate_to_contract(conn, contract_id, candidate_id, notes=notes)
+    console.print(f"[green]OK[/green] {contract_id} : nouvelle version {new_v}")
+
+
+@app.command("flux-remove")
+def flux_remove_cmd(
+    run: str = typer.Option("default"),
+    contract_id: str = typer.Option(..., "--id"),
+    candidate_id: str = typer.Option(..., "--candidate"),
+    notes: str = typer.Option(None, "--notes"),
+) -> None:
+    """Retire un candidate du contrat -> nouvelle version."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        new_v = remove_candidate_from_contract(conn, contract_id, candidate_id, notes=notes)
+    console.print(f"[green]OK[/green] {contract_id} : nouvelle version {new_v}")
+
+
+@app.command("flux-check")
+def flux_check_cmd(
+    run: str = typer.Option("default"),
+    contract_id: str = typer.Option(..., "--id"),
+    version: int = typer.Option(None, "--version"),
+) -> None:
+    """Verifie la coherence d'un contrat (charge poste + takt vs goulot)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        report = compute_coherence(conn, contract_id, version)
+
+    tbl = Table(
+        title=f"Coherence {contract_id} v{report.version} - {'OK' if report.overall_ok else 'VIOLATIONS'}"
+    )
+    tbl.add_column("metric")
+    tbl.add_column("workstation")
+    tbl.add_column("actual", justify="right")
+    tbl.add_column("limit", justify="right")
+    tbl.add_column("ok", justify="center")
+    tbl.add_column("explanation", overflow="fold")
+    for c in report.checks:
+        tbl.add_row(
+            c.metric,
+            c.workstation_id or "-",
+            f"{c.actual_value:.2f}" if c.actual_value is not None else "-",
+            f"{c.limit_value:.2f}" if c.limit_value is not None else "-",
+            "[green]oui[/green]" if c.is_ok else "[red]non[/red]",
+            c.explanation,
+        )
+    console.print(tbl)
+
+
+@app.command("flux-smooth")
+def flux_smooth_cmd(
+    run: str = typer.Option("default"),
+    contract_id: str = typer.Option(..., "--id"),
+    version: int = typer.Option(None, "--version"),
+) -> None:
+    """Calcule la distribution lissee des lancements."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        launches = compute_smoothing(conn, contract_id, version)
+
+    if not launches:
+        console.print("[yellow]Aucun lancement lisse.[/yellow]")
+        return
+    tbl = Table(title=f"Lancements lisses - {contract_id}")
+    tbl.add_column("candidate")
+    tbl.add_column("offset (min)", justify="right")
+    tbl.add_column("planned_start")
+    for l in launches:
+        tbl.add_row(l.candidate_id, str(l.offset_minutes), l.planned_start)
+    console.print(tbl)
+
+
+@app.command("mes-launch")
+def mes_launch_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+) -> None:
+    """Lance un OF (status='created' -> 'launched'). Primitive pour tests/demos."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        result = launch_of(conn, of_id)
+    console.print(
+        f"[green]OK[/green] {of_id} -> launched (event {result.event_id})"
+    )
+
+
+@app.command("p3-return")
+def p3_return_cmd(
+    run: str = typer.Option("default"),
+    candidate_id: str = typer.Option(..., "--candidate"),
+    reason: str = typer.Option(..., "--reason"),
+    cycle: str = typer.Option(None, "--cycle"),
+) -> None:
+    """P3 inverse Forme A : ramene un candidate gele en zone negociable.
+
+    L'OF associe doit etre en status='created' (non lance). Il est annule.
+    """
+    path = _db_path(run)
+    with db_session(path) as conn:
+        result = return_to_negociable(
+            conn, candidate_id, reason=reason, cycle_id=cycle
+        )
+    if result.cancelled_of_id:
+        console.print(
+            f"[green]OK[/green] {candidate_id} -> negociable "
+            f"(OF {result.cancelled_of_id} annule, event {result.event_id})"
+        )
+    else:
+        console.print(
+            f"[green]OK[/green] {candidate_id} -> negociable "
+            f"(pas d'OF associe, event {result.event_id})"
+        )
+
+
+@app.command("p3-fragment")
+def p3_fragment_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+    fragment_qty: float = typer.Option(..., "--qty", help="Quantite a fragmenter."),
+    reason: str = typer.Option(..., "--reason"),
+    cycle: str = typer.Option(None, "--cycle"),
+) -> None:
+    """P3 inverse Forme B : fragmente un OF lance/in_progress.
+
+    Cree un nouvel OF FRAGMENT (status='created') avec `fragment_qty` unites.
+    L'OF source garde la portion executee. Conservation : source.qty diminue
+    de fragment_qty.
+    """
+    path = _db_path(run)
+    with db_session(path) as conn:
+        result = fragment_of(
+            conn, of_id, fragment_quantity=fragment_qty, reason=reason, cycle_id=cycle
+        )
+    console.print(
+        f"[green]OK[/green] {of_id} fragmente : source garde "
+        f"{result.source_quantity_after:.0f}, fragment {result.fragment_of_id} "
+        f"prend {result.fragment_quantity:.0f} (event {result.event_id})"
+    )
+
+
+@app.command("lineage")
+def lineage_cmd(
+    run: str = typer.Option("default"),
+    of_id: str = typer.Option(..., "--of"),
+) -> None:
+    """Affiche la filiation d'un OF (source remontante + fragments descendants)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        nodes = get_lineage(conn, of_id)
+    if not nodes:
+        console.print(f"[yellow]OF inconnu : {of_id}[/yellow]")
+        return
+    tbl = Table(title=f"Filiation {of_id}")
+    tbl.add_column("of_id")
+    tbl.add_column("article")
+    tbl.add_column("quantity", justify="right")
+    tbl.add_column("status")
+    tbl.add_column("parent")
+    for n in nodes:
+        tbl.add_row(
+            n.of_id, n.article_id, f"{n.quantity:g}", n.status,
+            n.parent_of_id or "-",
+        )
+    console.print(tbl)
+
+
+@app.command("p3")
+def p3_cmd(
+    run: str = typer.Option("default"),
+    contract_id: str = typer.Option(..., "--id", help="ID du contrat a freeze."),
+    cycle: str = typer.Option(None, "--cycle"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Evaluer sans freezer."),
+) -> None:
+    """Execute la porte P3 sur un contrat de flux : evaluation + freeze si OK."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+
+    with db_session(path) as conn:
+        if dry_run:
+            criteria = evaluate_p3_for_contract(conn, contract_id)
+            tbl = Table(title=f"P3 dry-run - {contract_id}")
+            tbl.add_column("rule_id")
+            tbl.add_column("criterion")
+            tbl.add_column("outcome")
+            tbl.add_column("explanation", overflow="fold")
+            for c in criteria:
+                color = "green" if c.outcome == "PASS" else "red"
+                tbl.add_row(
+                    c.rule_id, c.criterion,
+                    f"[{color}]{c.outcome}[/{color}]", c.explanation,
+                )
+            console.print(tbl)
+            return
+
+        result = run_p3_freeze(conn, contract_id, cycle_id=cycle)
+
+    tbl = Table(title=f"P3 - {contract_id} : {result.decision}")
+    tbl.add_column("rule_id")
+    tbl.add_column("criterion")
+    tbl.add_column("outcome")
+    tbl.add_column("explanation", overflow="fold")
+    for c in result.criteria:
+        color = "green" if c.outcome == "PASS" else "red"
+        tbl.add_row(c.rule_id, c.criterion, f"[{color}]{c.outcome}[/{color}]", c.explanation)
+    console.print(tbl)
+    if result.batch_id:
+        console.print(f"[green]FREEZE OK[/green] tranche {result.batch_id} creee.")
+
+
+@app.command("freeze-list")
+def freeze_list_cmd(
+    run: str = typer.Option("default"),
+    status: str = typer.Option(None, "--status"),
+) -> None:
+    """Liste les tranches gelees."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        batches = list_freeze_batches(conn, status=status)
+    if not batches:
+        console.print("[yellow]Aucune tranche gelee.[/yellow]")
+        return
+    tbl = Table(title=f"Tranches gelees ({len(batches)})")
+    tbl.add_column("batch_id")
+    tbl.add_column("horizon")
+    tbl.add_column("decision")
+    tbl.add_column("contracts", justify="right")
+    tbl.add_column("candidates", justify="right")
+    tbl.add_column("qty totale", justify="right")
+    tbl.add_column("status")
+    tbl.add_column("frozen_at")
+    for b in batches:
+        tbl.add_row(
+            b.batch_id,
+            f"{b.horizon_start} -> {b.horizon_end}",
+            b.decision,
+            str(b.contract_count),
+            str(b.candidate_count),
+            f"{b.total_quantity:.0f}",
+            b.status,
+            b.frozen_at,
+        )
+    console.print(tbl)
+
+
+@app.command("freeze-detail")
+def freeze_detail_cmd(
+    run: str = typer.Option("default"),
+    batch_id: str = typer.Option(..., "--id"),
+) -> None:
+    """Detail d'une tranche gelee : entete + contrats figes."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        batch = fetch_freeze_batch(conn, batch_id)
+        if batch is None:
+            console.print(f"[red]ERR[/red] tranche inconnue : {batch_id}")
+            raise typer.Exit(code=1)
+        contracts = get_batch_contracts(conn, batch_id)
+
+    header = Table(title=f"Tranche gelee {batch_id}")
+    header.add_column("champ")
+    header.add_column("valeur")
+    header.add_row("horizon", f"{batch.horizon_start} -> {batch.horizon_end}")
+    header.add_row("decision", batch.decision)
+    header.add_row("status", batch.status)
+    header.add_row("contracts", str(batch.contract_count))
+    header.add_row("candidates", str(batch.candidate_count))
+    header.add_row("quantite totale", f"{batch.total_quantity:.0f}")
+    header.add_row("frozen_at", batch.frozen_at)
+    header.add_row("explanation", batch.explanation or "-")
+    console.print(header)
+
+    tbl = Table(title="Contrats figes")
+    tbl.add_column("contract_id")
+    tbl.add_column("version (figee)", justify="right")
+    for c in contracts:
+        tbl.add_row(c.contract_id, str(c.version))
+    console.print(tbl)
+
+
+@app.command("p2")
+def p2_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    cycle: str = typer.Option(None, "--cycle", help="Cycle territorial associe (optionnel)."),
+) -> None:
+    """Execute la porte P2 sur tous les candidates en zone 'libre'.
+
+    Pour chaque candidate, evalue les 5 criteres P2 (regles data-driven en
+    table decision_rules) et applique la decision PASS / PASS_WITH_RISK /
+    RECALCULATE / BLOCK. Cree une risk_debt par critere en RISK.
+    """
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+
+    with db_session(path) as conn:
+        batch = run_p2_on_libre_zone(conn, cycle_id=cycle)
+
+    summary = Table(title=f"Porte P2 - synthese ({len(batch.results)} candidates evalues)")
+    summary.add_column("decision")
+    summary.add_column("nb", justify="right")
+    summary.add_row("PASS", str(batch.passed))
+    summary.add_row("PASS_WITH_RISK", str(batch.passed_with_risk))
+    summary.add_row("RECALCULATE", str(batch.recalc))
+    summary.add_row("BLOCK", str(batch.blocked))
+    summary.add_row("[bold]risk_debts ouvertes[/bold]", str(batch.total_risk_debts))
+    console.print(summary)
+
+    tbl = Table(title="Detail par candidate")
+    tbl.add_column("candidate")
+    tbl.add_column("decision")
+    tbl.add_column("transitioned", justify="center")
+    tbl.add_column("risk_debts", justify="right")
+    tbl.add_column("criteres", overflow="fold")
+    for r in batch.results:
+        per_rule = ", ".join(f"{rr.rule_id}={rr.outcome}" for rr in r.rule_results)
+        tbl.add_row(
+            r.candidate_id,
+            r.decision,
+            "oui" if r.transitioned else "non",
+            str(len(r.risk_debts)),
+            per_rule,
+        )
+    console.print(tbl)
+
+
+@app.command("risk-debt")
+def risk_debt_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    status: str = typer.Option(None, "--status", help="Filtrer : open | extinct | expired."),
+) -> None:
+    """Liste les risk_debts."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+    with db_session(path) as conn:
+        debts = list_risk_debts(conn, status=status)
+
+    if not debts:
+        console.print("[yellow]Aucune risk_debt.[/yellow]")
+        return
+
+    tbl = Table(title=f"Risk debts ({len(debts)})")
+    tbl.add_column("id", justify="right")
+    tbl.add_column("candidate")
+    tbl.add_column("rule")
+    tbl.add_column("score", justify="right")
+    tbl.add_column("deadline")
+    tbl.add_column("status")
+    tbl.add_column("explanation", overflow="fold")
+    for d in debts:
+        tbl.add_row(
+            str(d.risk_debt_id),
+            d.candidate_id,
+            d.rule_id,
+            f"{d.score:.2f}",
+            d.deadline,
+            d.status,
+            d.explanation or "-",
+        )
+    console.print(tbl)
+
+
+@app.command("extinguish-debt")
+def extinguish_debt_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    debt_id: int = typer.Option(..., "--id", help="ID de la risk_debt."),
+    reason: str = typer.Option(..., "--reason", help="Raison d'extinction."),
+) -> None:
+    """Eteint manuellement une risk_debt (open -> extinct)."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        d = extinguish_risk_debt(conn, debt_id, reason=reason)
+    console.print(
+        f"[green]OK[/green] risk_debt {d.risk_debt_id} eteinte "
+        f"({d.candidate_id}, raison : {reason})"
+    )
+
+
+@app.command("expire-debts")
+def expire_debts_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+) -> None:
+    """Passe les risk_debts overdue en statut 'expired'."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        n = expire_overdue_risk_debts(conn)
+    console.print(f"[green]OK[/green] {n} risk_debt(s) expirees.")
+
+
+@app.command("rules")
+def rules_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    gate: str = typer.Option("P2", "--gate", help="Porte (P2/P3/P4)."),
+) -> None:
+    """Liste les regles actives pour une porte."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+    with db_session(path) as conn:
+        rules = load_active_rules(conn, gate)
+
+    if not rules:
+        console.print(f"[yellow]Aucune regle active pour {gate}.[/yellow]")
+        return
+
+    tbl = Table(title=f"Regles actives - {gate} ({len(rules)})")
+    tbl.add_column("rule_id")
+    tbl.add_column("version", justify="right")
+    tbl.add_column("criterion")
+    tbl.add_column("severity")
+    tbl.add_column("label", overflow="fold")
+    for r in rules:
+        tbl.add_row(r.rule_id, str(r.version), r.criterion, r.severity, r.label)
+    console.print(tbl)
+
+
+@app.command("zones")
+def zones_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+) -> None:
+    """Vue des candidate_orders par zone (libre / negociable / gelee)."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+
+    with db_session(path) as conn:
+        by_zone = {z: fetch_in_zone(conn, z) for z in (ZONE_LIBRE, ZONE_NEGOCIABLE, ZONE_GELEE)}
+
+    tbl = Table(title="Zones de planification - synthèse")
+    tbl.add_column("zone")
+    tbl.add_column("nb candidats", justify="right")
+    tbl.add_column("candidats", overflow="fold")
+    for zone in (ZONE_LIBRE, ZONE_NEGOCIABLE, ZONE_GELEE):
+        rows = by_zone[zone]
+        listing = ", ".join(
+            f"{r['candidate_id']}({r['article_id']}, {r['quantity']:g})"
+            for r in rows
+        )
+        tbl.add_row(zone, str(len(rows)), listing or "-")
+    console.print(tbl)
+
+
+@app.command("move-zone")
+def move_zone_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    candidate_id: str = typer.Option(..., "--candidate", help="ID du candidate à déplacer."),
+    target: str = typer.Option(..., "--to", help="Zone cible (libre|negociable|gelee)."),
+    decision: str = typer.Option(None, "--decision", help="Décision portée (ex: PASS)."),
+    actor: str = typer.Option("cli", "--actor"),
+    explanation: str = typer.Option(None, "--explanation"),
+) -> None:
+    """Déplace manuellement un candidate vers une zone (debug / V1 transitionnel)."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+
+    with db_session(path) as conn:
+        t = move_candidate_to_zone(
+            conn,
+            candidate_id,
+            target,
+            decision=decision,
+            explanation=explanation,
+            actor=actor,
+        )
+    console.print(
+        f"[green]OK[/green] {candidate_id} : {t.from_zone} -> {t.to_zone} "
+        f"(transition {t.transition_id})"
+    )
+
+
+@app.command("transitions")
+def transitions_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    candidate_id: str = typer.Option(..., "--candidate"),
+) -> None:
+    """Historique des transitions de zone d'un candidate."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+
+    with db_session(path) as conn:
+        history = transitions_for(conn, candidate_id)
+
+    if not history:
+        console.print(f"[yellow]Aucune transition pour {candidate_id}[/yellow]")
+        return
+
+    tbl = Table(title=f"Transitions {candidate_id}")
+    tbl.add_column("id", justify="right")
+    tbl.add_column("from")
+    tbl.add_column("->", justify="center")
+    tbl.add_column("to")
+    tbl.add_column("decision")
+    tbl.add_column("actor")
+    tbl.add_column("at")
+    for t in history:
+        tbl.add_row(
+            str(t.transition_id),
+            t.from_zone or "(création)",
+            "->",
+            t.to_zone,
+            t.decision or "-",
+            t.actor or "-",
+            t.at_time,
+        )
+    console.print(tbl)
+
+
+@app.command("cycle-create")
+def cycle_create_cmd(
+    run: str = typer.Option("default", help="Nom du run."),
+    gate: str = typer.Option(..., "--gate", help="Porte (P2 ou P3)."),
+    cycle_id: str = typer.Option(..., "--id", help="Identifiant cycle (ex: P2-2026-07)."),
+    period_start: str = typer.Option(..., "--start", help="Début ISO (YYYY-MM-DD)."),
+    period_end: str = typer.Option(..., "--end", help="Fin ISO (YYYY-MM-DD)."),
+    cadence_days: int = typer.Option(None, "--cadence", help="Cadence jours (defaut data-driven)."),
+) -> None:
+    """Crée un cycle territorial en statut 'planned'."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+
+    with db_session(path) as conn:
+        c = create_cycle(
+            conn,
+            gate=gate,
+            cycle_id=cycle_id,
+            period_start=period_start,
+            period_end=period_end,
+            cadence_days=cadence_days,
+        )
+    console.print(
+        f"[green]OK[/green] cycle {c.cycle_id} créé "
+        f"({c.gate}, {c.period_start} -> {c.period_end}, cadence {c.cadence_days}j, statut {c.status})"
+    )
+
+
+@app.command("cycle-open")
+def cycle_open_cmd(
+    run: str = typer.Option("default"),
+    cycle_id: str = typer.Option(..., "--id"),
+) -> None:
+    """Passe un cycle 'planned' à 'open'."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        c = open_cycle(conn, cycle_id)
+    console.print(f"[green]OK[/green] cycle {c.cycle_id} ouvert à {c.opened_at}")
+
+
+@app.command("cycle-close")
+def cycle_close_cmd(
+    run: str = typer.Option("default"),
+    cycle_id: str = typer.Option(..., "--id"),
+) -> None:
+    """Passe un cycle 'open' à 'closed'."""
+    path = _db_path(run)
+    with db_session(path) as conn:
+        c = close_cycle(conn, cycle_id)
+    console.print(f"[green]OK[/green] cycle {c.cycle_id} clôturé à {c.closed_at}")
+
+
+@app.command("cycle-list")
+def cycle_list_cmd(
+    run: str = typer.Option("default"),
+    gate: str = typer.Option(None, "--gate", help="Filtrer par porte (P2/P3)."),
+    status: str = typer.Option(None, "--status", help="Filtrer par statut."),
+) -> None:
+    """Liste les cycles territoriaux."""
+    path = _db_path(run)
+    if not path.exists():
+        console.print(f"[red]ERR[/red] base introuvable : {path}")
+        raise typer.Exit(code=1)
+    with db_session(path) as conn:
+        cycles = list_cycles(conn, gate=gate, status=status)
+
+    if not cycles:
+        console.print("[yellow]Aucun cycle.[/yellow]")
+        return
+
+    tbl = Table(title="Cycles territoriaux")
+    tbl.add_column("cycle_id")
+    tbl.add_column("gate")
+    tbl.add_column("période")
+    tbl.add_column("cadence", justify="right")
+    tbl.add_column("statut")
+    tbl.add_column("opened_at")
+    tbl.add_column("closed_at")
+    for c in cycles:
+        tbl.add_row(
+            c.cycle_id,
+            c.gate,
+            f"{c.period_start} -> {c.period_end}",
+            f"{c.cadence_days}j",
+            c.status,
+            c.opened_at or "-",
+            c.closed_at or "-",
+        )
+    console.print(tbl)
 
 
 @app.command("flatten-bom")

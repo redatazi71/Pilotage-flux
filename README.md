@@ -1,19 +1,16 @@
 # pilotage-flux
 
-Test de faisabilite V0 d'une solution APS + MES en pilotage par flux lean,
-sur donnees reelles et avec event sourcing.
+Solution APS + MES en pilotage par flux lean, sur données réelles SQLite avec
+event sourcing. Voir `cadrage_cdc_solution_aps_mes_pilotage_flux_v2.docx` pour
+la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
-Voir `cadrage_cdc_solution_aps_mes_pilotage_flux_v2.docx` pour la doctrine et
-le periemetre detaille du V0 (§21 bis).
+## État
 
-## Etat
+**V0 complet** (Lots L0.1 → L0.6) et **V1 complet** (Lots L1.1 → L1.7).
 
-**V0 (Lots L0.1 à L0.6) complet.** Le golden path bout-en-bout fonctionne :
-demande -> CBN -> contrats OF (P1) -> execution MES -> cloture P4 ->
-reconstruction event-sourcee.
-
-33 tests pytest, dont un test d'acceptation end-to-end couvrant les 3 criteres
-de succes V0 (bout-en-bout, data-driven, tracabilite reconstructible).
+- 146 tests pytest verts, dont deux tests d'acceptation end-to-end
+  (`test_acceptance_golden_path` V0 mono-niveau, `test_acceptance_v1`
+  multi-niveau avec contrats de flux + freeze + P3 inverse).
 
 ## Setup (Windows, PowerShell)
 
@@ -24,81 +21,113 @@ pip install -e ".[dev]"
 pytest
 ```
 
-## Golden path complet
+## Golden path V0 (mono-niveau, OF-driven)
 
 ```powershell
-# 1. Initialiser une base et importer les referentiels
 python -m pilotage_flux init-db --run demo --drop
 python -m pilotage_flux import-refs --run demo
-
-# 2. APS : CBN + charge/capacite + creation contrats OF (porte P1)
-python -m pilotage_flux plan --run demo
-
-# 3. MES : execution complete d'un OF (lancement -> ops -> cloture P4)
+python -m pilotage_flux plan --run demo                       # APS + P1
 python -m pilotage_flux simulate-execution --run demo --of OF-0001
-
-# 4. Visualisation
 python -m pilotage_flux flow --run demo
-python -m pilotage_flux of-detail --run demo --of OF-0001
-python -m pilotage_flux events --run demo
+python -m pilotage_flux replay --run demo --of OF-0001        # Event sourcing
+```
 
-# 5. Preuve event sourcing : reconstruction de l'OF depuis les seuls evenements
-python -m pilotage_flux replay --run demo --of OF-0001
+## Golden path V1 (multi-niveau, doctrine flux complète)
+
+```powershell
+python -m pilotage_flux init-db --run v1 --drop
+python -m pilotage_flux import-refs --run v1 --fixtures data/fixtures_v1
+python -m pilotage_flux flatten-bom --run v1                  # L1.1
+python -m pilotage_flux plan --run v1                         # CBN multi-niveau + P1
+python -m pilotage_flux pegging --run v1 --so SO-001          # Chaîne demande -> composants
+python -m pilotage_flux p2 --run v1                           # L1.3 - PASS_WITH_RISK + risk_debt
+python -m pilotage_flux risk-debt --run v1                    # Liste risk_debts
+python -m pilotage_flux flux-create --run v1 --horizon W27 --start 2026-07-06 --end 2026-07-12 --candidates "CND-0001,CND-0002,CND-0003,CND-0004"
+python -m pilotage_flux flux-detail --run v1 --id FX-0001
+python -m pilotage_flux flux-check --run v1 --id FX-0001      # Cohérence charge + takt
+python -m pilotage_flux flux-smooth --run v1 --id FX-0001     # Distribution lissée
+python -m pilotage_flux extinguish-debt --run v1 --id 1 --reason "test"
+python -m pilotage_flux extinguish-debt --run v1 --id 2 --reason "test"
+python -m pilotage_flux extinguish-debt --run v1 --id 3 --reason "test"
+python -m pilotage_flux extinguish-debt --run v1 --id 4 --reason "test"
+python -m pilotage_flux p3 --run v1 --id FX-0001              # FREEZE -> tranche gelée
+python -m pilotage_flux freeze-list --run v1
+python -m pilotage_flux zones --run v1                        # Tous en zone gelée
+
+# P3 inverse Forme A : renégociation d'un OF non lancé
+python -m pilotage_flux p3-return --run v1 --candidate CND-0001 --reason "renégo client"
+
+# P3 inverse Forme B : fragmentation d'un OF lancé
+python -m pilotage_flux mes-launch --run v1 --of OF-0002
+python -m pilotage_flux p3-fragment --run v1 --of OF-0002 --qty 30 --reason "urgence"
+python -m pilotage_flux lineage --run v1 --of OF-0002
 ```
 
 ## Architecture
 
 ```
 src/pilotage_flux/
-  db/           # Schema SQLite (12 tables) + connexion
-  events/       # Event store immuable + reconstruction
-  importers/    # Import CSV referentiels
-  parameters.py # Accesseurs data-driven (capacite, rendement, seuils)
-  aps/          # CBN, charge/capacite, planner (creation contrat OF)
-  mes/          # Lancement, declarations terrain, cloture
-  gates/        # Portes P1 (creation OF) et P4 (cloture)
-  visualization/# Vues flux physique par poste et par OF
-  cli/          # CLI typer (init-db, plan, simulate-execution, ...)
+  db/               Schema SQLite + connexion
+  events/           Event store + reconstruction event-sourcée
+  parameters.py     Accesseurs data-driven (capacité, rendement, seuils)
+  importers/        Import CSV référentiels
+  aps/              CBN multi-niveau, charge/capacité, BOM aplatissement,
+                    pegging multi-niveau, planner (création OF)
+  mes/              Lancement, déclarations début/fin, clôture
+  zones/            3 zones (libre/négociable/gelée) + cycles territoriaux
+  rules/            Moteur de règles minimal SQLite-based (engine + evaluators)
+  risk_debt.py      Registre risk_debts avec deadline + extinction
+  flux/             Contrats de flux versionnés (contracts/coherence/smoothing/freeze)
+  gates/            Portes P1, P2, P3, P3 inverse (forme A + B)
+  visualization/    Vues flux physique par poste et par OF
+  cli/              CLI typer (28 commandes)
 data/
-  fixtures/     # CSV golden path (3 articles, 3 postes, 2 commandes)
-  runs/         # Bases SQLite generees (gitignored)
-tests/          # 33 tests pytest dont test_acceptance_golden_path
+  fixtures/         Golden path V0 mono-niveau
+  fixtures_v1/      Golden path V1 multi-niveau (ART-A→SEMI-1→COMP-X/Y)
+  runs/             Bases SQLite générées (gitignored)
+tests/              146 tests : unitaires + intégration + acceptation
 ```
 
-## Periemetre V0 (rappel)
+## Concepts doctrinaux implémentés (cadrage §6, §7 bis)
 
-**Inclus** : implantation lineaire 3 postes, BOM mono-niveau, commandes
-fermes uniquement, CBN basique, charge/capacite par poste avec parametres
-SQLite versionnes, contrat OF avec operations planifiees, porte P1, MES
-(lancement / declarations / clotures), porte P4, 5 types d'evenements
-(OF_CREATED, OF_LAUNCHED, OP_STARTED, OP_FINISHED, OF_CLOSED), visualisation
-flux physique, reconstruction event-sourcee.
+| Concept | Module | État |
+|---|---|---|
+| Zones libre/négociable/gelée | `zones/transitions.py` | V1 ✓ |
+| Cycles territoriaux P2/P3 | `zones/cycles.py` | V1 ✓ |
+| Moteur de règles data-driven | `rules/` | V1 ✓ (5 règles P2, 4 règles P3) |
+| Risk debt + extinction | `risk_debt.py` | V1 ✓ |
+| Contrat de flux versionné | `flux/contracts.py` | V1 ✓ |
+| Cohérence (charge + takt vs goulot) | `flux/coherence.py` | V1 ✓ |
+| Lissage hebdomadaire | `flux/smoothing.py` | V1 ✓ |
+| Tranche gelée immuable | `flux/freeze.py` | V1 ✓ |
+| Porte P1 (création OF) | `gates/p1.py` | V0 ✓ |
+| Porte P2 (qualification) | `gates/p2.py` | V1 ✓ |
+| Porte P3 (freeze) | `gates/p3.py` | V1 ✓ |
+| P3 inverse forme A (retour négo) | `gates/p3_inverse.py` | V1 ✓ |
+| P3 inverse forme B (fragment) | `gates/p3_inverse.py` | V1 ✓ |
+| Porte P4 (clôture) | `mes/closure.py` | V0 ✓ |
+| Event sourcing + reconstruction | `events/` | V0 ✓ |
+| Pegging multi-niveau | `aps/pegging.py` | V1 ✓ |
 
-**Reporte** : contrats de flux, zones et portes P2/P3, P3 inverse, fragments,
-risk debt, filtre dual, evenements attendus vs reels, causes racines
-ponderees, BOM multi-niveau, pegging, CPM, implantations parallele et
-hybride, qualite, logistique, UI riche, multi-utilisateurs.
+## Reporté à V2 / V3
 
-## Criteres de succes V0 (§21 bis.5)
+- V2 : MES complet (qualité, logistique, consommations matière), implantations
+  parallèle et hybride, stocks/achats projetables (R-P2-05 enrichi).
+- V3 : événements attendus vs réels, filtre dual de tolérances et de mémoire,
+  causes racines bayésiennes, apprentissage automatique des seuils.
 
-Le test d'acceptation `tests/test_acceptance_golden_path.py` valide :
+## Critères de succès validés par tests d'acceptation
 
-1. **Bout-en-bout** : une commande devient un OF, est executee et cloturee.
-2. **Data-driven prouve** : modifier `capacity_factor` en base change le
-   verdict de surcharge sans toucher au code.
-3. **Tracabilite reconstructible** : `reconstruct_of` reconstruit l'etat
-   complet depuis les 9 evenements du store, sans lire les tables metier.
-4. **Reproductibilite** : les fixtures CSV sont deterministes.
-5. **Goulot dynamique** : WS-2 (`capacity_factor=0.80`) est correctement
-   identifie comme surcharge (450 min charge vs 384 min capacite).
+`tests/test_acceptance_golden_path.py` (V0) :
+1. Bout-en-bout demande → OF clôturé
+2. Data-driven prouvé (`UPDATE parameters` change comportement)
+3. Reconstruction event-sourcée
 
-## Suite (hors V0)
-
-L0.6 marque la fin du V0. Suite recommandee selon le document de cadrage v2 :
-
-- **V1** : portes P2 et P3, zones libre/negociable/gelee, contrats de flux,
-  risk debt, P3 inverse, BOM multi-niveau, pegging.
-- **V2** : MES complet (qualite, logistique, consommations), implantations
-  parallele et hybride, fragments.
-- **V3** : evenements attendus vs reels, filtre dual de tolerances et de
-  memoire, causes racines bayesiennes, apprentissage.
+`tests/test_acceptance_v1.py` (V1) :
+4. Pegging multi-niveau (100 ART-A → 200 COMP-X via 100 SEMI-1)
+5. Moteur de règles P2 (5 critères data-driven + risk_debt)
+6. Contrat de flux versionné + cohérence + lissage
+7. P3 freeze (tranche gelée immuable, snapshot version)
+8. P3 inverse forme A (retour négociable + OF annulé)
+9. P3 inverse forme B (fragmentation, conservation quantité, filiation)
+10. Traçabilité event_store (8 types d'événements) + gate_decisions_v1

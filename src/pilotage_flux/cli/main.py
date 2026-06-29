@@ -104,6 +104,13 @@ from pilotage_flux.mes import (
     close_of,
 )
 from pilotage_flux.visualization import of_detail_view, workstation_view
+from pilotage_flux.comparative import (
+    DOCTRINES,
+    baseline_scenario,
+    build_comparative_report,
+    compute_kpis,
+    run_doctrine,
+)
 
 
 app = typer.Typer(
@@ -1776,6 +1783,70 @@ def summary(
             count = conn.execute(sql).fetchone()[0]
             tbl.add_row(name, str(count))
     console.print(tbl)
+
+
+@app.command("compare-doctrines")
+def compare_doctrines(
+    run: str = typer.Option("compare", help="Préfixe des bases SQLite générées."),
+    fixtures: Path = typer.Option(
+        Path("data/fixtures_v1"),
+        help="Fixtures référentiels (V1 multi-niveau requises).",
+    ),
+    report_path: Path = typer.Option(
+        Path("data/comparative_baseline_report.md"),
+        help="Chemin de sortie du rapport Markdown.",
+    ),
+) -> None:
+    """Exécute le scénario baseline sur les 3 doctrines (OF, FLUX, EVENT) et publie le rapport L4.3."""
+    scenario = baseline_scenario()
+    DEFAULT_RUNS_DIR.mkdir(parents=True, exist_ok=True)
+
+    kpis = []
+    results = []
+    for doctrine in DOCTRINES:
+        db = DEFAULT_RUNS_DIR / f"{run}_{doctrine}.db"
+        console.print(f"[yellow]→[/yellow] exécution doctrine [bold]{doctrine}[/bold] …")
+        result = run_doctrine(scenario, doctrine, db, fixtures_dir=fixtures)
+        kpi = compute_kpis(scenario, result)
+        kpis.append(kpi)
+        results.append(result)
+        console.print(
+            f"  OFs {kpi.of_closed}/{kpi.of_total} • lead={kpi.lead_time_days_avg}j • "
+            f"WIP={kpi.wip_avg} • APS={kpi.aps_recalculations} • "
+            f"actions={kpi.actions_triggered}"
+        )
+
+    tbl = Table(title=f"Étude comparative V4 — scénario {scenario.name}")
+    tbl.add_column("KPI")
+    for d in DOCTRINES:
+        tbl.add_column(d.upper())
+    rows = [
+        ("Lead time moyen (j)", "lead_time_days_avg"),
+        ("Lead time max (j)", "lead_time_days_max"),
+        ("WIP moyen", "wip_avg"),
+        ("OF clôturés", "of_closed"),
+        ("Recalculs APS", "aps_recalculations"),
+        ("Nervosité", "nervousness"),
+        ("Écarts détectés", "deviations_detected"),
+        ("Actions tolérance", "actions_triggered"),
+        ("Replans locaux", "replan_local_actions"),
+        ("Replans globaux", "replan_global_actions"),
+        ("Causes attachées", "causes_attached"),
+        ("Évts qualité", "quality_events"),
+    ]
+    by_d = {k.doctrine: k for k in kpis}
+    for label, field_name in rows:
+        cells = [label]
+        for d in DOCTRINES:
+            v = getattr(by_d[d], field_name)
+            cells.append("—" if v is None else str(v))
+        tbl.add_row(*cells)
+    console.print(tbl)
+
+    report = build_comparative_report(scenario, kpis)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    console.print(f"[green]OK[/green] rapport écrit : [bold]{report_path}[/bold]")
 
 
 if __name__ == "__main__":

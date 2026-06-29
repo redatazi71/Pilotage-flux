@@ -19,12 +19,31 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 
+from pilotage_flux.parameters import get_num
+
 
 KIND_TIME = "time_delta"
 KIND_QTY = "quantity_delta"
 KIND_MISSING = "missing_actual"
 KIND_UNEXPECTED = "unexpected_actual"
 KIND_SCRAP_EXCESS = "qty_scrap_excess"
+
+
+DEFAULT_TIME_TOLERANCE_MINUTES = 30.0
+
+
+def _resolve_time_tolerance(conn: sqlite3.Connection) -> float:
+    """Lit le seuil de tolérance temporelle (en minutes) depuis parameters.
+
+    Permet aux études et runs réels d'ajuster la sensibilité du matching
+    sans modifier le code. Le nom de paramètre est `matching_time_tolerance_minutes`.
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="matching_time_tolerance_minutes",
+        default=DEFAULT_TIME_TOLERANCE_MINUTES,
+    )
+    return float(val) if val is not None else DEFAULT_TIME_TOLERANCE_MINUTES
 
 
 @dataclass(frozen=True)
@@ -185,6 +204,7 @@ def match_actuals_to_expected(
                     filtered.append(a)
             actuals = filtered
 
+        tolerance_minutes = _resolve_time_tolerance(conn)
         # Apparie 1:1 dans l'ordre
         for expected_row, actual_row in zip(bucket, actuals):
             try:
@@ -193,7 +213,7 @@ def match_actuals_to_expected(
             except (ValueError, TypeError):
                 continue
             delta_min = (actual_dt - expected_dt).total_seconds() / 60
-            score = _score_time_delta(delta_min)
+            score = _score_time_delta(delta_min, tolerance_minutes)
             qualification = _qualify(score)
 
             cur = conn.execute(

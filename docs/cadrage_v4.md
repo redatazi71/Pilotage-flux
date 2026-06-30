@@ -1132,6 +1132,91 @@ principielle qui ne suffit pas (V12.8), il y a un module manquant
 Chart : `docs/charts/v12_8_otif_comparative.png`.
 Données détaillées : `docs/cadrage_v4_v12_8_data.md`.
 
+### §28.15 V13.0 — Event-driven smoothing reactivity — LIVRÉ (rompt EVENT ≡ FLUX)
+
+V12.8 a confirmé un finding troublant : **EVENT et FLUX produisent
+strictement le même OTIF** sur les 8 cellules mesurées. Le
+diagnostic `docs/diagnose_event_vs_flux.py` a tracé ce que chaque
+doctrine fait dans `run_doctrine` et révélé :
+
+1. Les smoothed offsets sont identiques (4/4 scénarios).
+2. Les mêmes OFs sont stuck (ART-A=60, ART-B=90 systématiquement).
+3. EVENT applique ses correctives (`breakdown_cleared`,
+   `quality_intervention_started`, `po_alternative_sourced`) mais
+   **aucune ne touche `flux_smoothed_launches` ni
+   `_launch_scheduled_ofs`**. EVENT agit exclusivement
+   post-lancement.
+
+V13.0 corrige ce manque : **lorsqu'un corrective action est appliqué,
+les OFs encore en statut `created` et impactés voient leur
+`scheduled_launch_day` avancé** (= pull-forward du smoothing).
+
+#### §28.15.1 Implémentation
+
+Trois helpers dans `comparative/runner.py` :
+
+- `_pull_forward_pending_ofs_by_ws(conn, state, ws_id, day, days_advance)` :
+  panne sur WS résolue → OFs routant par ce WS avancés
+- `_pull_forward_pending_ofs_by_parent_article(conn, state, child_article, day, days_advance)` :
+  PO retardé re-sourcé → OFs parents (qui utilisent ce composant) avancés
+- `_pull_forward_all_pending_ofs(conn, state, day, days_advance)` :
+  intervention qualité globale → tous les OFs futurs avancés
+
+Wire-up dans `_apply_corrective_actions` (EVENT uniquement). Gating
+par le paramètre global :
+
+```
+event_driven_smoothing_advance_days (default 0 = désactivé)
+```
+
+`days_advance` borné par `max(day_current + 1, old_day -
+days_advance)` pour ne jamais lancer un OF dans le passé.
+
+#### §28.15.2 Résultat empirique (baseline)
+
+Sur les 4 scénarios stress XL (seed=42, `advance_days=5`) :
+
+| Scénario | FLUX V11 | EVENT V11 | EVENT V13.0 | Δ EVENT V13.0 vs V11 |
+|---|---|---|---|---|
+| baseline_xl | 0.695 | 0.695 ≡ | **0.881** | **+18.5 pp** |
+| stress_double_breakdown_xl | 0.675 | 0.675 ≡ | **0.785** | **+11.0 pp** |
+| stress_cascade_nc_xl | 0.675 | 0.675 ≡ | **0.950** | **+27.5 pp** |
+| stress_demand_spike_xl | 0.662 | 0.662 ≡ | 0.662 | +0.0 pp |
+
+**3/4 scénarios cassent l'égalité EVENT = FLUX.** Sur
+`stress_cascade_nc_xl`, EVENT atteint **0.950** — parité OF — sans
+le brute-force V12.7. Le levier est exclusivement la réactivité
+post-événement appliquée au smoothing.
+
+`stress_demand_spike_xl` reste inchangé parce que ce scénario
+contient uniquement des `urgent_order` hazards, qui sont absorbés
+localement (`urgent_absorbed_no_aps_replan`) sans déclencher de
+corrective physique → V13.0 n'a aucun événement à exploiter pour
+le pull-forward.
+
+#### §28.15.3 Lecture doctrinale
+
+V13.0 valide ce qui distinguait théoriquement EVENT de FLUX dans
+la doctrine — la **boucle cybernétique fermée mesure → corrective
+→ replanning**. Le maillon `corrective → replanning` était
+manquant : EVENT mesurait et corrigeait, mais ne re-planifiait
+pas. V13.0 le ferme.
+
+**Conséquence sur les V13 ultérieurs** :
+
+- V13.1 (BOM-op linkage) reste utile mais bénéficie aux deux
+  doctrines symétriquement. Il offre un gain structurel sur l'OTIF
+  sans creuser d'écart EVENT vs FLUX.
+- V13.3 (zones adaptatives) maintenant que V13.0 existe, EVENT
+  peut moduler `freeze_window` en fonction de la nervosité
+  observée — différenciation supplémentaire.
+- V13.0 + V13.1 + V13.3 ensemble produisent un EVENT
+  significativement plus performant sur l'OTIF que FLUX, avec une
+  doctrine **principielle** (pas de magic number).
+
+Chart : aucun (4 scénarios suffisent pour la table § 28.15.2).
+Diagnostic : `docs/diagnose_v13_0.py`.
+
 ### §24.10.1 Lectures clés des matrices
 
 **1. Quelle paire est la plus coûteuse ?**

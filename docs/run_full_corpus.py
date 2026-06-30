@@ -131,40 +131,62 @@ def _select(args) -> list[tuple[str, str]]:
     return plan
 
 
-def _run_one(script: str, env: dict[str, str]) -> tuple[str, float, str]:
-    """Exécute un script. Renvoie (status, durée_s, message_court)."""
+def _run_one(
+    script: str, env: dict[str, str], *, stream: bool,
+) -> tuple[str, float, str]:
+    """Exécute un script. Renvoie (status, durée_s, message_court).
+
+    stream=True  : la sortie de l'étude est diffusée EN DIRECT dans la
+                   console (visuel de progression). stderr est capturé
+                   pour le diagnostic d'erreur.
+    stream=False : sortie capturée, une ligne de résumé (mode --quiet).
+    """
     path = HERE / script
     if not path.exists():
         return ("ABSENT", 0.0, "fichier introuvable")
     t0 = time.time()
     try:
-        proc = subprocess.run(
-            [sys.executable, str(path)],
-            cwd=str(REPO_ROOT),
-            env=env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        if stream:
+            # stdout hérité (live), stderr capturé pour l'erreur
+            proc = subprocess.run(
+                [sys.executable, "-u", str(path)],
+                cwd=str(REPO_ROOT), env=env,
+                stdout=None, stderr=subprocess.PIPE,
+                text=True, encoding="utf-8", errors="replace",
+            )
+            stdout_txt = ""
+            stderr_txt = proc.stderr or ""
+        else:
+            proc = subprocess.run(
+                [sys.executable, str(path)],
+                cwd=str(REPO_ROOT), env=env,
+                capture_output=True,
+                text=True, encoding="utf-8", errors="replace",
+            )
+            stdout_txt = proc.stdout or ""
+            stderr_txt = proc.stderr or ""
     except Exception as exc:  # pragma: no cover - garde-fou
         return ("ERREUR", time.time() - t0, f"exception lancement : {exc}")
     dur = time.time() - t0
     if proc.returncode == 0:
-        # Dernière ligne non vide de stdout comme indicateur
         tail = ""
-        for line in reversed((proc.stdout or "").splitlines()):
+        for line in reversed(stdout_txt.splitlines()):
             if line.strip():
                 tail = line.strip()[:80]
                 break
         return ("OK", dur, tail)
-    # Échec : on remonte la dernière ligne de stderr
     err_tail = ""
-    for line in reversed((proc.stderr or "").splitlines()):
+    for line in reversed(stderr_txt.splitlines()):
         if line.strip():
             err_tail = line.strip()[:120]
             break
     return ("ÉCHEC", dur, err_tail)
+
+
+def _fmt_eta(seconds: float) -> str:
+    if seconds < 90:
+        return f"{seconds:.0f}s"
+    return f"{seconds / 60:.0f} min"
 
 
 def main() -> int:
@@ -179,6 +201,9 @@ def main() -> int:
     parser.add_argument("--list", action="store_true",
                         help="afficher le plan sans rien exécuter")
     parser.add_argument("--stop-on-error", action="store_true")
+    parser.add_argument("--quiet", action="store_true",
+                        help="ne pas streamer la sortie des études "
+                             "(une ligne de résumé par script)")
     args = parser.parse_args()
 
     plan = _select(args)
@@ -211,18 +236,42 @@ def main() -> int:
         print("   (ortools n'est requis que pour la doctrine OF_MILP.)")
         print("   On poursuit quand même — les scripts sans ces deps tourneront.\n")
 
+    stream = not args.quiet
+    total_n = len(plan)
+    print(f"\nMode  : {'streaming live' if stream else 'quiet (résumé)'}  "
+          f"— {total_n} scripts à exécuter")
+
     results: list[tuple[str, str, str, float, str]] = []
     t_start = time.time()
     cur_phase = None
-    for ph, script in plan:
+    for idx, (ph, script) in enumerate(plan, start=1):
         if ph != cur_phase:
-            print(f"\n──── Phase : {ph} ────")
+            print(f"\n{'━' * 78}\n  PHASE : {ph}\n{'━' * 78}")
             cur_phase = ph
-        print(f"  ▶ {script:42} ", end="", flush=True)
-        status, dur, msg = _run_one(script, env)
+        # ETA = durée moyenne des scripts déjà finis × restants
+        done = [r[3] for r in results if r[2] == "OK"]
+        eta_txt = ""
+        if done:
+            avg = sum(done) / len(done)
+            eta_txt = f" | ETA ~{_fmt_eta(avg * (total_n - idx + 1))}"
+        elapsed_txt = _fmt_eta(time.time() - t_start)
+        header = (f"\n[{idx}/{total_n}] ▶ {script}  "
+                  f"(écoulé {elapsed_txt}{eta_txt})")
+        if stream:
+            print(header)
+            print(f"  {'·' * 40} sortie live {'·' * 21}")
+        else:
+            print(f"{header:70} ", end="", flush=True)
+
+        status, dur, msg = _run_one(script, env, stream=stream)
+
         symbol = {"OK": "✓", "ÉCHEC": "✗", "ABSENT": "?",
                   "ERREUR": "✗"}.get(status, "?")
-        print(f"{symbol} {status:7} {dur:7.1f}s  {msg}")
+        if stream:
+            print(f"  └─ {symbol} {status} en {dur:.1f}s"
+                  + (f"  ⚠ {msg}" if status != "OK" else ""))
+        else:
+            print(f"{symbol} {status:7} {dur:7.1f}s  {msg}")
         results.append((ph, script, status, dur, msg))
         if status in ("ÉCHEC", "ERREUR") and args.stop_on_error:
             print("\n⏹  Arrêt sur erreur (--stop-on-error).")

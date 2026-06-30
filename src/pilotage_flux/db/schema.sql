@@ -837,3 +837,34 @@ CREATE TABLE IF NOT EXISTS run_metadata (
     key             TEXT PRIMARY KEY,
     value           TEXT NOT NULL
 );
+
+-- ---------------------------------------------------------------------
+-- V12.3 — Architecture cybernétique : approval queue
+-- ---------------------------------------------------------------------
+-- Toute décision de niveau L3 ou L4 est enqueue ici en statut
+-- 'pending' jusqu'à approbation humaine (ou auto_timeout en simulation).
+-- Les niveaux L1 et L2 ne passent JAMAIS par cette table (autonomes).
+
+CREATE TABLE IF NOT EXISTS approval_queue (
+    queue_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id     INTEGER NOT NULL
+                      REFERENCES tolerance_filter_decisions(decision_id),
+    autonomy_level  TEXT NOT NULL,
+        -- L1_absorbed | L2_auto_adjust | L3_local_replan_approval | L4_global_replan_approval
+        -- En pratique seuls L3 et L4 apparaissent ici (L1/L2 = autonomes)
+    status          TEXT NOT NULL DEFAULT 'pending',
+        -- pending | approved | rejected | auto_timeout
+    submitted_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    approved_at     TEXT,
+    approved_by     TEXT,
+        -- 'human:<user>' ou 'auto:timeout' ou 'auto:simulation:<lag_min>'
+    approval_lag_min REAL,
+        -- temps réel écoulé entre submitted_at et approved_at
+    notes           TEXT,
+    UNIQUE(decision_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_approval_queue_status
+    ON approval_queue (status);
+CREATE INDEX IF NOT EXISTS idx_approval_queue_level
+    ON approval_queue (autonomy_level);

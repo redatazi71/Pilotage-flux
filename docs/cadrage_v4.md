@@ -874,6 +874,75 @@ par paramètre.
 
 ---
 
+## §28. Architecture cybernétique étendue V12 (extension doctrinale)
+
+### §28.1 Motivation
+
+Au-delà de la doctrine V0→V11 mesurée dans cette étude, plusieurs
+limites structurelles ont été identifiées :
+
+- La doctrine **applique automatiquement** toute décision V3 (V3
+  actionnel L8.1), même celles à fort impact systémique.
+- Aucune **validation humaine** n'est requise, même pour les
+  replanifications globales.
+- Aucune **gradation d'autonomie** explicite : tout est soit
+  autonome, soit hors du système.
+
+L'architecture **V12 cybernétique étendue** introduit une matrice à
+4 niveaux d'autonomie qui couvre l'éventail allant de l'absorption
+silencieuse à la validation supervisor.
+
+### §28.2 Quatre niveaux d'autonomie
+
+| Niveau | Nom | Déclencheur (action V3) | Action | Validation |
+|---|---|---|---|---|
+| **L1** | Autonome sans ajustement | `inform`, `watch` | absorbé par tampon | aucune |
+| **L2** | Ajustement sans humain | `correct_local` | V3 actionnel applique | aucune |
+| **L3** | Replanification locale + validation | `replan_local` | CP-SAT propose, opérateur valide | humain (opérateur) |
+| **L4** | Replanification totale + validation | `escalate`, `replan_global` | refonte plan, supervisor valide | humain (supervisor) |
+
+### §28.3 Modules livrés en V12.3
+
+| Module | Rôle | Statut |
+|---|---|---|
+| `cybernetic/delta_engine/autonomy_levels.py` | Enum L1-L4 + mapping V3 → V12.3 | ✅ |
+| `cybernetic/delta_engine/dispatcher.py` | Route décisions selon niveau | ✅ |
+| `cybernetic/delta_engine/approval_queue.py` | Queue persistée + CRUD | ✅ |
+| Table SQL `approval_queue` | Persistance + audit | ✅ |
+| CLI `approval-list/approve/reject` | Workflow opérateur | ✅ |
+| 21 tests unitaires + 3 acceptance E2E | Couverture | ✅ |
+
+### §28.4 Modèle de validation simulée
+
+Pour les études comparatives intégrant la couche V12.3, la validation
+humaine est simulée avec un lag gaussien :
+
+- **L3 (opérateur)** : moyenne 4 h (240 min), σ = 1 h (60 min)
+- **L4 (supervisor)** : moyenne 8 h (480 min), σ = 2 h (120 min)
+
+Le lag réel est tracé dans `approval_queue.approval_lag_min` pour
+audit a posteriori. En production, ce champ enregistre le temps
+réel écoulé entre `submitted_at` et `approved_at`.
+
+### §28.5 Travaux futurs V12
+
+V12.3 est la **première brique livrée**. Les couches restantes sont
+documentées comme axes d'extension prioritaires :
+
+- **V12.1 Forecasting zone libre** : régression linéaire + ARIMA pour
+  les prévisions long-terme (~ 4 j de dev).
+- **V12.2 CP-SAT dynamique zone négociable** : extension de
+  `milp_scheduler` (§7.1) pour optimisation quotidienne (~ 2 j).
+- **V12.4 Workflow humain complet** : audit trail, notifications,
+  UI dédiée (~ 1 j + UI).
+- **V12.5 Matrice d'orchestration** : configuration runtime des
+  seuils L1/L2/L3/L4 par profil d'atelier (~ 1 j).
+
+L'effort total estimé pour la V12 complète est de **~ 7 j** de
+développement, à mesurer par un protocole comparatif V11 vs V12.
+
+---
+
 ## §25. Cahier des charges actualisé
 
 ### §25.1 Exigences fonctionnelles satisfaites

@@ -851,23 +851,87 @@ C'est un **défaut d'objectif** dans l'algorithme `flux/smoothing.py`
 qui mérite une extension dédiée — proposée comme **V12.6 Due-date
 aware smoothing** (cf. §28.12 ci-après).
 
-### §28.12 V12.6 — Due-date aware smoothing (proposition d'extension)
+### §28.12 V12.6 — Due-date aware smoothing — IMPLÉMENTÉ + finding négatif
 
-**Diagnostic §24.8.7** : le smoothing actuel maximise l'étalement
-sans contrainte de deadline. Trois pistes correctives :
+**Diagnostic initial §24.8.7** : le smoothing maximise l'étalement
+sans contrainte de deadline → hypothèse : "cap par due_date corrige
+le défaut Q".
 
-| Approche | Mécanisme | Complexité |
+**V12.6 implémenté** (option a — backward scheduling) :
+
+- `flux/smoothing.py:_compute_latest_start_minutes()` calcule
+  `latest_start = due_date − duration` via join
+  `candidate_orders ↔ sales_orders ↔ routing_operations`.
+- `compute_smoothing()` borne `offset_min ≤ latest_start` quand
+  le flag data-driven `smoothing_due_date_aware = 1` est posé.
+- Rétrocompat préservée (default OFF).
+- 6 tests unitaires verts + rétrocompat tests V1 + flux smoothing.
+
+#### §28.12.1 Étude comparative V11 vs V12.6 (160 runs)
+
+Protocole : 4 scénarios stress XL × 2 régimes × 2 doctrines (FLUX,
+EVENT) × 10 seeds.
+
+| Scénario | Doctrine | OTIF V11 | OTIF V12.6 | Δ OTIF | Δ coût |
+|---|---|---|---|---|---|
+| baseline_xl | FLUX | 0.693 | 0.693 | **0 pp** | 0 € |
+| baseline_xl | EVENT | 0.693 | 0.693 | **0 pp** | 0 € |
+| stress_double_breakdown_xl | FLUX | 0.675 | 0.675 | **0 pp** | 0 € |
+| stress_double_breakdown_xl | EVENT | 0.675 | 0.675 | **0 pp** | 0 € |
+| stress_cascade_nc_xl | FLUX | 0.675 | 0.675 | **0 pp** | 0 € |
+| stress_cascade_nc_xl | EVENT | 0.675 | 0.675 | **0 pp** | 0 € |
+| stress_demand_spike_xl | FLUX | 0.616 | 0.616 | **0 pp** | 0 € |
+| stress_demand_spike_xl | EVENT | 0.616 | 0.616 | **0 pp** | 0 € |
+
+#### §28.12.2 Hypothèse §24.8.7 — INVALIDÉE par la mesure
+
+**Le défaut Q de FLUX/EVENT n'est PAS dans `compute_smoothing()`.**
+
+V12.6 cap les offsets `latest_start` correctement (tests unitaires
+validés) mais sur les scénarios stress XL, les offsets ne sont
+**jamais cappés** → V12.6 = V11 en pratique. Donc :
+
+1. Soit les offsets V11 sont déjà ≤ latest_start (smoothing pas trop
+   tardif sur ces scénarios)
+2. Soit le défaut Q vient en **amont du smoothing** (génération
+   du contrat de flux qui sous-engage, ou mécanique candidate→OF
+   qui perd de la quantité)
+3. Soit le défaut Q vient en **aval du smoothing** (yield_rate par
+   poste, tampon DBR, scrap NC accumulé sans rattrapage)
+
+#### §28.12.3 V12.7 — Investigation profonde du défaut Q
+
+V12.7 cible la **vraie cause** du défaut Q de FLUX/EVENT :
+
+| Piste | Mécanisme | Effort |
 |---|---|---|
-| **V12.6.a Backward scheduling** | Calculer `latest_start = due_date − duration` pour chaque OF ; smoothing borné à `[earliest_start, latest_start]` | Faible (~½ j) |
-| **V12.6.b Slack-priority + smoothing résiduel** | Ordonner les OFs par slack croissant (`due − duration`) puis smoothing uniquement sur l'horizon résiduel | Moyenne (~1 j) |
-| **V12.6.c Optimisation due-date aware** | CP-SAT mixte : objectif = `α × congestion_goulot + β × Σ tardiveté` | Élevée (~2 j) — réutilise V12.2 |
+| **V12.7.a** Audit qty_in_contract vs SO.quantity | Vérifier si `flux/contracts.py:add_to_version` engage la totalité demandée | 0.5 j |
+| **V12.7.b** Inspection P2 cohérence/rejet | `flux/coherence.py` peut rejeter des candidates si charge > capacité goulot | 0.5 j |
+| **V12.7.c** Mesure yield × tampon DBR effectif | Capacité effective = raw × (1 − safety_factor) × yield ; effet cumulatif sur quantity_delivered | 0.5 j |
+| **V12.7.d** Scrap NC sans rattrapage | Si un OF subit NC (scrap), aucun OF de rattrapage n'est lancé | 1 j |
 
-**Effet attendu** : ramener FLUX/EVENT à 95-100 % de disponibilité
-SO-level même sur tolérance stricte (tol=0j), au prix d'une
-fraction de gain coût (estimation : −2 à −5 %).
+Hypothèse la plus forte : **V12.7.d** — quand un OF est scrappé
+partiellement (qty_scrap > 0), la doctrine V11 actuelle **ne lance
+pas d'OF de rattrapage**. La perte de quantité est définitive.
+Sur baseline_xl (sans aléa fort), FLUX/EVENT perdent quand même
+31 % — ce qui pointe plutôt vers une saturation du contrat
+(V12.7.a/b).
 
-Cette extension est **identifiée mais non livrée** dans V12 actuel.
-Elle s'inscrit naturellement après V12.5 dans la roadmap.
+V12.7 est **identifié mais non livré**. Reste prioritaire pour
+fermer la question Q.
+
+#### §28.12.4 Conclusion honnête sur V12.6
+
+V12.6 est un **finding scientifique négatif** : l'hypothèse
+§24.8.7 a été testée rigoureusement et **invalidée**. Le code
+V12.6 reste utile comme **garde-fou prudent** (cap due_date
+toujours valide en principe), mais ne résout pas le défaut Q
+observé. La doctrine FLUX/EVENT a un défaut Q **plus profond**,
+non localisé dans le smoothing.
+
+C'est précisément ce type de résultat — implémenter, mesurer,
+infirmer — qui distingue une étude reproductible d'un proof of
+concept marketing.
 
 ### §24.10.1 Lectures clés des matrices
 

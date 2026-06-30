@@ -387,7 +387,7 @@ def _empty_histogram() -> dict[str, int]:
     return {label: 0 for label in BIN_LABELS}
 
 
-def _window_lower_bound(now_iso: str, window_days: int) -> str:
+def window_lower_bound(now_iso: str, window_days: int) -> str:
     """Calcule la borne inférieure de la fenêtre (now - window_days)."""
     now_dt = datetime.fromisoformat(now_iso)
     lower = now_dt - timedelta(days=window_days)
@@ -420,8 +420,8 @@ def aggregate_cell(
     hist_cumul = {label: int(base_row[f"bin_cumul_{label}"])
                   for label in BIN_LABELS}
 
-    lower_c = _window_lower_bound(now_iso, W_COURTE_DAYS)
-    lower_l = _window_lower_bound(now_iso, W_LONGUE_DAYS)
+    lower_c = window_lower_bound(now_iso, W_COURTE_DAYS)
+    lower_l = window_lower_bound(now_iso, W_LONGUE_DAYS)
 
     rows = conn.execute(
         "SELECT delay_bin, occurred_at FROM causal_events "
@@ -490,7 +490,7 @@ def list_events_in_window(
     Utile pour debug / audit (spec §4.3 : événements expirés
     consultables).
     """
-    lower = _window_lower_bound(now_iso, window_days)
+    lower = window_lower_bound(now_iso, window_days)
     rows = conn.execute(
         "SELECT cell_event_id, occurred_at, delay_bin, delay_hours, "
         "impact_score FROM causal_events "

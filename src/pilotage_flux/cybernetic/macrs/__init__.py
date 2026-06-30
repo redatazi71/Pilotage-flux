@@ -60,6 +60,18 @@ from pilotage_flux.cybernetic.macrs.snapshots import (
     list_weight_versions,
     take_snapshot,
 )
+from pilotage_flux.cybernetic.macrs.pareto import (
+    CriticityEntry,
+    EmergingRacine,
+    ParetoCategoryEntry,
+    ParetoRacineEntry,
+    detect_declining_racines,
+    detect_emerging_racines,
+    pareto_categories,
+    pareto_criticite,
+    pareto_racines,
+    pareto_racines_in_category,
+)
 
 __all__ = [
     "CATEGORIES",
@@ -106,4 +118,14 @@ __all__ = [
     "list_snapshots_at",
     "list_weight_versions",
     "take_snapshot",
+    "CriticityEntry",
+    "EmergingRacine",
+    "ParetoCategoryEntry",
+    "ParetoRacineEntry",
+    "detect_declining_racines",
+    "detect_emerging_racines",
+    "pareto_categories",
+    "pareto_criticite",
+    "pareto_racines",
+    "pareto_racines_in_category",
 ]

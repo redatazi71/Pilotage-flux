@@ -43,6 +43,23 @@ from pilotage_flux.cybernetic.macrs.couche2 import (
     list_events_in_window,
     record_event,
 )
+from pilotage_flux.cybernetic.macrs.snapshots import (
+    WV_ACTIVE,
+    WV_ARCHIVED,
+    WV_EXPERIMENTAL,
+    WV_STATUSES,
+    CellSnapshot,
+    WeightVersion,
+    activate_weight_version,
+    archive_weight_version,
+    count_snapshots,
+    create_weight_version,
+    get_active_weight_version,
+    get_snapshots_for_cell,
+    list_snapshots_at,
+    list_weight_versions,
+    take_snapshot,
+)
 
 __all__ = [
     "CATEGORIES",
@@ -74,4 +91,19 @@ __all__ = [
     "list_cells_by_status",
     "list_events_in_window",
     "record_event",
+    "WV_ACTIVE",
+    "WV_ARCHIVED",
+    "WV_EXPERIMENTAL",
+    "WV_STATUSES",
+    "CellSnapshot",
+    "WeightVersion",
+    "activate_weight_version",
+    "archive_weight_version",
+    "count_snapshots",
+    "create_weight_version",
+    "get_active_weight_version",
+    "get_snapshots_for_cell",
+    "list_snapshots_at",
+    "list_weight_versions",
+    "take_snapshot",
 ]

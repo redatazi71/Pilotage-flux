@@ -1092,3 +1092,57 @@ CREATE INDEX IF NOT EXISTS idx_causal_events_cell_time
     ON causal_events (cell_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_causal_events_time
     ON causal_events (occurred_at);
+
+-- ---------------------------------------------------------------------
+-- MACRS Couche 2 — A.4 : snapshots hebdo + versioning des poids
+--
+-- weight_versions : jeu de coefficients de pondération utilisés par
+-- les indicateurs dérivés (Option B cause/racine, Option D info/
+-- correction). Versionnage explicite cf. spec §5. Une seule version
+-- active à tout instant (status = 'active'), les autres restent
+-- disponibles ('experimental' ou 'archived') pour comparaison.
+--
+-- causal_cell_snapshots : photographies hebdomadaires immuables des
+-- cellules ACTIVE (cf. spec §3.5). Permettent de reconstituer
+-- l'évolution de la matrice. Référencent éventuellement la
+-- weight_version active au moment de la prise. Ne sont JAMAIS
+-- utilisées par le Pareto courant.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS weight_versions (
+    weight_version_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    label               TEXT NOT NULL UNIQUE,
+    description         TEXT NOT NULL,
+    coefficients_json   TEXT NOT NULL,
+        -- JSON sérialisé : {indicateur_key: coefficient_float, ...}
+    status              TEXT NOT NULL DEFAULT 'experimental',
+        -- 'active' | 'archived' | 'experimental'
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    activated_at        TEXT,
+    archived_at         TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_weight_versions_status
+    ON weight_versions (status);
+
+CREATE TABLE IF NOT EXISTS causal_cell_snapshots (
+    snapshot_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    cell_id                  INTEGER NOT NULL REFERENCES causal_cells(cell_id),
+    racine_id                TEXT NOT NULL,
+    categorie_code           TEXT NOT NULL,
+    status                   TEXT NOT NULL,
+    snapshot_at              TEXT NOT NULL,
+    n_w_courte               INTEGER NOT NULL,
+    n_w_longue               INTEGER NOT NULL,
+    n_cumul                  INTEGER NOT NULL,
+    ratio_emergence          REAL,
+    histogram_w_courte_json  TEXT NOT NULL,
+    histogram_w_longue_json  TEXT NOT NULL,
+    histogram_cumul_json     TEXT NOT NULL,
+    weight_version_id        INTEGER REFERENCES weight_versions(weight_version_id),
+    created_at               TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_cell
+    ON causal_cell_snapshots (cell_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_time
+    ON causal_cell_snapshots (snapshot_at);

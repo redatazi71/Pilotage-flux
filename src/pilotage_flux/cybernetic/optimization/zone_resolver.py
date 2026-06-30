@@ -41,6 +41,62 @@ class NegotiableZone:
         )
 
 
+def compute_adaptive_freeze_window(
+    conn: sqlite3.Connection,
+    *,
+    base_window_days: int = 5,
+    nervousness_threshold_high: float = 0.30,
+    nervousness_threshold_low: float = 0.10,
+    contraction_factor: float = 0.5,
+    expansion_factor: float = 1.5,
+) -> int:
+    """V13.3 — Adapte la freeze_window selon la nervosité observée.
+
+    Nervosité estimée comme ratio n_replans / horizon_days_écoulés.
+
+    Règles :
+      - nervosité > high  ⇒ window × contraction_factor  (réactivité)
+      - nervosité < low   ⇒ window × expansion_factor    (stabilité)
+      - sinon             ⇒ window inchangée
+
+    Plancher 1 j, plafond 2 × base_window_days.
+    """
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS n FROM gate_decisions
+        WHERE decision IN ('REPLAN', 'ESCALATE')
+        """
+    ).fetchone()
+    n_replans = int(row["n"]) if row and row["n"] is not None else 0
+    horizon_row = conn.execute(
+        "SELECT value FROM run_metadata WHERE key = 'horizon_start'"
+    ).fetchone()
+    if not horizon_row:
+        return base_window_days
+    try:
+        horizon_start_dt = datetime.fromisoformat(horizon_row["value"])
+    except (ValueError, TypeError):
+        return base_window_days
+    latest = conn.execute(
+        "SELECT MAX(at_time) AS t FROM gate_decisions"
+    ).fetchone()
+    if not latest or not latest["t"]:
+        return base_window_days
+    try:
+        latest_dt = datetime.fromisoformat(latest["t"])
+    except (ValueError, TypeError):
+        return base_window_days
+    elapsed = max(1, (latest_dt - horizon_start_dt).days)
+    nerv = n_replans / elapsed
+    if nerv > nervousness_threshold_high:
+        w = int(round(base_window_days * contraction_factor))
+    elif nerv < nervousness_threshold_low:
+        w = int(round(base_window_days * expansion_factor))
+    else:
+        w = base_window_days
+    return max(1, min(2 * base_window_days, w))
+
+
 def resolve_negotiable_zone(
     conn: sqlite3.Connection,
     *,
@@ -48,6 +104,7 @@ def resolve_negotiable_zone(
     horizon_start: str | None = None,
     freeze_window_days: int = 5,
     horizon_forecast_days: int = 28,
+    adaptive: bool = False,
 ) -> NegotiableZone:
     """Identifie tous les OFs et candidats situés dans la zone négociable.
 
@@ -75,6 +132,11 @@ def resolve_negotiable_zone(
         horizon_start = row["value"]
 
     base = datetime.fromisoformat(horizon_start)
+    # V13.3 — adaptation de la freeze_window selon nervosité observée
+    if adaptive:
+        freeze_window_days = compute_adaptive_freeze_window(
+            conn, base_window_days=freeze_window_days,
+        )
     freeze_end_day = reference_day + freeze_window_days
     horizon_end_day = reference_day + horizon_forecast_days
 

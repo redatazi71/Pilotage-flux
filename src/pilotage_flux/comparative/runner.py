@@ -295,6 +295,7 @@ def _bootstrap_db(
     with db_session(db_path) as conn:
         import_referentials(conn, fixtures_dir)
         _seed_routing_alternatives_from_csv(conn, fixtures_dir)
+        _seed_bom_op_consumption_from_routing(conn)  # V13.1
         _import_sales_orders(conn, scenario)
         _setup_stocks_and_pos(conn, scenario)
         _apply_pending_param_overrides(conn)
@@ -936,37 +937,146 @@ def _decay_breakdowns(state: HazardState) -> None:
 # ----------------------------------------------------------------------
 
 
-def _of_blocked_by_pending_component(
-    conn: sqlite3.Connection, of_id: str
-) -> bool:
-    """Renvoie True si l'OF utilise (via pegging) un composant fabriqué
-    dont l'OF dédié n'est pas encore clôturé.
+def _get_bom_op_linkage_flag(conn: sqlite3.Connection) -> bool:
+    """V13.1 — Lit `bom_op_linkage_aware` (default 0).
 
-    Utilise pegging_links pour identifier précisément les OFs amont,
-    plutôt que de bloquer sur l'ensemble des SEMI-1 en cours (qui
-    sérialiserait artificiellement la production).
+    Active la liaison composant ↔ opération de gamme :
+      - Op 1 d'un parent peut démarrer dès que ses composants
+        spécifiques (consuming_operation_idx <= 1) sont prêts
+      - Op N peut démarrer dès que les composants consumés à op
+        ≤ N sont prêts
+
+    Permet la production phasée — ce qu'un planificateur lean fait
+    naturellement (« j'ai commencé op 1 dès SEMI-1 livré, sans
+    attendre SEMI-2 »).
+    """
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="bom_op_linkage_aware", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _seed_bom_op_consumption_from_routing(conn: sqlite3.Connection) -> int:
+    """V13.1 — Dispatch les bom_lines sur les ops du routing du parent.
+
+    Heuristique simple : la i-ème ligne BOM d'un article est attribuée
+    à l'op `min(i, n_ops)`. Premier composant à op 1, deuxième à op 2,
+    etc. Si plus de composants que d'ops, les derniers vont sur la
+    dernière op.
+
+    Ne touche QUE les `bom_lines` avec `consuming_operation_idx IS NULL`
+    (idempotent).
+    """
+    rows = conn.execute(
+        """
+        SELECT bom_line_id, parent_article, child_article
+        FROM bom_lines
+        WHERE consuming_operation_idx IS NULL
+        ORDER BY parent_article, bom_line_id
+        """,
+    ).fetchall()
+    if not rows:
+        return 0
+    n_assigned = 0
+    by_parent: dict[str, list] = {}
+    for r in rows:
+        by_parent.setdefault(r["parent_article"], []).append(r)
+    for parent, lines in by_parent.items():
+        ops = conn.execute(
+            "SELECT COUNT(*) AS n FROM routing_operations WHERE article_id = ?",
+            (parent,),
+        ).fetchone()
+        n_ops = int(ops["n"] or 0) if ops else 0
+        if n_ops < 1:
+            n_ops = 1
+        for i, line in enumerate(lines, start=1):
+            op_idx = min(i, n_ops)
+            conn.execute(
+                "UPDATE bom_lines SET consuming_operation_idx = ? "
+                "WHERE bom_line_id = ?",
+                (op_idx, line["bom_line_id"]),
+            )
+            n_assigned += 1
+    return n_assigned
+
+
+def _components_needed_at_or_before_op(
+    conn: sqlite3.Connection,
+    parent_article: str,
+    op_seq_idx: int,
+) -> list[str]:
+    """V13.1 — Liste des child_article consommés à l'op ≤ op_seq_idx.
+
+    Si `consuming_operation_idx IS NULL`, on considère le composant
+    requis à l'op 1 (legacy : tous les composants au démarrage).
+    """
+    rows = conn.execute(
+        """
+        SELECT child_article
+        FROM bom_lines
+        WHERE parent_article = ?
+          AND COALESCE(consuming_operation_idx, 1) <= ?
+        """,
+        (parent_article, op_seq_idx),
+    ).fetchall()
+    return [r["child_article"] for r in rows]
+
+
+def _of_op_blocked_by_pending_component(
+    conn: sqlite3.Connection,
+    of_id: str,
+    op_seq_idx: int,
+    *,
+    op_aware: bool,
+) -> bool:
+    """V13.1 — Variante op-aware de `_of_blocked_by_pending_component`.
+
+    Si `op_aware=False` : comportement legacy (block si TOUT composant
+    en amont est encore en flight).
+
+    Si `op_aware=True` : ne block que pour les composants dont
+    `consuming_operation_idx <= op_seq_idx`. L'op 1 peut démarrer dès
+    que ses composants spécifiques sont prêts, indépendamment des
+    composants des ops 2+.
     """
     row = conn.execute(
-        "SELECT candidate_id FROM manufacturing_orders WHERE of_id = ?",
+        "SELECT candidate_id, article_id FROM manufacturing_orders "
+        "WHERE of_id = ?",
         (of_id,),
     ).fetchone()
     if not row or row["candidate_id"] is None:
         return False
     cand_id = row["candidate_id"]
-    # Cherche les candidates amont (dépendances directes) via pegging
+    parent_article = row["article_id"]
+    # Composants requis à cette op (ou plus tôt) si op_aware ; sinon tous
+    if op_aware and parent_article:
+        needed = set(
+            _components_needed_at_or_before_op(
+                conn, parent_article, op_seq_idx,
+            )
+        )
+    else:
+        needed = None  # = legacy : tous composants en amont
+    # Upstream candidates via pegging
     upstream = conn.execute(
         """
-        SELECT target_id FROM pegging_links
-        WHERE source_type = 'candidate_order'
-          AND source_id = ?
-          AND target_type = 'candidate_order'
+        SELECT pl.target_id, c.article_id AS up_article
+        FROM pegging_links pl
+        LEFT JOIN candidate_orders c ON c.candidate_id = pl.target_id
+        WHERE pl.source_type = 'candidate_order'
+          AND pl.source_id = ?
+          AND pl.target_type = 'candidate_order'
         """,
         (cand_id,),
     ).fetchall()
     if not upstream:
         return False
     for up in upstream:
-        # Y a-t-il un OF associé à cette candidate amont non encore clôturé ?
+        # Filtre op-aware : seuls les composants requis à cette op
+        if needed is not None and up["up_article"] not in needed:
+            continue
         pending = conn.execute(
             """
             SELECT COUNT(*) AS n FROM manufacturing_orders
@@ -978,6 +1088,20 @@ def _of_blocked_by_pending_component(
         if pending and int(pending["n"]) > 0:
             return True
     return False
+
+
+def _of_blocked_by_pending_component(
+    conn: sqlite3.Connection, of_id: str
+) -> bool:
+    """Renvoie True si l'OF utilise (via pegging) un composant fabriqué
+    dont l'OF dédié n'est pas encore clôturé.
+
+    Wrapper legacy : appelle `_of_op_blocked_by_pending_component` en
+    mode non-op-aware (bloque sur tout composant en flight).
+    """
+    return _of_op_blocked_by_pending_component(
+        conn, of_id, op_seq_idx=1, op_aware=False,
+    )
 
 
 def _advance_one_day(
@@ -1009,6 +1133,8 @@ def _advance_one_day(
     # V13.A — bascule legacy (1 op/WS/jour) ⟷ réaliste (budget min/WS/jour)
     daily_capa_min = _get_realistic_capacity_minutes_per_day(conn)
     realistic = daily_capa_min > 0
+    # V13.1 — BOM-op linkage : déblocage phase par phase
+    bom_op_aware = _get_bom_op_linkage_flag(conn)
     busy_ws: set[str] = set()  # legacy
     ws_minutes_used: dict[str, float] = {}  # realistic
     # Scrap cumulé des NC du jour (et précédents) à appliquer au 1er OF avancé.
@@ -1020,12 +1146,11 @@ def _advance_one_day(
     state.pending_nc_scrap = 0.0  # consumé
     for row in active:
         of_id = row["of_id"]
-        if _of_blocked_by_pending_component(conn, of_id):
-            continue
         # OF retardé par un breakdown précédent : doit attendre 1 jour
         if state.delayed_of_until.get(of_id, 0) > day:
             continue
-        # Cherche la prochaine op pending
+        # Cherche la prochaine op pending (besoin de sequence_idx avant
+        # de tester le blocage BOM en mode op-aware)
         op = conn.execute(
             """
             SELECT of_op_id, workstation_id, sequence_idx
@@ -1036,6 +1161,11 @@ def _advance_one_day(
             (of_id,),
         ).fetchone()
         if op is None:
+            continue
+        # V13.1 : blocage BOM phasé par op (legacy si flag off)
+        if _of_op_blocked_by_pending_component(
+            conn, of_id, int(op["sequence_idx"]), op_aware=bom_op_aware,
+        ):
             continue
         qty_row = conn.execute(
             "SELECT quantity FROM manufacturing_orders WHERE of_id = ?",

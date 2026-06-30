@@ -12,7 +12,8 @@ import re
 from pathlib import Path
 
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 
 HERE = Path(__file__).resolve().parent
@@ -84,6 +85,23 @@ def build_docx() -> None:
             doc.add_heading(line[4:], level=3)
         elif line.startswith("#### "):
             doc.add_heading(line[5:], level=4)
+        # Images : ![alt](relative/path.png)
+        elif line.startswith("!["):
+            m = re.match(r"!\[(.*?)\]\((.+?)\)", line)
+            if m:
+                alt, rel = m.group(1), m.group(2)
+                img_path = (HERE / rel).resolve()
+                if img_path.exists():
+                    p = doc.add_paragraph()
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    run = p.add_run()
+                    run.add_picture(str(img_path), width=Inches(6.2))
+                    if alt:
+                        cap = doc.add_paragraph(alt)
+                        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        for r in cap.runs:
+                            r.italic = True
+                            r.font.size = Pt(9)
         # Tables
         elif line.startswith("|") and "|" in line[1:]:
             rows, next_i = _parse_markdown_table(lines, i)

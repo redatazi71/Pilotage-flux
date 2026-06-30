@@ -155,6 +155,10 @@ coût total (matière + MOD + MOI + scrap).
 | stress_demand_spike_xl | 47 173 € | **−5 492 €** | +0 € | −5 492 € |
 | stress_multi_contract_overload | 21 391 € | **−11 449 €** | −1 287 € | −11 449 € |
 
+![Décomposition 2×2 — Δ coût vs OF sur les 2 protocoles](charts/decomposition_2x2.png)
+
+![Δ coût par scénario × doctrine — 4 000 runs XL](charts/per_scenario_xl.png)
+
 ### §24.4 Conclusions scientifiques validées
 
 #### 24.4.1 Le flux apporte sur les 5 scénarios (−5 k€ à −18 k€)
@@ -284,6 +288,8 @@ industrielle :
 L'interaction marginale (~2 %) provient de cas où le flux a déjà absorbé
 un aléa qui aurait été détecté par l'event sourcing.
 
+![Additivité quasi-parfaite — flux seul + event seul ≈ combiné](charts/additivity.png)
+
 **Découverte 2 — Magnitude amplifiée par la diversité**
 
 Le tableau ci-dessous compare l'apport flux seul entre les 4 000 runs XL
@@ -324,6 +330,8 @@ moins de moitié, nervosité divisée par 3-5, additivité flux+event
 mesurable). Cette **convergence** entre 2 protocoles indépendants
 (scénarios canoniques vs aléatoires, fixtures fixes vs variées)
 est un argument scientifique fort en faveur de la doctrine.
+
+![Lead time par doctrine — convergence des 2 protocoles](charts/lead_time_comparison.png)
 
 ### §24.7 Conclusion doctrinale
 

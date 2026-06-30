@@ -923,3 +923,54 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notif_target_unread
     ON notifications (target, read_at);
+
+-- ---------------------------------------------------------------------
+-- Goldilocks #4 : Contrat de Production PC=(T, Ep, Er, C, O) au grain
+-- opération (cadrage v1.3). Chaque order_operation porte un PC qui
+-- engage le système sur 5 dimensions :
+--   T  : Temps cible (cycle minutes de l'op)
+--   Ep : Engagement procédural (rendement qualité, conformité)
+--   Er : Engagement de résultats (quantité bonne livrée)
+--   C  : Coûts cible (€ par op = main d'œuvre + matière)
+--   O  : Origine (SO/candidate/flux_contract dont l'op découle)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS production_contracts (
+    pc_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    of_id              TEXT NOT NULL REFERENCES manufacturing_orders(of_id),
+    of_op_id           INTEGER NOT NULL REFERENCES order_operations(of_op_id),
+    -- T : Temps cible
+    target_time_min    REAL NOT NULL,
+    actual_time_min    REAL,
+    tolerance_pct_time REAL NOT NULL DEFAULT 0.10,
+    -- Ep : Engagement procédural (rendement qualité attendu)
+    target_quality_rate     REAL NOT NULL DEFAULT 1.0,
+    actual_quality_rate     REAL,
+    tolerance_pct_quality   REAL NOT NULL DEFAULT 0.05,
+    -- Er : Engagement de résultats (quantité bonne)
+    target_qty_good         REAL NOT NULL,
+    actual_qty_good         REAL,
+    tolerance_pct_quantity  REAL NOT NULL DEFAULT 0.03,
+    -- C : Coûts cible (€)
+    target_cost             REAL NOT NULL DEFAULT 0,
+    actual_cost             REAL,
+    tolerance_pct_cost      REAL NOT NULL DEFAULT 0.10,
+    -- O : Origine (référence remontée jusqu'à la source de demande)
+    origin_kind             TEXT NOT NULL,
+        -- 'sales_order' | 'candidate' | 'flux_contract'
+    origin_ref              TEXT NOT NULL,
+    -- Statut PC
+    status                  TEXT NOT NULL DEFAULT 'open',
+        -- 'open' | 'fulfilled' | 'breached'
+    breach_dimensions       TEXT,
+        -- liste CSV ('T,Er') des dimensions hors tolérance
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    closed_at               TEXT,
+    UNIQUE (of_op_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pc_of
+    ON production_contracts (of_id);
+CREATE INDEX IF NOT EXISTS idx_pc_origin
+    ON production_contracts (origin_kind, origin_ref);
+CREATE INDEX IF NOT EXISTS idx_pc_status
+    ON production_contracts (status);

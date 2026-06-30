@@ -1096,39 +1096,91 @@ Avec V12.1, V12.2, V12.3 et V12.4 livrés, reste :
 
 Effort restant pour la V12 complète : **~ 1 j** de dev.
 
-### §28.9 Apprentissage et boucle de rétroaction — extension critique
+### §28.9 V12.1.1 + V12.2.1 — Apprentissage feedback-aware — LIVRÉ
 
-L'architecture V12 (V12.1 forecasting + V12.2 optim) **n'est pas
-encore close** sur la dimension apprentissage. Les prévisions et les
-plans ne tiennent compte que des **séries observées brutes**, pas
-des **erreurs passées** ni des **patterns d'aléas récurrents**.
+La boucle cybernétique est désormais **fermée** entre V12.1/V12.2
+et la doctrine V0-V11 : les prévisions et plans intègrent
+explicitement les écarts passés.
 
-Pour fermer la boucle cybernétique, deux extensions sont
-identifiées comme prioritaires :
+#### §28.9.1 V12.1.1 — Forecasting feedback-aware (zone libre)
 
-**V12.1.1 — Forecasting feedback-aware (zone libre)**
+Module `cybernetic/forecasting/feedback.py` — 3 composants :
 
-| Boucle | Mécanisme | Source |
+| Composant | Mécanisme | Source dans la DB |
 |---|---|---|
-| Bias correction | si forecast historique sur-prédit, soustrait le biais moyen | comparaison forecast vs réalisé sur fenêtre |
-| Hazard-aware features | comptage des aléas passés par type/jour-de-semaine ajouté comme features de régression | `event_deviations` |
-| Pattern d'écart | si une décision L3/L4 est rejetée, ré-évalue le forecast amont | `approval_queue.status == 'rejected'` |
+| **HistoricalContext** | Charge les compteurs d'écarts par kind / par fenêtre / par jour de la semaine + calcule le biais forecast/observé | `event_deviations.deviation_kind, score, detected_at` |
+| **BiasCorrectionWrapper** | Wrappe un forecaster et soustrait un biais appris (`learn_bias(observed, predicted)`) | Réutilise les forecasts précédents + observations |
+| **HazardAwareRegressionForecaster** | Régression enrichie de 2 features supplémentaires : densité d'aléas pour `weekday(t)` et `weekday(t-1)` | `HistoricalContext.get_hazard_density_by_day_of_week` |
 
-**V12.2.1 — Optimisation feedback-aware (zone négociable)**
+**Effet attendu** : un jour historiquement « à risque » (par exemple
+lundi matin si les pannes y sont concentrées) reçoit une prédiction
+ajustée. Si le forecast a sur-prédit dans le passé, le wrapper
+corrige automatiquement.
 
-| Boucle | Mécanisme | Source |
+#### §28.9.2 V12.2.1 — Optimisation feedback-aware (zone négociable)
+
+Module `cybernetic/optimization/feedback.py` — 2 composants :
+
+| Composant | Mécanisme | Source dans la DB |
 |---|---|---|
-| Memoize causes d'échec | si CP-SAT a produit un plan rejeté, exclut la cellule de l'espace de recherche au tour suivant | `approval_queue` historique |
-| Pondération par fréquence | pondère le coût d'un poste par sa fréquence historique de panne | `event_deviations` filtré par workstation |
-| Apprentissage des heuristiques | choisit l'heuristique (SLACK/EDD/SPT/ATC) selon le contexte ayant historiquement le meilleur résultat | comparaison KPI par heuristique |
+| **RejectionMemory** | Charge les décisions historiques `status='rejected'` et expose : `is_decision_id_rejected`, `is_known_bad_pattern(kind, score)`, `rejection_rate_by_level` | `approval_queue.status = 'rejected'` joint à `tolerance_filter_decisions` et `event_deviations` |
+| **FragilityWeights** | Calcule un poids par workstation_id : `weight = 1.0 + α × log(1+N_dev) / log(1+max_N)` avec α = max_weight − 1.0. Postes sans écart → 1.0 ; postes fragiles → jusqu'à `max_weight` (défaut 2.0) | `event_deviations` joint à `candidate_orders → manufacturing_orders → order_operations` |
 
-Ces deux extensions sont **techniquement faisables avec les données
-existantes** (event_deviations, tolerance_filter_decisions,
-approval_queue, approval_audit_log) — aucune nouvelle table n'est
-nécessaire. Elles s'inscrivent comme V12.1.1 et V12.2.1 dans la
-roadmap, après livraison V12.5.
+**Effet attendu** :
+- Si CP-SAT propose un plan dont la signature (kind+score) a été
+  rejetée historiquement, `RejectionMemory.is_known_bad_pattern`
+  permet de **filtrer en amont** avant soumission L3/L4
+- Si un poste a accumulé des écarts, `FragilityWeights` permet de
+  **pondérer son coût dans l'objectif CP-SAT** → le solveur
+  privilégie naturellement les postes fiables
 
-Estimation effort : ~2 j cumulés (~1 j par couche).
+#### §28.9.3 Données utilisées (aucune nouvelle table)
+
+Les deux extensions s'appuient **uniquement** sur les tables
+existantes :
+
+| Table | Utilisation V12.1.1 | Utilisation V12.2.1 |
+|---|---|---|
+| `event_deviations` | Densité par jour, biais forecast | Comptes par workstation pour fragility |
+| `tolerance_filter_decisions` | Lien deviation ↔ décision | Score combiné pour pattern match |
+| `approval_queue` | — | Historique des rejets |
+| `approval_audit_log` | — | (potentiellement notes rejets) |
+| `candidate_orders` + `manufacturing_orders` + `order_operations` | — | Chaîne candidate→OF→workstation pour fragility |
+
+#### §28.9.4 Tests V12.1.1 + V12.2.1
+
+**20 tests verts** (`tests/test_v12_feedback.py`) :
+
+- HistoricalContext : compte par kind/fenêtre, calcul biais, densité par jour de semaine
+- BiasCorrectionWrapper : learn_bias, application -bias sur prédictions, rejet erreurs longueur
+- HazardAwareRegressionForecaster : fonctionne sans context, utilise densités avec context
+- RejectionMemory : empty DB neutral, load rejected records, is_decision_id_rejected, pattern matching, rejection rate par niveau
+- FragilityWeights : empty DB → tout = 1.0, baseline 1.0, fragile list triée, plafond max_weight
+
+#### §28.9.5 Limites assumées
+
+- **Pas de re-fit en ligne** : V12.1.1 BiasCorrectionWrapper apprend
+  son biais une fois (au `learn_bias()`) — il n'apprend pas
+  continuellement. Une extension future pourrait écouter chaque
+  nouvelle observation pour mise à jour incrémentale.
+- **FragilityWeights est borné** : la formule logarithmique évite
+  les explosions mais peut sous-estimer un poste extrêmement
+  problématique (capped à `max_weight=2.0` par défaut).
+- **RejectionMemory ne propage pas la cause** : si les notes de
+  rejet contiennent une explication structurée, V12.2.1 ne la
+  parse pas — il prend juste le pattern numérique (kind, score).
+  Une extension NLP/regex pourrait extraire les motifs.
+
+### §28.10 Travaux futurs V12 (restants)
+
+Avec V12.1, V12.1.1, V12.2, V12.2.1, V12.3 et V12.4 livrés, reste :
+
+- **V12.5 Matrice d'orchestration** : configuration runtime des
+  seuils L1/L2/L3/L4 par profil d'atelier, sélection automatique
+  algo (CP-SAT vs heuristique) selon contexte, profils par
+  configuration JSON (~ 1 j).
+
+Effort restant pour la V12 complète : **~ 1 j** de dev.
 
 ---
 

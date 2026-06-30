@@ -24,6 +24,11 @@ from pilotage_flux.cybernetic.optimization.cp_sat_dynamic import (
     ProposedReplan,
     propose_dynamic_replan,
 )
+from pilotage_flux.cybernetic.optimization.feedback import (
+    FragilityWeights,
+    RejectionMemory,
+    RejectionRecord,
+)
 from pilotage_flux.cybernetic.optimization.heuristics import (
     HEURISTIC_ATC,
     HEURISTIC_EDD,
@@ -46,4 +51,7 @@ __all__ = [
     "HEURISTIC_SPT",
     "HEURISTIC_ATC",
     "schedule_heuristic",
+    "RejectionMemory",
+    "RejectionRecord",
+    "FragilityWeights",
 ]

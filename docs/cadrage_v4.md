@@ -1066,6 +1066,103 @@ doctrinal n'est pas un artefact**, ni des choix de scénarios
 
 ---
 
+## §24.14 Cadre QCDS — 4 objectifs industriels mesurés
+
+Les unités industrielles poursuivent **4 objectifs simultanés** :
+
+1. **Q — Quantité** : livrer les bonnes quantités (quantity_compliance)
+2. **C — Coût** : au moindre coût (total_cost_eur)
+3. **D — Délai** : à date (disponibility_so_level)
+4. **S — Stabilité** : avec minimum de perturbations (nervousness)
+
+Le paper jusqu'ici mesurait C / D / S explicitement mais agrégeait
+Q (`of_closed` + `qty_good`) sans KPI dédié. L'**Option A** comble
+cette lacune en ajoutant `quantity_compliance` calculé comme
+`Σ(qty_good livrée par OF) / Σ(qty_demandée par SO)` (SOs rejetées
+exclues).
+
+### §24.14.1 Mesure QCDS 80 runs (Random scenarios, 20 seeds)
+
+| Doctrine | Q (compliance) | C (coût €) | D (disp. tol=3j) | S (nervosité) |
+|---|---|---|---|---|
+| OF | **0.918** | 107 785 | **1.000** | 0.333 |
+| FLUX | 0.796 | **84 422** | 0.989 | 0.333 |
+| **OF+EVENT** | **0.923** | 100 617 | **1.000** | **0.086** |
+| EVENT | 0.803 | **79 996** | 0.994 | **0.086** |
+
+**Δ vs OF par dimension** :
+
+| Doctrine | Δ Q | Δ C | Δ D | Δ S |
+|---|---|---|---|---|
+| FLUX | **−12.2 pp** | −21.7 % | −1.1 pp | 0 % |
+| **OF+EVENT** | +0.6 pp | −6.7 % | 0 pp | **−74.1 %** |
+| EVENT | **−11.5 pp** | **−25.8 %** | −0.6 pp | **−74.1 %** |
+
+### §24.14.2 Lecture QCDS — aucune doctrine ne domine tout
+
+**Constat** : sur les 4 dimensions QCDS, **aucune doctrine ne
+domine simultanément**. Trade-offs explicites mesurés :
+
+| Doctrine | Forces (≥ 3/4) | Faiblesses |
+|---|---|---|
+| **OF** | Q ✓ D ✓ | C ✗ S ✗ |
+| **FLUX** | C ✓ | Q ✗ D ↓ S = OF |
+| **OF+EVENT** | **Q ✓ D ✓ S ✓** | C légèrement ↓ (−7 %) |
+| **EVENT** | C ✓ S ✓ | Q ✗ D ↓ |
+
+**Découverte importante** : **OF+EVENT** est le **meilleur compromis
+QCDS global** (3/4 dimensions excellentes, seul −7 % sur C).
+EVENT bat OF+EVENT sur C (−26 % vs −7 %) **mais perd 11.5 pp de
+compliance quantité** — un déficit qu'un atelier strict ne peut pas
+absorber.
+
+### §24.14.3 Lien avec §24.8.6/§24.8.7 et choix de doctrine
+
+L'analyse QCDS confirme et étend les findings §24.8.6 (ontime) et
+§24.8.7 (cause smoothing) :
+
+- **Le smoothing du flux** dégrade simultanément Q (−12 pp) ET D
+  (−1.1 pp à tol=3j, −15 pp à tol=0j).
+- **L'event sourcing** ne corrige pas cette dégradation Q + D
+  (FLUX → EVENT : Q et D inchangés).
+- **OF+EVENT** est seul à préserver Q + D **tout en améliorant**
+  C (−7 %) et S (−74 %).
+
+**Recommandation doctrinale par profil d'atelier** :
+
+| Profil atelier | Doctrine recommandée | Justification |
+|---|---|---|
+| Strict ontime / quantités précises (aéro, médical, automotive) | **OF+EVENT** | Q ✓ D ✓ S ✓, seul −7 % sur C |
+| Industries à tolérance modérée (consumer, biens d'équipement) | **EVENT** | gain max C (−26 %) + S (−74 %), Q acceptable |
+| Industries à fort coût (matière chère, scrap critique) | **EVENT** | dominance C écrasante |
+| Industries en transition (lean rollout) | **OF+EVENT** | risque min, gain S immédiat |
+
+**Cette recommandation différenciée** est plus nuancée que les
+conclusions §24.6 (« EVENT bat OF de −21.8 % ») — elle reflète
+honnêtement le trade-off QCDS mesuré.
+
+![QCDS — radar 4 objectifs × 4 doctrines](charts/qcds_4_dimensions.png)
+
+### §24.14.4 Limite QCDS et travaux futurs
+
+`quantity_compliance` capture le ratio quantitatif global mais ne
+distingue pas :
+
+- Livraison partielle (50 % livré à date + 50 % livré en retard)
+- Mauvais produit (BOM mal alloué)
+- Surproduction par effet de lot (compliance > 1.0)
+
+Une décomposition fine de Q en sous-KPIs (
+`fill_rate_on_time` + `fill_rate_late` + `overproduction_rate`) est
+identifiée comme extension future, hors paper v1.
+
+V12.6 (§28.12 due-date aware smoothing) permettrait de **réconcilier
+EVENT avec Q + D** : ramener compliance EVENT à ~92 % et dispo à
+100 % au prix d'une fraction de gain coût (estimé : EVENT passerait
+de −26 % à −20 % sur C).
+
+---
+
 ## §29. Démarche d'implantation progressive (industriel)
 
 L'implantation de la doctrine pilotage par flux dans un atelier

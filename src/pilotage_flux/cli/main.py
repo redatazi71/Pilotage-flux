@@ -2398,5 +2398,83 @@ def random_study(
     console.print(tbl)
 
 
+# ----------------------------------------------------------------------
+# V12.3 — CLI Delta engine 4 niveaux + approval queue
+# ----------------------------------------------------------------------
+
+
+@app.command("approval-list")
+def cmd_approval_list(
+    db_path: Path = typer.Argument(..., help="Base SQLite"),
+    level: str = typer.Option(None, help="Filtrer par niveau (L3/L4)"),
+    limit: int = typer.Option(20, help="Limite de résultats"),
+) -> None:
+    """V12.3 — Liste les décisions en attente de validation humaine."""
+    from pilotage_flux.cybernetic.delta_engine import (
+        AUTONOMY_LEVEL_L3, AUTONOMY_LEVEL_L4, list_pending,
+    )
+    level_map = {"L3": AUTONOMY_LEVEL_L3, "L4": AUTONOMY_LEVEL_L4}
+    level_filter = level_map.get(level) if level else None
+    with db_session(db_path) as conn:
+        pending = list_pending(conn, autonomy_level=level_filter, limit=limit)
+
+    if not pending:
+        console.print("[yellow]Aucune décision en attente.[/yellow]")
+        return
+
+    tbl = Table(title=f"Approbations en attente ({len(pending)})")
+    tbl.add_column("Queue ID", justify="right")
+    tbl.add_column("Decision ID", justify="right")
+    tbl.add_column("Niveau")
+    tbl.add_column("Soumis le")
+    tbl.add_column("Notes")
+    for e in pending:
+        tbl.add_row(
+            str(e.queue_id), str(e.decision_id), e.autonomy_level,
+            e.submitted_at, e.notes or "",
+        )
+    console.print(tbl)
+
+
+@app.command("approval-approve")
+def cmd_approval_approve(
+    db_path: Path = typer.Argument(..., help="Base SQLite"),
+    queue_id: int = typer.Argument(..., help="ID dans la queue"),
+    by: str = typer.Option(..., "--by", help="Identité du validateur"),
+    notes: str = typer.Option("", "--notes", help="Notes optionnelles"),
+) -> None:
+    """V12.3 — Approuve une décision en attente."""
+    from pilotage_flux.cybernetic.delta_engine import approve_decision
+    with db_session(db_path) as conn:
+        entry = approve_decision(
+            conn, queue_id, approved_by=f"human:{by}",
+            notes=notes or None,
+        )
+    console.print(
+        f"[green]OK[/green] Queue {queue_id} approuvé "
+        f"(lag={entry.approval_lag_min:.1f} min)"
+    )
+
+
+@app.command("approval-reject")
+def cmd_approval_reject(
+    db_path: Path = typer.Argument(..., help="Base SQLite"),
+    queue_id: int = typer.Argument(..., help="ID dans la queue"),
+    by: str = typer.Option(..., "--by", help="Identité du rejetteur"),
+    notes: str = typer.Option("", "--notes", help="Raison du rejet"),
+) -> None:
+    """V12.3 — Rejette une décision en attente."""
+    from pilotage_flux.cybernetic.delta_engine import reject_decision
+    with db_session(db_path) as conn:
+        entry = reject_decision(
+            conn, queue_id, rejected_by=f"human:{by}",
+            notes=notes or None,
+        )
+    console.print(
+        f"[yellow]Rejeté[/yellow] Queue {queue_id} "
+        f"(lag={entry.approval_lag_min:.1f} min)"
+    )
+
+
 if __name__ == "__main__":
     app()

@@ -240,6 +240,45 @@ def _setup_stocks_and_pos(
             )
 
 
+# Point 3 paper — overrides paramétriques applicables post-bootstrap
+# via global module-level state (set/reset par run_doctrine).
+_PENDING_PARAM_OVERRIDES: dict | None = None
+
+
+def _apply_pending_param_overrides(conn: sqlite3.Connection) -> None:
+    """Applique les overrides paramétriques en attente (Point 3 paper).
+
+    Override = bump de version, valid_to ancien posé. Idempotent
+    par run.
+    """
+    global _PENDING_PARAM_OVERRIDES
+    if not _PENDING_PARAM_OVERRIDES:
+        return
+    for (scope, scope_ref, name), value in _PENDING_PARAM_OVERRIDES.items():
+        conn.execute(
+            """
+            UPDATE parameters SET valid_to = datetime('now')
+            WHERE scope = ? AND (scope_ref IS ? OR scope_ref = ?)
+              AND name = ? AND valid_to IS NULL
+            """,
+            (scope, scope_ref, scope_ref, name),
+        )
+        row = conn.execute(
+            """
+            SELECT COALESCE(MAX(version), 0) + 1 AS v FROM parameters
+            WHERE scope = ? AND (scope_ref IS ? OR scope_ref = ?) AND name = ?
+            """,
+            (scope, scope_ref, scope_ref, name),
+        ).fetchone()
+        conn.execute(
+            """
+            INSERT INTO parameters (scope, scope_ref, name, value_num, version)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (scope, scope_ref, name, float(value), int(row["v"])),
+        )
+
+
 def _bootstrap_db(
     scenario: Scenario, db_path: Path, fixtures_dir: Path
 ) -> None:
@@ -248,6 +287,9 @@ def _bootstrap_db(
     L11.3 : si `<fixtures_dir>/routing_alternatives.csv` existe, l'utilise
     pour seeder la table routing_alternatives. Sinon, fixtures sans
     alternatives (l'arbitrage L11.2 sera linéaire pur).
+
+    Point 3 paper : applique les overrides paramétriques pending en
+    fin de bootstrap (après seed_defaults via import_referentials).
     """
     init_schema(db_path, drop_existing=True)
     with db_session(db_path) as conn:
@@ -255,6 +297,7 @@ def _bootstrap_db(
         _seed_routing_alternatives_from_csv(conn, fixtures_dir)
         _import_sales_orders(conn, scenario)
         _setup_stocks_and_pos(conn, scenario)
+        _apply_pending_param_overrides(conn)
 
 
 def _seed_routing_alternatives_from_csv(
@@ -1806,6 +1849,7 @@ def run_doctrine(
     fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
     evaluate_rejections: bool = True,
     late_threshold_days: int | None = None,
+    param_overrides: dict | None = None,
 ) -> RunResult:
     """Lance la doctrine demandée.
 
@@ -1816,12 +1860,27 @@ def run_doctrine(
 
     `late_threshold_days` (Point 2 paper) override la valeur par
     défaut/DB. Utile pour profils stricts (0 = livraison ontime).
+
+    `param_overrides` (Point 3 paper) : dict
+    {(scope, scope_ref, name): value_num} appliqué après le bootstrap
+    de la DB et avant la simulation. Permet de varier directement
+    les paramètres data-driven (buffer DBR, seuils Little, coûts, etc.)
+    sans modifier les fixtures.
     """
     if doctrine not in _DISPATCH:
         raise ValueError(
             f"Doctrine inconnue : {doctrine!r} (dispatch : {list(_DISPATCH)})"
         )
-    result = _DISPATCH[doctrine](scenario, db_path, fixtures_dir=fixtures_dir)
+    global _PENDING_PARAM_OVERRIDES
+    previous_overrides = _PENDING_PARAM_OVERRIDES
+    try:
+        if param_overrides:
+            _PENDING_PARAM_OVERRIDES = param_overrides
+        result = _DISPATCH[doctrine](
+            scenario, db_path, fixtures_dir=fixtures_dir,
+        )
+    finally:
+        _PENDING_PARAM_OVERRIDES = previous_overrides
     if evaluate_rejections:
         _evaluate_rejections(
             db_path, scenario, result,

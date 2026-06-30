@@ -1217,6 +1217,322 @@ pas. V13.0 le ferme.
 Chart : aucun (4 scénarios suffisent pour la table § 28.15.2).
 Diagnostic : `docs/diagnose_v13_0.py`.
 
+### §28.16 Audit simulation + Matrice QCDS 5 doctrines (Option 1)
+
+La V13.0 a révélé un résultat dérangeant : **OF+EVENT bat FLUX+EVENT
+sur l'OTIF dans 3/4 scénarios stress XL** (`docs/diagnose_v13_0_matrix.py`).
+Avant de pousser V13.1/V13.3, audit complet du pipeline simulation
++ mesure QCDS étendue.
+
+#### §28.16.1 Audit `_advance_one_day` — 6 simplifications de modèle
+
+`docs/audit_simulation_v13_0.md` documente 6 simplifications dans
+`comparative/runner.py` :
+
+1. **Sérialisation `1 op / WS / jour`** (lignes 970-972) : un WS ne
+   traite qu'UN OF par jour, indépendamment de qty/unit_time
+2. **Durée d'op fixée à 480 min** dans `_execute_op` (ligne 379)
+3. **qty_good = qty_good de la dernière op** dans `close_of`
+   (`mes/closure.py:62`), scrap non compoundé
+4. V13.0 inactif sur stress_demand_spike (urgent_absorbed
+   n'invoque pas `_apply_corrective_actions`)
+5. `_apply_corrective_actions` appelé uniquement EVENT/OF+EVENT
+6. `open_nc + scrap_nc` doctrine-gated FLUX/EVENT vs OF/OF+EVENT
+
+**Aucun bug détecté.** Les vérifications de cohérence (pegging_links,
+KPI quantity_compliance, blocage BOM) sont passantes 3/3 doctrines.
+Le résultat OF > FLUX sur OTIF est *cohérent* avec la sérialisation
+1-op/jour qui favorise structurellement les doctrines qui lancent au
+plus tôt.
+
+#### §28.16.2 Option 1 — Matrice QCDS 5 doctrines × 4 scénarios
+
+100 runs (5 doctrines × 4 scénarios × 5 seeds) mesurant les 4
+dimensions QCDS — `docs/build_qcds_matrix_5_doctrines.py`.
+
+**Verdict par objectif** :
+
+| Objectif | Doctrine gagnante 4/4 |
+|---|---|
+| **OTIF** (Q × D) | **OF / OF+EVENT** (0.885-0.950) |
+| **Coût** | **FLUX / EVENT** (jusqu'à −45 % vs OF) |
+| **Stabilité** (WIP σ) | **FLUX** (σ 1.4-4.2 vs σ 6.2-7.7 pour OF) |
+
+**Cas emblématique — `stress_double_breakdown_xl`** :
+
+| Doctrine | OTIF | Coût | WIP pic | WIP σ |
+|---|---|---|---|---|
+| OF | 0.950 | 48 735 € | 18 | 6.23 |
+| EVENT | 0.675 | **27 320 € (−44 %)** | **7 (−61 %)** | **1.44 (−77 %)** |
+
+EVENT économise **21 415 €** et lisse **4× mieux** la production,
+au prix de **27.5 pp d'OTIF**. Le choix doctrinal est un **arbitrage
+QCDS** (§30), pas une supériorité univoque.
+
+**Lecture doctrinale honnête** : **FLUX n'est pas OTIF-first**
+(comme on aurait pu le croire) — **FLUX est Cost-first ET
+Stability-first**. Sa préférence dépend de la priorité métier du
+planificateur.
+
+#### §28.16.3 Option 2 — Capacité réaliste (N ops / WS / jour)
+
+Modification de `_advance_one_day` : nouveau paramètre
+`realistic_capacity_minutes_per_day` (default 0 = legacy). Quand
+> 0, le WS traite N ops tant que `Σ(qty × unit_time / capa)` <
+budget journalier. La durée d'op est calculée via `routing_operations`.
+
+Mesure sur 100 runs en mode réaliste (cap=480) —
+`docs/build_qcds_realistic_capacity.py` :
+
+| Doctrine | Legacy OTIF | Réaliste OTIF | Δ |
+|---|---|---|---|
+| OF (4 scénarios) | 0.885 (spike) à 0.950 | **0.950 partout** | +6.5 pp sur spike |
+| FLUX | 0.606-0.694 | **0.694-0.745** | +0 à +13.9 pp |
+| EVENT V13.0 | 0.606-0.950 | **0.745-0.950** | +6.9 à +13.9 pp |
+
+**Découvertes du mode réaliste** :
+
+1. **OF passe à 0.950 partout** : la sérialisation 1-op/jour
+   pénalisait OF sur `stress_demand_spike_xl`. Levée, OF retrouve
+   son plafond.
+2. **FLUX reste à OTIF 0.694** en mode réaliste sur baseline — la
+   sérialisation **n'était PAS** la cause de son défaut.
+3. **Coûts −30 à −40 % en réaliste** : capacité plus généreuse =
+   moins de WIP carrying.
+4. **Hiérarchie QCDS préservée** : OF gagne OTIF, FLUX gagne Coût
+   et Stabilité, dans les deux modes.
+
+**Conséquence cruciale** : le défaut OTIF de FLUX est doctrinalement
+causé par le **smoothing qui place les parents avant les composants**
+(BOM cascade). Le mode réaliste lève la sérialisation WS mais ne
+change rien à cette mauvaise ordonnance.
+
+→ **V13.1 (BOM-op linkage avec consommation par op)** reste la
+voie principielle pour fermer le gap OTIF FLUX sans détruire son
+avantage Cost/Stability. Le « parent peut démarrer op 1 dès que
+SEMI-1 est prêt, sans attendre SEMI-2 » ouvre une fenêtre que
+V13.0 (pull-forward) seul ne peut pas exploiter.
+
+Chart : aucun.
+Données : `docs/cadrage_v4_qcds_matrix_5_doctrines.md` (legacy),
+`docs/cadrage_v4_qcds_realistic_capacity.md` (réaliste).
+Audit : `docs/audit_simulation_v13_0.md`.
+
+### §28.17 V13.1 — BOM-op linkage — LIVRÉ (combo V13.0+V13.1+réaliste = QCDS-optimal)
+
+V12.8 puis V13.0 ont confirmé que le défaut OTIF FLUX vient du
+smoothing qui place les **parents avant les composants**, et que
+réagir aux événements (V13.0) ne suffit pas seul à fermer le gap.
+
+V13.1 implémente la **liaison composant/opération de gamme** :
+chaque ligne `bom_lines` reçoit une colonne
+`consuming_operation_idx` qui indique à quelle op du parent ce
+composant est consommé. **L'op N peut démarrer dès que ses
+composants spécifiques sont prêts, sans attendre les composants
+d'op N+k.**
+
+#### §28.17.1 Implémentation
+
+1. **Schema** : nouvelle colonne `consuming_operation_idx INTEGER`
+   sur `bom_lines` (default NULL = legacy : consommé à l'op 1).
+2. **Helper** `_seed_bom_op_consumption_from_routing(conn)` :
+   heuristique simple, la i-ème ligne BOM d'un parent va à l'op
+   `min(i, n_ops)`. Idempotent (ne touche que NULL).
+3. **`_of_op_blocked_by_pending_component(conn, of_id, op_seq_idx,
+   op_aware=True)`** : block uniquement si un composant avec
+   `consuming_operation_idx <= op_seq_idx` est encore en flight.
+4. **Paramètre** `bom_op_linkage_aware` (default 0 = legacy V11).
+5. **Wire** dans `_advance_one_day` : la décision de blocage utilise
+   la sequence_idx de la prochaine op pending.
+
+#### §28.17.2 Étude QCDS V13.1 (100 runs, 4 scénarios × 5 seeds × 5 cfg)
+
+| Configuration | baseline | double_db | cnc | demand_spike |
+|---|---|---|---|---|
+| OF référence | 0.950 | 0.950 | 0.938 | 0.885 |
+| FLUX V11 | 0.694 | 0.675 | 0.675 | 0.606 |
+| EVENT V13.0 | 0.924 | 0.785 | 0.950 | 0.606 |
+| EVENT V13.0 + V13.1 | **0.950** | 0.785 | 0.950 | **0.735** |
+| **EVENT V13.0+V13.1+réaliste** | **0.950** | **0.950** | **0.950** | **0.950** |
+
+#### §28.17.3 Bilan QCDS du combo cybernétique complet
+
+Comparée à OF baseline sur les 4 scénarios, la doctrine
+**EVENT V13.0 + V13.1 + réaliste (cap=480)** présente :
+
+| Objectif | EVENT cyber combo vs OF |
+|---|---|
+| **Q (OTIF)** | équivalent ou **supérieur** (0.950 partout) |
+| **C (coût)** | **−30 à −42 %** (médiane −38 %) |
+| **D (dispo SO)** | 1.000 partout |
+| **S (WIP σ)** | **−50 % en moyenne** (σ 2.1-3.7 vs 5.2-7.7 OF) |
+
+**La doctrine FLUX/EVENT, dotée de la boucle cybernétique
+complète V13.0+V13.1, devient strictement dominante sur OF
+baseline pour les 4 objectifs QCDS sans compromis.**
+
+#### §28.17.4 Lecture doctrinale
+
+Le **chemin doctrinal** qui mène à cette dominance combine 3
+mécanismes principielle alignés avec ton intuition initiale (cf.
+§28.16) :
+
+1. **V13.0** (event-driven smoothing reactivity) : la boucle
+   mesure → corrective → replanning se ferme. Les OFs en zone
+   négociable s'ajustent aux signaux physiques.
+2. **V13.1** (BOM-op linkage) : la production phasée permet de
+   démarrer un OF sans attendre tous ses composants. Le smoothing
+   « parent avant child » cesse d'être pénalisant car le parent
+   peut démarrer op 1 dès que sa composante d'op 1 est prête.
+3. **V13.A** (capacité réaliste) : la simulation cesse de
+   sérialiser artificiellement à 1 op/WS/jour. Le débit physique
+   s'aligne sur les durées réelles `qty × unit_time`.
+
+**Chaque mécanisme est nécessaire ; aucun n'est suffisant seul.**
+La preuve : V13.1 seul sur baseline n'améliore pas l'OTIF FLUX
+(0.694 → 0.694), parce que le bottleneck baseline est le timing
+(pas le BOM cascade). Avec V13.0 qui répare le timing, V13.1
+libère la dernière marge (0.924 → 0.950).
+
+Tests : 476 OK (toutes les flags V13.x default 0 préservent compat).
+Données : `docs/cadrage_v4_qcds_v13_1.md`.
+Diagnostic : `docs/diagnose_v13_1.py`.
+
+### §28.18 V13.3 — Zones adaptatives par nervosité — LIVRÉ
+
+V13.3 complète la triade cybernétique en rendant la **freeze_window**
+elle-même réactive : elle se contracte sous haute nervosité (pour
+plus de réactivité) et s'étend sous faible nervosité (pour plus de
+stabilité), conformément à ton intuition initiale (cf. §28.16).
+
+#### §28.18.1 Implémentation
+
+Nouvelle fonction
+`cybernetic/optimization/zone_resolver.py:compute_adaptive_freeze_window` :
+
+```python
+nervousness = n_replans / horizon_days_écoulés
+if nervousness > 0.30 :  window × 0.5   (contraction)
+elif nervousness < 0.10 :  window × 1.5  (expansion)
+else                     :  window inchangée
+```
+
+Plancher 1 j, plafond 2 × base_window_days. Wire dans
+`resolve_negotiable_zone(adaptive=True)` (default False = legacy).
+
+#### §28.18.2 Impact sur les 4 scénarios stress XL
+
+V13.3 modifie le critère d'identification de la zone négociable, et
+donc l'enveloppe de re-planification. Sur les 4 scénarios actuels,
+EVENT V13.0+V13.1+réaliste atteint déjà OTIF=0.950 (plafond
+mécanique). V13.3 n'a donc pas de marge OTIF à offrir sur ces
+scénarios — son apport mesurable est sur **C** et **S** lorsque la
+nervosité varie fortement (scénarios à churn élevé non couverts par
+notre benchmark actuel).
+
+V13.3 est **livré pour la cohérence doctrinale** (la triade
+V13.0+V13.1+V13.3 ferme la boucle cybernétique au niveau zones) et
+sera quantifié sur des scénarios à nervosité forte dans les
+travaux ultérieurs.
+
+#### §28.18.3 Synthèse — Triade cybernétique complète V13
+
+| Mécanisme | Ce qu'il ouvre | Statut |
+|---|---|---|
+| **V13.0** — event-driven smoothing reactivity | Boucle mesure→corrective→replanning fermée | LIVRÉ §28.15 |
+| **V13.1** — BOM-op linkage | Production phasée (op 1 démarre dès SEMI-1 prêt) | LIVRÉ §28.17 |
+| **V13.3** — Zones adaptatives | Freeze window pilotée par nervosité | LIVRÉ §28.18 |
+| **V13.A** — Capacité réaliste | N ops par WS par jour selon qty×unit_time | LIVRÉ §28.16 |
+
+Activation simultanée (sur EVENT) → la doctrine flux/event devient
+**strictement dominante sur OF** pour les 4 dimensions QCDS. C'est
+le résultat le plus important du projet : la lecture habituelle
+« FLUX paraît mal sur OTIF » n'était valide qu'**en l'absence de
+la boucle cybernétique complète**.
+
+Tests : 488 OK.
+
+> **⚠ ATTENTION — voir §28.19.** L'affirmation « dominante sur les
+> 4 dimensions QCDS » ci-dessus a été **partiellement invalidée par
+> l'audit forensique §28.19**. Les gains de Coût (−30 à −42 %) étaient
+> un artefact de comparaison (legacy vs réaliste + sous-production).
+> À mode et volume égaux, l'avantage réel d'EVENT V13 sur OF se réduit
+> à la **Stabilité (WIP σ −25 %)**, avec parité Coût et OTIF. Lire
+> §28.19 avant toute citation des chiffres §28.16/§28.17.
+
+### §28.19 Audit forensique — corrections aux §28.16/§28.17
+
+Un audit objectif step-by-step (`docs/audit_forensique_simulation.md`)
+mené après la série V13 a révélé **deux erreurs de mesure** (pas de
+bug de code) qui ont surévalué l'apport doctrinal de FLUX/EVENT.
+
+#### §28.19.1 OTIF=0.950 est un plafond mécanique
+
+Tout OF clôturé a `qty_good ≈ 0.95 × qty` (scrap fixe 5 %). Donc
+`quantity_compliance ≤ 0.95` toujours, et « OTIF 0.950 » signifie
+**« 100 % des OFs clôturés »**, pas « qualité quasi-parfaite ». Le
+KPI est binaire au niveau OF (clôturé → 0.95 ; stuck → 0).
+
+#### §28.19.2 La MOD legacy facture 8 h forfaitaires par op
+
+`costing/engine.py` calcule MOD = `(actual_end − actual_start) ×
+taux`. En legacy, chaque op est tamponnée `0→480 min` quelle que
+soit `qty × unit_time`. Deux effets pervers :
+
+1. La MOD legacy est proportionnelle au **nombre d'ops exécutées**,
+   pas au travail réel.
+2. **Un OF stuck facture moins de MOD** — ne pas finir « coûte »
+   moins cher.
+
+Le « −38 % » du mode réaliste vs legacy est **à ~95 % un correctif
+de facturation** (MOD enfin au temps réel), pas un gain doctrinal.
+
+#### §28.19.3 « FLUX est Cost-first » : FAUX au coût par unité
+
+Conséquence du §28.19.2. Baseline legacy :
+
+| Doctrine | Coût total | Unités livrées | **Coût / unité** |
+|---|---|---|---|
+| OF | 37 744 € | 533 | **70.8 €/u** |
+| FLUX | 31 731 € | 390 | **81.4 €/u** |
+
+Le coût total inférieur de FLUX vient de sa **sous-production**
+(390 vs 533 u). Par unité livrée, FLUX est **15 % plus cher** sur
+baseline. L'étude Option 1 (§28.16) comparait des coûts **totaux à
+volumes différents** — métrique invalide. FLUX n'est moins cher par
+unité que sur les scénarios à panne sévère (double_breakdown :
+85.3 vs 98.7 €/u), où le lissage évite de concentrer des ops longues
+pendant la panne (avantage partiellement réel, partiellement artefact
+de sous-production).
+
+#### §28.19.4 L'avantage V13 réel vs OF (même mode) : Stabilité, pas Coût
+
+Comparaison apples-to-apples (les deux en mode réaliste, volume et
+OTIF identiques 530 u / 0.950) :
+
+| baseline | Coût / u | WIP σ |
+|---|---|---|
+| EVENT V13 cyber+réal | 44.1 €/u | 3.69 |
+| OF réaliste | 44.4 €/u | 4.95 |
+
+À output égal, l'avantage Coût d'EVENT V13 sur OF est **~1 %** (pas
+−38 %). Le seul avantage doctrinal **robuste** est la **Stabilité**
+(WIP σ −25 %), conséquence réelle du lissage.
+
+#### §28.19.5 Verdict corrigé
+
+- **Pas de bug de calcul** ; déterminisme, jointures, invariants
+  matière/scrap : tous vérifiés (488 tests OK).
+- **Erreur de mesure** : comparaison de coûts totaux à volumes
+  différents + modèle MOD legacy forfaitaire.
+- **Conclusion doctrinale corrigée** : à output et OTIF égaux,
+  FLUX/EVENT n'est **pas moins cher** qu'OF ; son seul gain robuste
+  est la **réduction du WIP (−25 % de variance)**. L'OTIF plafonne
+  à 0.95 pour tous (modèle scrap). La « domination 4 dimensions »
+  de §28.17 se réduit à **avantage Stabilité réel + parité Coût/OTIF**.
+- **Règle méthodologique** : toujours rapporter le **€/unité livrée**,
+  jamais le coût total brut, entre doctrines à volumes différents.
+
 ### §24.10.1 Lectures clés des matrices
 
 **1. Quelle paire est la plus coûteuse ?**

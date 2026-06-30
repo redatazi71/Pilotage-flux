@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS bom_lines (
     parent_article  TEXT NOT NULL REFERENCES articles(article_id),
     child_article   TEXT NOT NULL REFERENCES articles(article_id),
     quantity        REAL NOT NULL,
+    consuming_operation_idx INTEGER,
+        -- V13.1 : sequence_idx de l'op de routing du parent qui consomme
+        -- ce composant. NULL = legacy (consommé à l'op 1, comportement
+        -- historique). Non-null = l'op N peut démarrer dès que ce
+        -- composant est prêt, sans attendre les autres.
     UNIQUE (parent_article, child_article)
 );
 

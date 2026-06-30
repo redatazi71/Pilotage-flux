@@ -295,6 +295,7 @@ def _bootstrap_db(
     with db_session(db_path) as conn:
         import_referentials(conn, fixtures_dir)
         _seed_routing_alternatives_from_csv(conn, fixtures_dir)
+        _seed_bom_op_consumption_from_routing(conn)  # V13.1
         _import_sales_orders(conn, scenario)
         _setup_stocks_and_pos(conn, scenario)
         _apply_pending_param_overrides(conn)
@@ -561,6 +562,79 @@ def _apply_hazard(
             {"day": hazard.day, "kind": kind, "workstation_id": ws,
              "block_days": block_days}
         )
+
+
+def _get_realistic_capacity_minutes_per_day(
+    conn: sqlite3.Connection,
+) -> int:
+    """V13.A — Lit `realistic_capacity_minutes_per_day` (default 0).
+
+    0  → legacy : 1 op / WS / jour (sérialisation simplifiée)
+    >0 → réaliste : un WS peut traiter N ops tant que la somme des
+         durées (qty × unit_time / capacity_factor) ne dépasse pas
+         ce budget journalier. Typique : 480 (1 shift 8h) ou 960
+         (2 shifts).
+
+    Cible le finding de l'audit §28.16 : la sérialisation 1-op-par-jour
+    favorise structurellement les doctrines qui lancent le plus tôt.
+    """
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="realistic_capacity_minutes_per_day", default=0.0,
+    )
+    return int(val) if val is not None else 0
+
+
+def _compute_op_duration_min(
+    conn: sqlite3.Connection,
+    of_id: str,
+    sequence_idx: int,
+    qty: float,
+    workstation_id: str,
+    state: "HazardState",
+) -> float:
+    """V13.A — Durée réelle d'une op en minutes.
+
+    duration = qty × unit_time_min / capacity_factor(ws)
+    Si le WS est en breakdown, on multiplie par le slowdown_factor.
+
+    Cherche unit_time_min via `order_operations` (lié à `of_id` +
+    `sequence_idx`) avec fallback sur `routing_operations`.
+    """
+    from pilotage_flux.parameters import workstation_capacity_factor
+    row = conn.execute(
+        """
+        SELECT o.unit_time_min
+        FROM order_operations o
+        WHERE o.of_id = ? AND o.sequence_idx = ?
+        """,
+        (of_id, sequence_idx),
+    ).fetchone()
+    unit_time = float(row["unit_time_min"]) if row and row["unit_time_min"] else 0.0
+    if unit_time <= 0:
+        # Fallback : lit via routing
+        of_art = conn.execute(
+            "SELECT article_id FROM manufacturing_orders WHERE of_id = ?",
+            (of_id,),
+        ).fetchone()
+        if of_art:
+            r = conn.execute(
+                "SELECT unit_time_min FROM routing_operations "
+                "WHERE article_id = ? AND sequence_idx = ?",
+                (of_art["article_id"], sequence_idx),
+            ).fetchone()
+            unit_time = float(r["unit_time_min"]) if r and r["unit_time_min"] else 1.0
+        else:
+            unit_time = 1.0
+    capa = workstation_capacity_factor(conn, workstation_id)
+    if capa <= 0:
+        capa = 1.0
+    base_dur = qty * unit_time / capa
+    if workstation_id in state.breakdown_ws:
+        factor = state.breakdown_factor.get(workstation_id, 1.5)
+        base_dur *= factor
+    return max(1.0, base_dur)
 
 
 def _get_event_driven_smoothing_advance_days(
@@ -863,37 +937,146 @@ def _decay_breakdowns(state: HazardState) -> None:
 # ----------------------------------------------------------------------
 
 
-def _of_blocked_by_pending_component(
-    conn: sqlite3.Connection, of_id: str
-) -> bool:
-    """Renvoie True si l'OF utilise (via pegging) un composant fabriqué
-    dont l'OF dédié n'est pas encore clôturé.
+def _get_bom_op_linkage_flag(conn: sqlite3.Connection) -> bool:
+    """V13.1 — Lit `bom_op_linkage_aware` (default 0).
 
-    Utilise pegging_links pour identifier précisément les OFs amont,
-    plutôt que de bloquer sur l'ensemble des SEMI-1 en cours (qui
-    sérialiserait artificiellement la production).
+    Active la liaison composant ↔ opération de gamme :
+      - Op 1 d'un parent peut démarrer dès que ses composants
+        spécifiques (consuming_operation_idx <= 1) sont prêts
+      - Op N peut démarrer dès que les composants consumés à op
+        ≤ N sont prêts
+
+    Permet la production phasée — ce qu'un planificateur lean fait
+    naturellement (« j'ai commencé op 1 dès SEMI-1 livré, sans
+    attendre SEMI-2 »).
+    """
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="bom_op_linkage_aware", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _seed_bom_op_consumption_from_routing(conn: sqlite3.Connection) -> int:
+    """V13.1 — Dispatch les bom_lines sur les ops du routing du parent.
+
+    Heuristique simple : la i-ème ligne BOM d'un article est attribuée
+    à l'op `min(i, n_ops)`. Premier composant à op 1, deuxième à op 2,
+    etc. Si plus de composants que d'ops, les derniers vont sur la
+    dernière op.
+
+    Ne touche QUE les `bom_lines` avec `consuming_operation_idx IS NULL`
+    (idempotent).
+    """
+    rows = conn.execute(
+        """
+        SELECT bom_line_id, parent_article, child_article
+        FROM bom_lines
+        WHERE consuming_operation_idx IS NULL
+        ORDER BY parent_article, bom_line_id
+        """,
+    ).fetchall()
+    if not rows:
+        return 0
+    n_assigned = 0
+    by_parent: dict[str, list] = {}
+    for r in rows:
+        by_parent.setdefault(r["parent_article"], []).append(r)
+    for parent, lines in by_parent.items():
+        ops = conn.execute(
+            "SELECT COUNT(*) AS n FROM routing_operations WHERE article_id = ?",
+            (parent,),
+        ).fetchone()
+        n_ops = int(ops["n"] or 0) if ops else 0
+        if n_ops < 1:
+            n_ops = 1
+        for i, line in enumerate(lines, start=1):
+            op_idx = min(i, n_ops)
+            conn.execute(
+                "UPDATE bom_lines SET consuming_operation_idx = ? "
+                "WHERE bom_line_id = ?",
+                (op_idx, line["bom_line_id"]),
+            )
+            n_assigned += 1
+    return n_assigned
+
+
+def _components_needed_at_or_before_op(
+    conn: sqlite3.Connection,
+    parent_article: str,
+    op_seq_idx: int,
+) -> list[str]:
+    """V13.1 — Liste des child_article consommés à l'op ≤ op_seq_idx.
+
+    Si `consuming_operation_idx IS NULL`, on considère le composant
+    requis à l'op 1 (legacy : tous les composants au démarrage).
+    """
+    rows = conn.execute(
+        """
+        SELECT child_article
+        FROM bom_lines
+        WHERE parent_article = ?
+          AND COALESCE(consuming_operation_idx, 1) <= ?
+        """,
+        (parent_article, op_seq_idx),
+    ).fetchall()
+    return [r["child_article"] for r in rows]
+
+
+def _of_op_blocked_by_pending_component(
+    conn: sqlite3.Connection,
+    of_id: str,
+    op_seq_idx: int,
+    *,
+    op_aware: bool,
+) -> bool:
+    """V13.1 — Variante op-aware de `_of_blocked_by_pending_component`.
+
+    Si `op_aware=False` : comportement legacy (block si TOUT composant
+    en amont est encore en flight).
+
+    Si `op_aware=True` : ne block que pour les composants dont
+    `consuming_operation_idx <= op_seq_idx`. L'op 1 peut démarrer dès
+    que ses composants spécifiques sont prêts, indépendamment des
+    composants des ops 2+.
     """
     row = conn.execute(
-        "SELECT candidate_id FROM manufacturing_orders WHERE of_id = ?",
+        "SELECT candidate_id, article_id FROM manufacturing_orders "
+        "WHERE of_id = ?",
         (of_id,),
     ).fetchone()
     if not row or row["candidate_id"] is None:
         return False
     cand_id = row["candidate_id"]
-    # Cherche les candidates amont (dépendances directes) via pegging
+    parent_article = row["article_id"]
+    # Composants requis à cette op (ou plus tôt) si op_aware ; sinon tous
+    if op_aware and parent_article:
+        needed = set(
+            _components_needed_at_or_before_op(
+                conn, parent_article, op_seq_idx,
+            )
+        )
+    else:
+        needed = None  # = legacy : tous composants en amont
+    # Upstream candidates via pegging
     upstream = conn.execute(
         """
-        SELECT target_id FROM pegging_links
-        WHERE source_type = 'candidate_order'
-          AND source_id = ?
-          AND target_type = 'candidate_order'
+        SELECT pl.target_id, c.article_id AS up_article
+        FROM pegging_links pl
+        LEFT JOIN candidate_orders c ON c.candidate_id = pl.target_id
+        WHERE pl.source_type = 'candidate_order'
+          AND pl.source_id = ?
+          AND pl.target_type = 'candidate_order'
         """,
         (cand_id,),
     ).fetchall()
     if not upstream:
         return False
     for up in upstream:
-        # Y a-t-il un OF associé à cette candidate amont non encore clôturé ?
+        # Filtre op-aware : seuls les composants requis à cette op
+        if needed is not None and up["up_article"] not in needed:
+            continue
         pending = conn.execute(
             """
             SELECT COUNT(*) AS n FROM manufacturing_orders
@@ -905,6 +1088,20 @@ def _of_blocked_by_pending_component(
         if pending and int(pending["n"]) > 0:
             return True
     return False
+
+
+def _of_blocked_by_pending_component(
+    conn: sqlite3.Connection, of_id: str
+) -> bool:
+    """Renvoie True si l'OF utilise (via pegging) un composant fabriqué
+    dont l'OF dédié n'est pas encore clôturé.
+
+    Wrapper legacy : appelle `_of_op_blocked_by_pending_component` en
+    mode non-op-aware (bloque sur tout composant en flight).
+    """
+    return _of_op_blocked_by_pending_component(
+        conn, of_id, op_seq_idx=1, op_aware=False,
+    )
 
 
 def _advance_one_day(
@@ -933,7 +1130,13 @@ def _advance_one_day(
         ORDER BY of_id ASC
         """
     ).fetchall()
-    busy_ws: set[str] = set()
+    # V13.A — bascule legacy (1 op/WS/jour) ⟷ réaliste (budget min/WS/jour)
+    daily_capa_min = _get_realistic_capacity_minutes_per_day(conn)
+    realistic = daily_capa_min > 0
+    # V13.1 — BOM-op linkage : déblocage phase par phase
+    bom_op_aware = _get_bom_op_linkage_flag(conn)
+    busy_ws: set[str] = set()  # legacy
+    ws_minutes_used: dict[str, float] = {}  # realistic
     # Scrap cumulé des NC du jour (et précédents) à appliquer au 1er OF avancé.
     # V3 qc_intervention_active divise par 2 (l'intervention qualité limite
     # le dommage). Cumulatif : un cascade_nc voit chaque NC consommé tour à tour.
@@ -943,12 +1146,11 @@ def _advance_one_day(
     state.pending_nc_scrap = 0.0  # consumé
     for row in active:
         of_id = row["of_id"]
-        if _of_blocked_by_pending_component(conn, of_id):
-            continue
         # OF retardé par un breakdown précédent : doit attendre 1 jour
         if state.delayed_of_until.get(of_id, 0) > day:
             continue
-        # Cherche la prochaine op pending
+        # Cherche la prochaine op pending (besoin de sequence_idx avant
+        # de tester le blocage BOM en mode op-aware)
         op = conn.execute(
             """
             SELECT of_op_id, workstation_id, sequence_idx
@@ -960,19 +1162,64 @@ def _advance_one_day(
         ).fetchone()
         if op is None:
             continue
+        # V13.1 : blocage BOM phasé par op (legacy si flag off)
+        if _of_op_blocked_by_pending_component(
+            conn, of_id, int(op["sequence_idx"]), op_aware=bom_op_aware,
+        ):
+            continue
         qty_row = conn.execute(
             "SELECT quantity FROM manufacturing_orders WHERE of_id = ?",
             (of_id,),
         ).fetchone()
         qty = float(qty_row["quantity"])
         ws = op["workstation_id"]
-        # Sérialisation : un poste ne peut traiter qu'un OF par jour
-        if ws in busy_ws:
+        if realistic:
+            # V13.A — réaliste : N ops/WS/jour tant que cap minutes pas dépassé
+            op_dur = _compute_op_duration_min(
+                conn, of_id, int(op["sequence_idx"]), qty, ws, state,
+            )
+            used = ws_minutes_used.get(ws, 0.0)
+            if used + op_dur > daily_capa_min:
+                continue
+            start_min = int(used)
+            end_min = int(min(daily_capa_min, used + op_dur))
+            ws_minutes_used[ws] = used + op_dur
+            base_scrap = max(0.0, round(qty * 0.05))
+            scrap_extra = 0.0
+            if pending_scrap > 0:
+                scrap_extra = pending_scrap
+                pending_scrap = 0.0
+            qty_scrap = min(qty, base_scrap + scrap_extra)
+            qty_good = max(0.0, qty - qty_scrap)
+            sid, fid = _execute_op(
+                conn, op["of_op_id"],
+                horizon_start=scenario.horizon_start, day=day,
+                qty_good=qty_good, qty_scrap=qty_scrap, actor=actor,
+            )
+            # Réécrit les timestamps avec les minutes réelles
+            _stamp_event_at_day(
+                conn, sid, scenario.horizon_start, day, start_min,
+            )
+            _stamp_event_at_day(
+                conn, fid, scenario.horizon_start, day, end_min,
+            )
+            _stamp_op_actual(
+                conn, op["of_op_id"], scenario.horizon_start,
+                start_day=day, end_day=day,
+                minutes_offset_start=start_min,
+                minutes_offset_end=end_min,
+            )
+            if ws in state.breakdown_ws:
+                # Le breakdown ralentit déjà via op_dur ; pas de delayed_of_until
+                # supplémentaire en mode réaliste
+                pass
+        elif ws in busy_ws:
+            # Legacy : un poste ne peut traiter qu'un OF par jour
             continue
-        busy_ws.add(ws)
-        # Effet panne : retard proportionnel au slowdown_factor.
-        # factor=1.5 -> +1 jour ; factor=2.0 -> +2 jours ; factor=3.0 -> +3 jours.
-        if ws in state.breakdown_ws:
+        elif ws in state.breakdown_ws:
+            busy_ws.add(ws)
+            # Effet panne : retard proportionnel au slowdown_factor.
+            # factor=1.5 -> +1 jour ; factor=2.0 -> +2 jours ; factor=3.0 -> +3 jours.
             factor = state.breakdown_factor.get(ws, 1.5)
             delay_days = max(1, int(round((factor - 1.0) * 2)))
             end_day = day + delay_days
@@ -998,6 +1245,7 @@ def _advance_one_day(
             # avant que sa prochaine op puisse être avancée
             state.delayed_of_until[of_id] = end_day
         else:
+            busy_ws.add(ws)
             base_scrap = max(0.0, round(qty * 0.05))
             scrap_extra = 0.0
             if pending_scrap > 0:

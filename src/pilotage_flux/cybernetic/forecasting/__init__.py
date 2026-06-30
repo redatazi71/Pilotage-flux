@@ -27,6 +27,11 @@ from pilotage_flux.cybernetic.forecasting.dataset import (
     split_holdout,
 )
 from pilotage_flux.cybernetic.forecasting.ensemble import EnsembleForecaster
+from pilotage_flux.cybernetic.forecasting.feedback import (
+    BiasCorrectionWrapper,
+    HazardAwareRegressionForecaster,
+    HistoricalContext,
+)
 from pilotage_flux.cybernetic.forecasting.forecast_result import ForecastResult
 from pilotage_flux.cybernetic.forecasting.linear import (
     LinearTrendForecaster,
@@ -47,6 +52,9 @@ __all__ = [
     "ArimaForecaster",
     "ExponentialSmoothingForecaster",
     "EnsembleForecaster",
+    "HistoricalContext",
+    "BiasCorrectionWrapper",
+    "HazardAwareRegressionForecaster",
     "mae",
     "rmse",
     "mape",

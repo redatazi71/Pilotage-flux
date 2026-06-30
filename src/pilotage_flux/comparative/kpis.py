@@ -59,6 +59,12 @@ class KpiSet:
     total_cost_eur: float = 0.0
     cost_per_of_eur: float = 0.0
     cost_scrap_eur: float = 0.0
+    # Point 2 paper — disponibilité réelle (vs disponibilité OF-level)
+    so_total: int = 0
+    so_delivered: int = 0
+    so_rejected: int = 0
+    disponibility_so_level: float = 1.0
+    # = so_delivered / so_total (1.0 = aucune SO refusée)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -117,6 +123,22 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
         ).fetchone()
         quality_events = int(qe_row["n"]) if qe_row else 0
 
+        # Point 2 paper — comptage SOs total / livré / rejeté
+        so_row = conn.execute(
+            "SELECT "
+            " COUNT(*) AS total, "
+            " SUM(CASE WHEN rejected_at IS NOT NULL THEN 1 ELSE 0 END) AS rejected "
+            "FROM sales_orders"
+        ).fetchone()
+        so_total = int(so_row["total"]) if so_row else 0
+        so_rejected = int(so_row["rejected"]) if (
+            so_row and so_row["rejected"] is not None
+        ) else 0
+        so_delivered = so_total - so_rejected
+        disponibility_so_level = (
+            so_delivered / so_total if so_total > 0 else 1.0
+        )
+
         if result.doctrine in (DOCTRINE_EVENT, DOCTRINE_OF_EVENT):
             row = conn.execute(
                 "SELECT COUNT(*) AS n FROM event_deviations"
@@ -169,4 +191,8 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
         causes_attached=causes_attached,
         quality_events=quality_events,
         nervousness=round(nervousness, 3),
+        so_total=so_total,
+        so_delivered=so_delivered,
+        so_rejected=so_rejected,
+        disponibility_so_level=round(disponibility_so_level, 4),
     )

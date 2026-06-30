@@ -1702,6 +1702,84 @@ def run_of_milp_doctrine(
 
 
 # ----------------------------------------------------------------------
+# Point 2 paper — mécanisme de rejet de SO (§7.2)
+# ----------------------------------------------------------------------
+
+
+DEFAULT_LATE_THRESHOLD_DAYS = 14
+# 14 jours = par défaut, un client cancellait une commande dont la
+# livraison dépasse de 2 semaines la due_date.
+
+
+def _evaluate_rejections(
+    db_path: Path, scenario: Scenario, result: RunResult,
+) -> None:
+    """Marque comme `cancelled` les SOs dont la livraison réelle a
+    dépassé `due_date + late_threshold_days`.
+
+    Lève un proxy de **disponibilité réelle** dans le modèle, à la
+    différence du KPI of_closed/of_total qui reste toujours élevé
+    (le simulateur ne refuse jamais une commande).
+
+    Le seuil est lu depuis `parameters` (clé : `late_threshold_days`)
+    ou prend la valeur par défaut `DEFAULT_LATE_THRESHOLD_DAYS`.
+    """
+    from datetime import datetime, timedelta
+    from pilotage_flux.db import db_session
+    from pilotage_flux.parameters import get_num
+
+    with db_session(db_path) as conn:
+        threshold = int(
+            get_num(conn, scope="global", scope_ref=None,
+                    name="late_threshold_days",
+                    default=DEFAULT_LATE_THRESHOLD_DAYS) or DEFAULT_LATE_THRESHOLD_DAYS
+        )
+        base = datetime.fromisoformat(scenario.horizon_start)
+        horizon_end = base + timedelta(days=scenario.horizon_days)
+
+        rows = conn.execute(
+            "SELECT sales_order_id, due_date, status FROM sales_orders"
+        ).fetchall()
+        for r in rows:
+            if r["status"] == "cancelled":
+                continue
+            try:
+                due = datetime.fromisoformat(r["due_date"])
+            except (ValueError, TypeError):
+                continue
+            deadline = due + timedelta(days=threshold)
+            # Si l'horizon est plus court que la deadline, on ne peut
+            # pas juger → on attend
+            if horizon_end < deadline:
+                continue
+
+            # Cette SO est-elle livrée avant deadline ?
+            delivered = conn.execute(
+                """
+                SELECT 1 FROM manufacturing_orders m
+                JOIN candidate_orders c ON c.candidate_id = m.candidate_id
+                WHERE c.sales_order_id = ?
+                  AND m.status = 'closed'
+                  AND m.actual_end IS NOT NULL
+                  AND m.actual_end <= ?
+                LIMIT 1
+                """,
+                (r["sales_order_id"], deadline.isoformat()),
+            ).fetchone()
+            if delivered is None:
+                conn.execute(
+                    """
+                    UPDATE sales_orders
+                    SET status = 'cancelled',
+                        rejected_at = ?,
+                        rejection_reason = 'late_beyond_threshold'
+                    WHERE sales_order_id = ?
+                    """,
+                    (horizon_end.isoformat(), r["sales_order_id"]),
+                )
+
+
+# ----------------------------------------------------------------------
 # Dispatch
 # ----------------------------------------------------------------------
 
@@ -1721,9 +1799,20 @@ def run_doctrine(
     db_path: Path,
     *,
     fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
+    evaluate_rejections: bool = True,
 ) -> RunResult:
+    """Lance la doctrine demandée.
+
+    `evaluate_rejections` (Point 2 paper, défaut True) déclenche le
+    post-processing qui marque comme `cancelled` les SOs dont la
+    livraison dépasse `due_date + late_threshold_days`. Permet la
+    mesure de disponibilité réelle.
+    """
     if doctrine not in _DISPATCH:
         raise ValueError(
             f"Doctrine inconnue : {doctrine!r} (dispatch : {list(_DISPATCH)})"
         )
-    return _DISPATCH[doctrine](scenario, db_path, fixtures_dir=fixtures_dir)
+    result = _DISPATCH[doctrine](scenario, db_path, fixtures_dir=fixtures_dir)
+    if evaluate_rejections:
+        _evaluate_rejections(db_path, scenario, result)
+    return result

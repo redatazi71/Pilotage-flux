@@ -917,6 +917,23 @@ Sur baseline_xl (sans aléa fort), FLUX/EVENT perdent quand même
 31 % — ce qui pointe plutôt vers une saturation du contrat
 (V12.7.a/b).
 
+#### §28.12.4 Conclusion honnête sur V12.6
+
+V12.6 est un **finding scientifique négatif** : l'hypothèse
+§24.8.7 a été testée rigoureusement et **invalidée**. Le code
+V12.6 reste utile comme **garde-fou prudent** (cap due_date
+toujours valide en principe), mais ne résout pas le défaut Q
+observé. La doctrine FLUX/EVENT a un défaut Q **plus profond**,
+non localisé dans le smoothing — confirmé et résolu par V12.7
+(§28.13).
+
+C'est précisément ce type de résultat — implémenter, mesurer,
+infirmer — qui distingue une étude reproductible d'un proof of
+concept marketing.
+
+Chart : `docs/charts/v12_6_otif_comparative.png`.
+Données détaillées : `docs/cadrage_v4_v12_6_data.md`.
+
 ### §28.13 V12.7 — Horizon-aware smoothing — LIVRÉ (correction du défaut Q)
 
 V12.7 a été investigué après l'échec de V12.6. Le diagnostic
@@ -1022,19 +1039,6 @@ V12.7 est **livré et mesuré**. Le défaut Q est **résolu**.
 
 Chart : `docs/charts/v12_7_otif_comparative.png`.
 Données détaillées : `docs/cadrage_v4_v12_7_data.md`.
-
-#### §28.12.4 Conclusion honnête sur V12.6
-
-V12.6 est un **finding scientifique négatif** : l'hypothèse
-§24.8.7 a été testée rigoureusement et **invalidée**. Le code
-V12.6 reste utile comme **garde-fou prudent** (cap due_date
-toujours valide en principe), mais ne résout pas le défaut Q
-observé. La doctrine FLUX/EVENT a un défaut Q **plus profond**,
-non localisé dans le smoothing.
-
-C'est précisément ce type de résultat — implémenter, mesurer,
-infirmer — qui distingue une étude reproductible d'un proof of
-concept marketing.
 
 ### §24.10.1 Lectures clés des matrices
 

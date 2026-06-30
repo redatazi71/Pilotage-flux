@@ -2476,5 +2476,116 @@ def cmd_approval_reject(
     )
 
 
+# ----------------------------------------------------------------------
+# V12.4 — Workflow humain : rôles, audit, escalation, dashboard
+# ----------------------------------------------------------------------
+
+
+@app.command("role-set")
+def cmd_role_set(
+    db_path: Path = typer.Argument(..., help="Base SQLite"),
+    user_id: str = typer.Argument(..., help="Identifiant utilisateur"),
+    role: str = typer.Argument(..., help="operator | supervisor | admin"),
+) -> None:
+    """V12.4 — Assigne un rôle à un utilisateur."""
+    from pilotage_flux.cybernetic.human_loop import set_user_role
+    from pilotage_flux.cybernetic.human_loop.audit_log import (
+        EVENT_ROLE_CHANGED, log_audit_event,
+    )
+    with db_session(db_path) as conn:
+        set_user_role(conn, user_id, role)
+        log_audit_event(
+            conn, event_type=EVENT_ROLE_CHANGED,
+            actor=f"cli:{user_id}",
+            details={"user_id": user_id, "new_role": role},
+        )
+    console.print(
+        f"[green]OK[/green] Rôle [bold]{role}[/bold] "
+        f"assigné à [cyan]{user_id}[/cyan]"
+    )
+
+
+@app.command("human-dashboard")
+def cmd_human_dashboard(
+    db_path: Path = typer.Argument(..., help="Base SQLite"),
+) -> None:
+    """V12.4 — Affiche un snapshot du workflow V12 (queue + audit)."""
+    from pilotage_flux.cybernetic.human_loop import snapshot_dashboard
+    with db_session(db_path) as conn:
+        snap = snapshot_dashboard(conn)
+
+    tbl = Table(title="Dashboard V12.4 — Workflow humain")
+    tbl.add_column("Indicateur")
+    tbl.add_column("Valeur", justify="right")
+    tbl.add_row("Pending total", str(snap.pending_total))
+    tbl.add_row("  dont L3", str(snap.pending_l3))
+    tbl.add_row("  dont L4", str(snap.pending_l4))
+    tbl.add_row("Pending overdue (> 4h)", str(snap.pending_overdue))
+    tbl.add_row("Pic d'attente (min)", f"{snap.longest_pending_min:.0f}")
+    tbl.add_row("Approuvés 24h", str(snap.approved_last_24h))
+    tbl.add_row("Rejetés 24h", str(snap.rejected_last_24h))
+    tbl.add_row("Escaladés 24h", str(snap.escalated_last_24h))
+    tbl.add_row("Lag moyen approbation (min)",
+                 f"{snap.avg_approval_lag_min:.1f}")
+    for role, n in snap.notifications_unread_by_role.items():
+        tbl.add_row(f"Notifs non lues — {role}", str(n))
+    console.print(tbl)
+
+
+@app.command("human-escalate")
+def cmd_human_escalate(
+    db_path: Path = typer.Argument(..., help="Base SQLite"),
+    threshold_min: float = typer.Option(
+        240.0, "--threshold", help="Seuil overdue en minutes",
+    ),
+) -> None:
+    """V12.4 — Escalade les approbations L3 en attente > seuil."""
+    from pilotage_flux.cybernetic.human_loop import escalate_overdue
+    with db_session(db_path) as conn:
+        result = escalate_overdue(
+            conn, overdue_threshold_minutes=threshold_min,
+        )
+    console.print(
+        f"[yellow]Escalation[/yellow] : "
+        f"{result.n_detected} overdue détectés, "
+        f"{result.n_escalated} escaladés L3→L4, "
+        f"{result.n_notified} notifications créées"
+    )
+
+
+@app.command("human-audit")
+def cmd_human_audit(
+    db_path: Path = typer.Argument(..., help="Base SQLite"),
+    queue_id: int = typer.Option(
+        None, "--queue", help="Filtrer par queue_id",
+    ),
+    limit: int = typer.Option(50, help="Limite de résultats"),
+) -> None:
+    """V12.4 — Affiche l'audit trail des décisions V12."""
+    from pilotage_flux.cybernetic.human_loop import list_audit_events
+    with db_session(db_path) as conn:
+        events = list_audit_events(
+            conn, queue_id=queue_id, limit=limit,
+        )
+
+    if not events:
+        console.print("[yellow]Aucun événement d'audit.[/yellow]")
+        return
+
+    tbl = Table(title=f"Audit trail V12.4 ({len(events)} événements)")
+    tbl.add_column("Date", justify="left")
+    tbl.add_column("Queue", justify="right")
+    tbl.add_column("Event")
+    tbl.add_column("Actor")
+    tbl.add_column("Détails")
+    for e in events:
+        tbl.add_row(
+            e.occurred_at,
+            str(e.queue_id) if e.queue_id is not None else "—",
+            e.event_type, e.actor, str(e.details)[:80],
+        )
+    console.print(tbl)
+
+
 if __name__ == "__main__":
     app()

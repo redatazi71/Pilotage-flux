@@ -868,3 +868,48 @@ CREATE INDEX IF NOT EXISTS idx_approval_queue_status
     ON approval_queue (status);
 CREATE INDEX IF NOT EXISTS idx_approval_queue_level
     ON approval_queue (autonomy_level);
+
+-- ---------------------------------------------------------------------
+-- V12.4 — Workflow humain : rôles, audit trail, notifications
+-- ---------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id        TEXT PRIMARY KEY,
+    role           TEXT NOT NULL,
+        -- operator | supervisor | admin
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    modified_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS approval_audit_log (
+    log_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    queue_id       INTEGER REFERENCES approval_queue(queue_id),
+    event_type     TEXT NOT NULL,
+        -- submitted | approved | rejected | escalated |
+        -- auto_timeout | role_changed | note_added
+    actor          TEXT NOT NULL,
+        -- 'human:<user>' ou 'auto:<source>'
+    details        TEXT,
+        -- JSON sérialisé (libre)
+    occurred_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_queue
+    ON approval_audit_log (queue_id);
+CREATE INDEX IF NOT EXISTS idx_audit_event
+    ON approval_audit_log (event_type);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target          TEXT NOT NULL,
+        -- 'role:operator' | 'role:supervisor' | 'user:<user_id>'
+    kind            TEXT NOT NULL,
+        -- pending_approval | overdue | escalated | rejected_with_note
+    queue_id        INTEGER REFERENCES approval_queue(queue_id),
+    message         TEXT NOT NULL,
+    read_at         TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_notif_target_unread
+    ON notifications (target, read_at);

@@ -10,12 +10,23 @@ en un seul bloc.
 # 1. Activer l'environnement virtuel (adapter le chemin)
 .\.venv\Scripts\activate
 
-# 2. (si nécessaire) installer les dépendances
-pip install -e .
+# 2. Installer le package + les dépendances des études (matplotlib,
+#    numpy, openpyxl, python-docx). OBLIGATOIRE au premier lancement.
+pip install -e ".[studies]"
+#    Optionnel (doctrine OF_MILP uniquement) :
+pip install ortools
 
 # 3. Lancer tout le corpus
 python docs\run_full_corpus.py
 ```
+
+> **Si vous voyez `ModuleNotFoundError: No module named 'matplotlib'`
+> ou `'pilotage_flux'`** : l'étape 2 n'a pas été faite dans
+> l'interpréteur courant. L'orchestrateur ajoute déjà `src/` au
+> `PYTHONPATH` (donc `pilotage_flux` se résout même sans
+> `pip install -e .`), mais `matplotlib`/`openpyxl` doivent être
+> installés via `pip install -e ".[studies]"`. Le pré-check au
+> démarrage affiche la commande exacte avec le bon interpréteur.
 
 ## Options utiles
 

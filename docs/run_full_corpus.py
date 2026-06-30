@@ -94,7 +94,30 @@ def _build_env() -> dict[str, str]:
     env["MPLBACKEND"] = "Agg"          # pas de display requis
     env["PYTHONUTF8"] = "1"            # Windows : force UTF-8
     env["PYTHONIOENCODING"] = "utf-8"  # accents français en sortie
+    # Injecte src/ dans PYTHONPATH pour que `import pilotage_flux`
+    # fonctionne même SANS `pip install -e .` (layout src/).
+    src_dir = str(REPO_ROOT / "src")
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        src_dir + (os.pathsep + existing if existing else "")
+    )
     return env
+
+
+def _preflight_dependencies() -> list[str]:
+    """Vérifie les dépendances tierces des études. Renvoie la liste des
+    paquets manquants (vide si tout est présent).
+
+    `pilotage_flux` n'est pas testé ici : il est résolu via PYTHONPATH=src
+    dans les sous-processus (cf. _build_env).
+    """
+    missing: list[str] = []
+    for pkg in ("matplotlib", "numpy", "openpyxl"):
+        try:
+            __import__(pkg)
+        except ImportError:
+            missing.append(pkg)
+    return missing
 
 
 def _select(args) -> list[tuple[str, str]]:
@@ -177,6 +200,16 @@ def main() -> int:
     print(f"Racine   : {REPO_ROOT}")
     print(f"Backend  : Agg (matplotlib headless)")
     print("=" * 78)
+
+    # Pré-check des dépendances tierces (matplotlib/numpy/openpyxl)
+    missing = _preflight_dependencies()
+    if missing:
+        print("\n⚠  Dépendances manquantes dans cet interpréteur Python :")
+        print(f"     {', '.join(missing)}")
+        print("   Les études correspondantes échoueront. Pour les installer :")
+        print(f'     "{sys.executable}" -m pip install {" ".join(missing)} ortools')
+        print("   (ortools n'est requis que pour la doctrine OF_MILP.)")
+        print("   On poursuit quand même — les scripts sans ces deps tourneront.\n")
 
     results: list[tuple[str, str, str, float, str]] = []
     t_start = time.time()

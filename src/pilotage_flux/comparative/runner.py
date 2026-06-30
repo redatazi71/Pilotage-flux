@@ -563,6 +563,128 @@ def _apply_hazard(
         )
 
 
+def _get_event_driven_smoothing_advance_days(
+    conn: sqlite3.Connection,
+) -> int:
+    """V13.0 — Lit `event_driven_smoothing_advance_days` (default 0).
+
+    Quand un corrective action est appliqué, les OFs encore en zone
+    négociable (statut 'created') et impactés par l'action voient
+    leur `scheduled_launch_day` avancé de ce nombre de jours
+    (borné par day_current + 1).
+
+    0 = désactive V13.0 (rétrocompat).
+    """
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="event_driven_smoothing_advance_days", default=0.0,
+    )
+    return int(val) if val is not None else 0
+
+
+def _pull_forward_pending_ofs_by_ws(
+    conn: sqlite3.Connection,
+    state: "HazardState",
+    ws_id: str,
+    day_current: int,
+    days_advance: int,
+) -> list[str]:
+    """V13.0 — Avance les OFs encore 'created' qui routent par ws_id.
+
+    Effet : la panne sur ws_id étant résolue, les OFs en attente
+    peuvent démarrer plus tôt qu'initialement smoothé.
+    """
+    if days_advance <= 0:
+        return []
+    rows = conn.execute(
+        """
+        SELECT DISTINCT m.of_id
+        FROM manufacturing_orders m
+        JOIN routing_operations r ON r.article_id = m.article_id
+        WHERE m.status = 'created' AND r.workstation_id = ?
+        """,
+        (ws_id,),
+    ).fetchall()
+    affected: list[str] = []
+    for r in rows:
+        of_id = r["of_id"]
+        if of_id not in state.scheduled_launch_day:
+            continue
+        old_day = state.scheduled_launch_day[of_id]
+        new_day = max(day_current + 1, old_day - days_advance)
+        if new_day < old_day:
+            state.scheduled_launch_day[of_id] = new_day
+            affected.append(of_id)
+    return affected
+
+
+def _pull_forward_pending_ofs_by_parent_article(
+    conn: sqlite3.Connection,
+    state: "HazardState",
+    child_article_id: str,
+    day_current: int,
+    days_advance: int,
+) -> list[str]:
+    """V13.0 — Avance les OFs 'created' dont l'article est PARENT BOM
+    de child_article_id (utilise ce composant).
+
+    Effet : le composant fourni alternativement étant désormais
+    disponible, les OFs parents peuvent démarrer plus tôt.
+    """
+    if days_advance <= 0:
+        return []
+    rows = conn.execute(
+        """
+        SELECT DISTINCT m.of_id
+        FROM manufacturing_orders m
+        JOIN bom_lines b ON b.parent_article = m.article_id
+        WHERE m.status = 'created' AND b.child_article = ?
+        """,
+        (child_article_id,),
+    ).fetchall()
+    affected: list[str] = []
+    for r in rows:
+        of_id = r["of_id"]
+        if of_id not in state.scheduled_launch_day:
+            continue
+        old_day = state.scheduled_launch_day[of_id]
+        new_day = max(day_current + 1, old_day - days_advance)
+        if new_day < old_day:
+            state.scheduled_launch_day[of_id] = new_day
+            affected.append(of_id)
+    return affected
+
+
+def _pull_forward_all_pending_ofs(
+    conn: sqlite3.Connection,
+    state: "HazardState",
+    day_current: int,
+    days_advance: int,
+) -> list[str]:
+    """V13.0 — Avance TOUS les OFs encore 'created'.
+
+    Effet : intervention qualité couvre l'ensemble du futur ; on
+    récupère du débit en avançant uniformément les lancements.
+    """
+    if days_advance <= 0:
+        return []
+    affected: list[str] = []
+    for of_id, old_day in list(state.scheduled_launch_day.items()):
+        # Ne touche que les OFs encore en attente de lancement
+        row = conn.execute(
+            "SELECT status FROM manufacturing_orders WHERE of_id = ?",
+            (of_id,),
+        ).fetchone()
+        if row is None or row["status"] != "created":
+            continue
+        new_day = max(day_current + 1, old_day - days_advance)
+        if new_day < old_day:
+            state.scheduled_launch_day[of_id] = new_day
+            affected.append(of_id)
+    return affected
+
+
 def _apply_corrective_actions(
     conn: sqlite3.Connection,
     scenario: Scenario,
@@ -615,6 +737,9 @@ def _apply_corrective_actions(
     decision_ref = int(rows[0]["decision_id"])
     action_ref = rows[0]["action_level"]
 
+    # V13.0 — event-driven smoothing reactivity (gated par paramètre)
+    advance_days = _get_event_driven_smoothing_advance_days(conn)
+
     # L5.2 — breakdown : clear immédiat des pannes
     if state.breakdown_ws:
         for ws in list(state.breakdown_ws.keys()):
@@ -627,6 +752,21 @@ def _apply_corrective_actions(
                 "workstation_id": ws,
                 "effect": "breakdown_cleared",
             })
+            # V13.0 : panne résolue → avance les OFs en attente sur ce WS
+            if advance_days > 0:
+                pulled = _pull_forward_pending_ofs_by_ws(
+                    conn, state, ws, day, advance_days,
+                )
+                if pulled:
+                    result.corrective_actions_applied.append({
+                        "day": day,
+                        "decision_id": decision_ref,
+                        "action_level": action_ref,
+                        "effect": "v13_0_smoothing_pulled_forward",
+                        "ws_id": ws,
+                        "of_ids": pulled,
+                        "advance_days": advance_days,
+                    })
 
     # L8.1.a — quality_nc : intervention qualité (réduit scrap futur de 50%)
     if state.nc_count >= 1 and not state.qc_intervention_active:
@@ -637,6 +777,21 @@ def _apply_corrective_actions(
             "action_level": action_ref,
             "effect": "quality_intervention_started",
         })
+        # V13.0 : intervention qualité globale → avance tous les OFs futurs
+        if advance_days > 0:
+            pulled = _pull_forward_all_pending_ofs(
+                conn, state, day, advance_days,
+            )
+            if pulled:
+                result.corrective_actions_applied.append({
+                    "day": day,
+                    "decision_id": decision_ref,
+                    "action_level": action_ref,
+                    "effect": "v13_0_smoothing_pulled_forward",
+                    "scope": "all_pending_qc",
+                    "of_ids": pulled,
+                    "advance_days": advance_days,
+                })
 
     # L8.1.b — po_delay : sourcing alternatif (réception immédiate à l'horizon initial)
     for po_id in list(state.po_delays.keys()):
@@ -664,6 +819,22 @@ def _apply_corrective_actions(
             "qty_alt_sourced": remaining,
             "effect": "po_alternative_sourced",
         })
+        # V13.0 : composant désormais dispo → avance les OFs parents
+        if advance_days > 0 and po_row["article_id"]:
+            pulled = _pull_forward_pending_ofs_by_parent_article(
+                conn, state, po_row["article_id"], day, advance_days,
+            )
+            if pulled:
+                result.corrective_actions_applied.append({
+                    "day": day,
+                    "decision_id": decision_ref,
+                    "action_level": action_ref,
+                    "effect": "v13_0_smoothing_pulled_forward",
+                    "po_id": po_id,
+                    "child_article": po_row["article_id"],
+                    "of_ids": pulled,
+                    "advance_days": advance_days,
+                })
 
 
 def _ensure_applied_actions_table(conn: sqlite3.Connection) -> None:

@@ -13,8 +13,11 @@ import pytest
 
 from pilotage_flux.db import db_session
 from pilotage_flux.flux.smoothing import (
+    _compute_latest_start_horizon_minutes,
     _compute_latest_start_minutes,
+    _estimate_candidate_duration_min,
     _get_due_date_aware_flag,
+    _get_horizon_aware_flag,
     compute_smoothing,
 )
 
@@ -152,6 +155,91 @@ def test_due_date_aware_caps_smoothing_offsets(tmp_db) -> None:
         # V12.6 doit aussi être 0 ou cappé à latest_start
         assert offset_v14 == 0  # premier candidate ⇒ running=0
         assert offset_v126 == 0  # même comportement sur un unique candidate
+
+
+# --- V12.7 — Horizon-aware smoothing tests ---
+
+
+def _enable_horizon_aware(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO parameters (scope, scope_ref, name, value_num) "
+        "VALUES (?, ?, ?, ?)",
+        ("global", None, "smoothing_horizon_aware", 1.0),
+    )
+
+
+def test_horizon_aware_default_off(tmp_db) -> None:
+    """Sans paramètre explicite, V12.7 est désactivé (rétrocompat V1.4)."""
+    with db_session(tmp_db) as conn:
+        assert _get_horizon_aware_flag(conn) is False
+
+
+def test_horizon_aware_flag_enabled_when_param_set(tmp_db) -> None:
+    with db_session(tmp_db) as conn:
+        _enable_horizon_aware(conn)
+        assert _get_horizon_aware_flag(conn) is True
+
+
+def test_estimate_duration_fallback_no_routing(tmp_db) -> None:
+    """Sans routing → fallback 960 min (plancher 60)."""
+    with db_session(tmp_db) as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO articles (article_id, label) VALUES (?, ?)",
+            ("ART-NOROUT", "T"),
+        )
+        conn.execute(
+            "INSERT INTO candidate_orders "
+            "(candidate_id, article_id, quantity, status) "
+            "VALUES (?, ?, 10, 'candidate')",
+            ("CAND-NOROUT", "ART-NOROUT"),
+        )
+        dur = _estimate_candidate_duration_min(conn, "CAND-NOROUT")
+        assert dur == 960
+
+
+def test_horizon_aware_caps_offset_below_horizon(tmp_db) -> None:
+    """latest_start_horizon = horizon_total_min - duration × safety_factor."""
+    with db_session(tmp_db) as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO articles (article_id, label) VALUES (?, ?)",
+            ("ART-H", "T"),
+        )
+        conn.execute(
+            "INSERT INTO candidate_orders "
+            "(candidate_id, article_id, quantity, status) "
+            "VALUES (?, ?, 10, 'candidate')",
+            ("CAND-H", "ART-H"),
+        )
+        # horizon = 30000 min, duration fallback = 960 min, safety = 1
+        latest = _compute_latest_start_horizon_minutes(
+            conn, "CAND-H", horizon_total_min=30000, safety_factor=1.0,
+        )
+        assert latest == 30000 - 960
+        # safety = 10 → cap plus serré
+        latest_safe = _compute_latest_start_horizon_minutes(
+            conn, "CAND-H", horizon_total_min=30000, safety_factor=10.0,
+        )
+        assert latest_safe == 30000 - 9600
+
+
+def test_horizon_aware_clamped_to_zero_when_duration_exceeds_horizon(tmp_db) -> None:
+    """Si la duration estimée dépasse l'horizon → cap à 0."""
+    with db_session(tmp_db) as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO articles (article_id, label) VALUES (?, ?)",
+            ("ART-LONG", "T"),
+        )
+        conn.execute(
+            "INSERT INTO candidate_orders "
+            "(candidate_id, article_id, quantity, status) "
+            "VALUES (?, ?, 10, 'candidate')",
+            ("CAND-LONG", "ART-LONG"),
+        )
+        # horizon = 100 min, duration fallback 960 → cap 0
+        latest = _compute_latest_start_horizon_minutes(
+            conn, "CAND-LONG", horizon_total_min=100,
+        )
+        assert latest == 0
 
 
 def test_due_date_aware_does_not_break_when_due_already_passed(tmp_db) -> None:

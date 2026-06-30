@@ -45,7 +45,7 @@ def _horizon_total_minutes(start: str, end: str) -> int:
 def _get_due_date_aware_flag(conn: sqlite3.Connection) -> bool:
     """V12.6 — Lit le paramètre `smoothing_due_date_aware` (default 0).
 
-    1 = active la version V12.6 (offsets bornés par latest_start)
+    1 = active la version V12.6 (offsets bornés par latest_start_due)
     0 = version V1.4 historique (smoothing libre sur l'horizon)
     """
     val = get_num(
@@ -53,6 +53,70 @@ def _get_due_date_aware_flag(conn: sqlite3.Connection) -> bool:
         name="smoothing_due_date_aware", default=0.0,
     )
     return bool(val and float(val) > 0.5)
+
+
+def _get_horizon_aware_flag(conn: sqlite3.Connection) -> bool:
+    """V12.7 — Lit le paramètre `smoothing_horizon_aware` (default 0).
+
+    Borne l'offset à `horizon_end - duration × safety_factor` pour
+    garantir que l'OF termine avant la fin de simulation. Corrige le
+    vrai défaut Q identifié par §28.13 (V12.6 invalidé, V12.7 cible
+    la vraie cause).
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_horizon_aware", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _get_horizon_safety_factor(conn: sqlite3.Connection) -> float:
+    """V12.7 — Lit `smoothing_horizon_safety_factor` (default 10.0).
+
+    Multiplicateur appliqué à la durée estimée pour absorber
+    l'attente sur workstations (queueing) que la simple somme
+    unit_time × quantity n'inclut pas. Doit être > 1.
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_horizon_safety_factor", default=10.0,
+    )
+    f = float(val) if val is not None else 10.0
+    return max(1.0, f)
+
+
+def _estimate_candidate_duration_min(
+    conn: sqlite3.Connection, candidate_id: str
+) -> int:
+    """Estime la durée totale du candidate.
+
+    durée = quantity × Σ(unit_time_min des operations du routing).
+    Fallback : 960 min. Plancher : 60 min.
+
+    Note : ne modélise pas l'attente sur les workstations (queueing).
+    Un multiplicateur de sécurité est ajouté pour les contextes
+    multi-OFs (voir `compute_smoothing`).
+    """
+    row = conn.execute(
+        """
+        SELECT
+            COALESCE(c.quantity, 1) AS qty,
+            COALESCE(SUM(r.unit_time_min), 0) AS unit_total
+        FROM candidate_orders c
+        LEFT JOIN routing_operations r ON r.article_id = c.article_id
+        WHERE c.candidate_id = ?
+        GROUP BY c.candidate_id
+        """,
+        (candidate_id,),
+    ).fetchone()
+    if row is None:
+        return 960
+    qty = float(row["qty"] or 1.0)
+    unit_total = float(row["unit_total"] or 0.0)
+    duration_min = int(round(qty * unit_total)) if unit_total > 0 else 960
+    if duration_min < 60:
+        duration_min = 60
+    return duration_min
 
 
 def _compute_latest_start_minutes(
@@ -66,14 +130,10 @@ def _compute_latest_start_minutes(
     `latest_start = (due_date - duration_estimée) − horizon_start`
     en minutes. Si la candidate n'a pas de SO parent ou pas de due_date,
     on renvoie `fallback_min` (= horizon total → smoothing libre).
-
-    duration_estimée : on prend la somme des unit_time_min des
-    operations du candidate (via les routings, agrégée par article).
-    À défaut, fallback 480 min/jour × 2 = 960 min.
     """
     row = conn.execute(
         """
-        SELECT so.due_date, c.article_id
+        SELECT so.due_date
         FROM candidate_orders c
         JOIN sales_orders so ON so.sales_order_id = c.sales_order_id
         WHERE c.candidate_id = ?
@@ -89,23 +149,32 @@ def _compute_latest_start_minutes(
     except (ValueError, TypeError):
         return fallback_min
 
-    # Estime la durée totale du candidate via routings
-    dur_row = conn.execute(
-        """
-        SELECT COALESCE(SUM(unit_time_min), 0) AS total_min
-        FROM routing_operations
-        WHERE article_id = ?
-        """,
-        (row["article_id"],),
-    ).fetchone()
-    duration_min = int(dur_row["total_min"] or 960) if dur_row else 960
-    if duration_min < 60:
-        duration_min = 60  # plancher pratique
-
+    duration_min = _estimate_candidate_duration_min(conn, candidate_id)
     latest_start_min = int(
         (due_dt - start_dt).total_seconds() // 60
     ) - duration_min
     return max(0, latest_start_min)
+
+
+def _compute_latest_start_horizon_minutes(
+    conn: sqlite3.Connection,
+    candidate_id: str,
+    horizon_total_min: int,
+    safety_factor: float = 10.0,
+) -> int:
+    """V12.7 — Calcule l'offset maximal tel que l'OF puisse terminer
+    avant `horizon_end`, incluant un facteur d'attente queueing.
+
+    `latest_start_horizon = horizon_total_min - duration × safety_factor`.
+
+    Le multiplicateur `safety_factor` couvre l'écart entre temps de
+    cycle Σ(unit_time × qty) et temps elapsed réel (queueing,
+    setups, transferts inter-WS). Valeur typique : 10-50× selon le
+    taux d'utilisation des workstations.
+    """
+    duration_min = _estimate_candidate_duration_min(conn, candidate_id)
+    effective_duration = int(round(duration_min * max(1.0, safety_factor)))
+    return max(0, horizon_total_min - effective_duration)
 
 
 def compute_smoothing(
@@ -120,6 +189,12 @@ def compute_smoothing(
     V12.6 (data-driven, via `smoothing_due_date_aware = 1`) : chaque
     offset est borné par `latest_start = due_date - duration` afin de
     garantir que la livraison reste possible avant la due_date.
+
+    V12.7 (via `smoothing_horizon_aware = 1`) : chaque offset est borné
+    par `horizon_end - duration` pour garantir que l'OF termine avant
+    la fin de simulation. Cible la vraie cause du défaut Q (OFs stuck
+    `in_progress` avec qty_good=0) identifiée par §28.13 après que
+    V12.6 a été invalidé.
     """
     contract = fetch_contract(conn, contract_id)
     if contract is None:
@@ -143,6 +218,10 @@ def compute_smoothing(
 
     start_dt = datetime.fromisoformat(contract.horizon_start)
     due_date_aware = _get_due_date_aware_flag(conn)
+    horizon_aware = _get_horizon_aware_flag(conn)
+    safety_factor = (
+        _get_horizon_safety_factor(conn) if horizon_aware else 1.0
+    )
 
     # Calcul cumulatif : le i-ème candidate démarre quand on a déjà engagé
     # somme(qty[0..i-1]) sur le total.
@@ -155,19 +234,27 @@ def compute_smoothing(
     for cand in candidates:
         qty = float(cand["qty_in_contract"])
         linear_offset = int(round((running / total_qty) * horizon_min))
+        offset_min = linear_offset
         if due_date_aware:
-            latest_start = _compute_latest_start_minutes(
+            latest_start_due = _compute_latest_start_minutes(
                 conn,
                 candidate_id=cand["candidate_id"],
                 horizon_start=contract.horizon_start,
                 fallback_min=horizon_min,
             )
-            # V12.6 : on borne par latest_start. Si la valeur cible
-            # linéaire dépasse latest_start, on recale pour respecter
-            # la due_date.
-            offset_min = min(linear_offset, latest_start)
-        else:
-            offset_min = linear_offset
+            offset_min = min(offset_min, latest_start_due)
+        if horizon_aware:
+            # V12.7 : borne par horizon_end - duration × safety pour
+            # que l'OF ait le temps de terminer avant la fin de
+            # simulation (incluant l'attente queueing). Corrige la
+            # vraie cause du défaut Q identifiée par §28.13.
+            latest_start_horizon = _compute_latest_start_horizon_minutes(
+                conn,
+                candidate_id=cand["candidate_id"],
+                horizon_total_min=horizon_min,
+                safety_factor=safety_factor,
+            )
+            offset_min = min(offset_min, latest_start_horizon)
         planned_dt = start_dt + timedelta(minutes=offset_min)
         planned_start_iso = planned_dt.isoformat(sep=" ")
         conn.execute(

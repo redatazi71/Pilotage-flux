@@ -974,3 +974,44 @@ CREATE INDEX IF NOT EXISTS idx_pc_origin
     ON production_contracts (origin_kind, origin_ref);
 CREATE INDEX IF NOT EXISTS idx_pc_status
     ON production_contracts (status);
+
+-- ---------------------------------------------------------------------
+-- MACRS Couche 1 — Matrice d'incidence causale enrichie
+--   46 racines × 7 catégories Δ = 175 cellules d'incidence binaire.
+--   Référence : matrice_incidence_causale.md (couche 1).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS macrs_categories (
+    categorie_code  TEXT PRIMARY KEY,    -- Mat | Cap | Op | Qual | Temp | Info | Sync
+    label           TEXT NOT NULL,
+    definition      TEXT NOT NULL,
+    ordre           INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS macrs_racines (
+    racine_id           TEXT PRIMARY KEY,    -- R001..R046, identifiant stable
+    domaine             TEXT NOT NULL,
+        -- demande | approvisionnement | logistique | production | qualite
+    sous_domaine        TEXT NOT NULL,
+    label               TEXT NOT NULL,
+    predictibilite      TEXT NOT NULL,
+        -- 'forte' | 'moyenne' | 'faible'
+    c1_precurseur       TEXT NOT NULL,    -- 'O' | 'N'
+    c2_cumulative       TEXT NOT NULL,    -- 'O' | 'N' | 'P' (partiel)
+    c3_aleatoire        TEXT NOT NULL,    -- 'non' | 'partiel' | 'dominant'
+    mecanisme           TEXT,
+    observabilite       TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_macrs_racines_domaine
+    ON macrs_racines (domaine, sous_domaine);
+
+-- Incidence binaire : 1 ligne par couple actif (175 attendus).
+CREATE TABLE IF NOT EXISTS macrs_incidence (
+    racine_id       TEXT NOT NULL REFERENCES macrs_racines(racine_id),
+    categorie_code  TEXT NOT NULL REFERENCES macrs_categories(categorie_code),
+    PRIMARY KEY (racine_id, categorie_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_macrs_incidence_cat
+    ON macrs_incidence (categorie_code);

@@ -8,7 +8,7 @@ la doctrine (§7 bis glossaire formel, §21 bis MVP V0).
 
 **V0** (L0.1 → L0.6), **V1** (L1.1 → L1.7), **V2** (L2.1 → L2.7), **V3** (L3.1 → L3.7), **V4** (L4.1 → L4.3), **V5** (L5.1 → L5.2), **V6** (L6.1 → L6.2), **V7** (L7.1), **V8** (L8.1 + L8.3 + L8.4) et **V9** (L9.1 → L9.5) complets.
 
-- 293 tests pytest verts, dont onze tests d'acceptation end-to-end :
+- 299 tests pytest verts, dont douze tests d'acceptation end-to-end :
   - `test_acceptance_golden_path` V0 mono-niveau (data-driven + event-sourcing)
   - `test_acceptance_v1` multi-niveau (contrats de flux + freeze + P3 inverse)
   - `test_acceptance_v2` MES enrichi (stocks/PO + consommations + qualité + logistique + alternatives)
@@ -475,6 +475,65 @@ capacité effective.
 `run_variance_study` et `run_random_study` exposent un callback
 `on_run_complete(scen, doctrine, seed)`. La CLI consomme via
 `rich.progress` : barre, ETA, temps écoulé, MofN.
+
+## V11 phase B — CPM + arbitrage routing parallèle/hybride
+
+**L11.1 — CPM forward/backward pass** (`aps/cpm_scheduling.py`) :
+`compute_cpm_for_of(of_id)` calcule EST/EFT/LST/LFT/slack pour chaque
+opération et identifie le chemin critique. `compute_makespan(of_id)`
+renvoie l'EFT de la dernière op. Sur un routing linéaire, toutes les
+ops sont critiques (slack = 0).
+
+**L11.2 — Arbitrage routing** (`aps/routing_arbitrage.py`) :
+`arbitrate_routing_for_of(of_id)` pour chaque op compare le poste
+préféré aux alternatives déclarées dans `routing_alternatives`, en
+tenant compte de la charge actuelle (Σ unit_time × qty pending).
+Choisit le poste minimisant l'EFT. Bascule si `savings ≥ min_savings_min`
+(défaut 30 min). Stratégies couvertes naturellement :
+
+- **Linéaire** : tous les OFs suivent le routing principal
+- **Parallèle** : un OF bascule sur l'alternative (poste préféré saturé)
+- **Hybride** : certaines ops basculent, d'autres restent — au sein d'un même OF
+
+Tous les seuils data-driven via `parameters` :
+- `routing_arbitrage_enabled` (1/0)
+- `routing_arbitrage_min_savings_min` (défaut 30)
+
+**L11.3 — Routing alternatives** : `fixtures_extended/routing_alternatives.csv`
+fourni à la main. Pour les fixtures aléatoires, `FixtureSpec.routing_alternatives_ratio`
+contrôle la fréquence (défaut 30 % des ops reçoivent une alternative
+1.05-1.40× plus lente sur un poste choisi au hasard).
+
+**L11.4 — Wire dans runner** : appelé après chaque `promote_candidate_to_of`
+dans les 4 doctrines. Trace `arbitrage OF X: strategy (économie N min)`
+dans `result.notes` quand l'arbitrage bascule.
+
+### Résultats (100 runs, 5 fixtures × 5 scénarios × 4 doctrines)
+
+Configuration multi-goulot serrée (4 goulots forts, routing_alternatives 40%) :
+
+| Doctrine | Coût | Δ vs OF |
+|---|---|---|
+| OF | 272 938 ± 83 358 € | +0 |
+| FLUX | 213 182 ± 64 804 € | **−59 757** |
+| OF+EVENT | 267 322 ± 80 500 € | −5 617 |
+| EVENT | 207 316 ± 62 895 € | **−65 623** |
+
+**Lecture honnête** : par rapport à L10.7 sans CPM (−58 595 / −64 801),
+les écarts doctrinaux sont **quasi identiques**. CPM + arbitrage activent
+des bascules (14+ par OF en moyenne), mais l'effet économique global est
+marginal (~+1 k€). Trois raisons :
+
+1. Le critère d'arbitrage est greedy sur EFT, **sans coût horaire**.
+   L'arbitrage peut basculer sur un poste plus rapide mais plus cher.
+2. Les alternatives sont par construction plus lentes (factor 1.05-1.40),
+   ce qui limite les gains réels.
+3. Le runner sériale 1 op/poste/jour : la bénéfice d'une charge mieux
+   répartie n'est pas exploité par le pas de simulation jour.
+
+→ **CPM est livré, fonctionnel et testé**, mais pour faire payer
+l'arbitrage il faut soit un critère cost-aware (phase C), soit un runner
+plus fin (Phase D potentielle).
 
 ### L10.7 — Validation multi-goulot serré
 

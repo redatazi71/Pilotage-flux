@@ -27,6 +27,7 @@ from pilotage_flux.data_factory import (
     DEFAULT_SPEC,
     FixtureSpec,
     generate_random_fixtures,
+    seed_random_routing_alternatives,
 )
 
 

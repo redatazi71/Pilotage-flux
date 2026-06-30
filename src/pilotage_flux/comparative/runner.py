@@ -1841,6 +1841,16 @@ def run_event_doctrine(
         "tolerance_threshold_escalate": 2.00,
         "tolerance_threshold_replan_global": 3.50,
     }
+    # Pour les pilotages BCE : profil doctrinal CONSERVATIVE qui
+    # favorise l'absorption (N1/N2) plutôt que la replanification
+    # (N3/N4). Cohérent avec la doctrine cybernétique : moins de
+    # nervosité de planning grâce à la chaîne MACRS+Delta.
+    from pilotage_flux.comparative.bce_wire import (
+        get_tolerance_defaults_for_doctrine,
+    )
+    bce_defaults = get_tolerance_defaults_for_doctrine(doctrine)
+    if bce_defaults:
+        defaults.update(bce_defaults)
     if parameter_overrides:
         defaults.update(parameter_overrides)
 
@@ -2100,6 +2110,16 @@ def run_of_event_doctrine(
         "tolerance_threshold_escalate": 2.00,
         "tolerance_threshold_replan_global": 3.50,
     }
+    # Pour les pilotages BCE : profil doctrinal CONSERVATIVE qui
+    # favorise l'absorption (N1/N2) plutôt que la replanification
+    # (N3/N4). Cohérent avec la doctrine cybernétique : moins de
+    # nervosité de planning grâce à la chaîne MACRS+Delta.
+    from pilotage_flux.comparative.bce_wire import (
+        get_tolerance_defaults_for_doctrine,
+    )
+    bce_defaults = get_tolerance_defaults_for_doctrine(doctrine)
+    if bce_defaults:
+        defaults.update(bce_defaults)
     if parameter_overrides:
         defaults.update(parameter_overrides)
 

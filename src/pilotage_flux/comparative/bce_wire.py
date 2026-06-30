@@ -55,6 +55,43 @@ def bce_bootstrap(conn: sqlite3.Connection) -> None:
     seed_default_delta_levels(conn)
 
 
+# Mapping pilotage → profil de tolérance doctrinal.
+# La doctrine v1.3 prévoit que BCE absorbe plus (favorise N1/N2) et
+# replanifie moins, d'où le profil CONSERVATIVE pour les pilotages BCE.
+# Les pilotages +EVENT sans BCE gardent les seuils permissifs
+# historiques (DEFAULT). Les pilotages pures OF/FLUX n'utilisent pas
+# le moteur Delta.
+TOLERANCE_DEFAULTS_BY_DOCTRINE: dict[str, dict[str, float]] = {
+    # BCE : seuils larges pour absorber (CONSERVATIVE)
+    "of_event_bce": {
+        "tolerance_threshold_watch": 0.50,
+        "tolerance_threshold_correct_local": 1.00,
+        "tolerance_threshold_replan_local": 1.50,
+        "tolerance_threshold_escalate": 2.00,
+        "tolerance_threshold_replan_global": 3.00,
+    },
+    "event_bce": {
+        "tolerance_threshold_watch": 0.50,
+        "tolerance_threshold_correct_local": 1.00,
+        "tolerance_threshold_replan_local": 1.50,
+        "tolerance_threshold_escalate": 2.00,
+        "tolerance_threshold_replan_global": 3.00,
+    },
+}
+
+
+def get_tolerance_defaults_for_doctrine(
+    doctrine: str,
+) -> dict[str, float]:
+    """Renvoie les seuils par défaut du filtre dual pour un pilotage.
+
+    Si le pilotage est BCE, renvoie les seuils CONSERVATIVE (favorise
+    N1/N2). Sinon renvoie un dict vide → le caller utilise ses
+    propres defaults historiques.
+    """
+    return dict(TOLERANCE_DEFAULTS_BY_DOCTRINE.get(doctrine, {}))
+
+
 def bce_apply_hazard_hook(
     conn: sqlite3.Connection,
     hazard,

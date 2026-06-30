@@ -117,21 +117,27 @@ DEFAULT_PROFILE = ToleranceProfile(
     latency_minutes=DEFAULT_LATENCY_MINUTES,
 )
 
-# Tolérance large + latence : le système réagit moins, accepte plus
-# d'écart avant d'agir. Utile pour pilotages OF / FLUX sans BCE.
+# Tolérance large : le système favorise l'absorption (N1) et garde
+# l'escalade (N3/N4) pour les événements vraiment exceptionnels. C'est
+# l'esprit doctrinal de la BCE qui doit ABSORBER plus et REPLANIFIER
+# moins. Profil utilisé par les pilotages BCE.
+#
+# Avec ces seuils, un score_combined typique 0.6-0.8 (qui correspond
+# à un hazard standard sur 1 occurrence) tombe en informer/surveiller
+# (L1/L2 = N1) au lieu de replanifier.
 CONSERVATIVE_PROFILE = ToleranceProfile(
     label="conservative",
-    threshold_watch=0.30,
-    threshold_correct_local=0.60,
-    threshold_replan_local=0.90,
-    threshold_escalate=1.20,
-    threshold_replan_global=1.80,
+    threshold_watch=0.50,
+    threshold_correct_local=1.00,
+    threshold_replan_local=1.50,
+    threshold_escalate=2.00,
+    threshold_replan_global=3.00,
     window_hours=48,
     latency_minutes=30,
 )
 
-# Tolérance étroite + latence 0 : déclenche vite. Pour pilotages
-# +EVENT et +BCE.
+# Tolérance étroite : déclenche vite, plus de N3/N4. Utile pour
+# pilotages réactifs sans MACRS (qui ne peuvent pas absorber).
 REACTIVE_PROFILE = ToleranceProfile(
     label="reactive",
     threshold_watch=0.10,

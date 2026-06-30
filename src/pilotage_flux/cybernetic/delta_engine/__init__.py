@@ -76,6 +76,14 @@ from pilotage_flux.cybernetic.delta_engine.tolerance_filter import (
     get_current_tolerance_profile,
     map_action_to_niveau,
 )
+from pilotage_flux.cybernetic.delta_engine.macrs_wiring import (
+    DEFAULT_BOOST_CRITICITE,
+    DEFAULT_BOOST_RATIO_HIGH,
+    DEFAULT_BOOST_RATIO_LOW,
+    NIVEAU_TO_AUTONOMY,
+    CyberneticDecisionResult,
+    record_and_decide,
+)
 
 __all__ = [
     "AUTONOMY_LEVEL_L1",
@@ -132,4 +140,11 @@ __all__ = [
     "evaluate_and_decide",
     "get_current_tolerance_profile",
     "map_action_to_niveau",
+    # B.3 — wiring MACRS → Delta
+    "DEFAULT_BOOST_CRITICITE",
+    "DEFAULT_BOOST_RATIO_HIGH",
+    "DEFAULT_BOOST_RATIO_LOW",
+    "NIVEAU_TO_AUTONOMY",
+    "CyberneticDecisionResult",
+    "record_and_decide",
 ]

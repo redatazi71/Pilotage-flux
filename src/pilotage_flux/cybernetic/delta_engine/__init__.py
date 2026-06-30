@@ -64,6 +64,18 @@ from pilotage_flux.cybernetic.delta_engine.decisions import (
     mark_decision_expired,
     mark_decision_rejected,
 )
+from pilotage_flux.cybernetic.delta_engine.tolerance_filter import (
+    ACTION_TO_NIVEAU,
+    CONSERVATIVE_PROFILE,
+    DEFAULT_PROFILE,
+    PROFILES_BY_LABEL,
+    REACTIVE_PROFILE,
+    ToleranceProfile,
+    apply_tolerance_profile,
+    evaluate_and_decide,
+    get_current_tolerance_profile,
+    map_action_to_niveau,
+)
 
 __all__ = [
     "AUTONOMY_LEVEL_L1",
@@ -109,4 +121,15 @@ __all__ = [
     "mark_decision_executed",
     "mark_decision_expired",
     "mark_decision_rejected",
+    # B.2 — filtre dual tolérances formalisé
+    "ACTION_TO_NIVEAU",
+    "CONSERVATIVE_PROFILE",
+    "DEFAULT_PROFILE",
+    "PROFILES_BY_LABEL",
+    "REACTIVE_PROFILE",
+    "ToleranceProfile",
+    "apply_tolerance_profile",
+    "evaluate_and_decide",
+    "get_current_tolerance_profile",
+    "map_action_to_niveau",
 ]

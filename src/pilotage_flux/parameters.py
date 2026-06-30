@@ -45,6 +45,32 @@ def get_num(
     return row["value_num"]
 
 
+def get_text(
+    conn: sqlite3.Connection,
+    *,
+    scope: str,
+    scope_ref: str | None,
+    name: str,
+    default: str | None = None,
+) -> str | None:
+    """Lit la valeur texte d'un paramètre courant (`valid_to IS NULL`)."""
+    row = conn.execute(
+        """
+        SELECT value_text FROM parameters
+        WHERE scope = ?
+          AND (scope_ref IS ? OR scope_ref = ?)
+          AND name = ?
+          AND valid_to IS NULL
+        ORDER BY version DESC
+        LIMIT 1
+        """,
+        (scope, scope_ref, scope_ref, name),
+    ).fetchone()
+    if row is None:
+        return default
+    return row["value_text"]
+
+
 def workstation_capacity_factor(
     conn: sqlite3.Connection, workstation_id: str
 ) -> float:

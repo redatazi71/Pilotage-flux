@@ -72,6 +72,14 @@ from pilotage_flux.cybernetic.macrs.pareto import (
     pareto_racines,
     pareto_racines_in_category,
 )
+from pilotage_flux.cybernetic.macrs.hazard_labels import (
+    HAZARD_TO_CATEGORIE,
+    HAZARD_TO_RACINE,
+    default_categorie_for,
+    default_racine_for,
+    labeled_hazard,
+    resolve_racine,
+)
 
 __all__ = [
     "CATEGORIES",
@@ -128,4 +136,11 @@ __all__ = [
     "pareto_criticite",
     "pareto_racines",
     "pareto_racines_in_category",
+    # C.1 — étiquetage des hazards
+    "HAZARD_TO_CATEGORIE",
+    "HAZARD_TO_RACINE",
+    "default_categorie_for",
+    "default_racine_for",
+    "labeled_hazard",
+    "resolve_racine",
 ]

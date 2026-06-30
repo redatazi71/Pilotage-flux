@@ -93,12 +93,20 @@ def bce_apply_hazard_hook(
         actor="auto:bce_loop",
     )
     if res.skipped_reason is not None:
-        return {
+        # Même quand le mapping standard est manquant, on tente
+        # l'émission zone libre (forecast deviation) si applicable.
+        zone_libre_info = _emit_zone_libre_if_applicable(
+            conn, hazard, occ.isoformat(), decided,
+        )
+        trace = {
             "bce_skipped": res.skipped_reason,
             "kind": hazard.kind,
         }
+        if zone_libre_info is not None:
+            trace.update(zone_libre_info)
+        return trace
     cyber = res.cybernetic_decision
-    return {
+    trace = {
         "bce_deviation_id": res.deviation_id,
         "bce_racine_id": res.racine_id,
         "bce_categorie_code": res.categorie_code,
@@ -108,6 +116,42 @@ def bce_apply_hazard_hook(
         "bce_approval_queue_id": (
             cyber.approval_queue_id if cyber else None
         ),
+    }
+    # Émission complémentaire zone libre si le hazard a un mapping
+    # forecast (par ex. URGENT_ORDER, PO_DELAY).
+    zone_libre_info = _emit_zone_libre_if_applicable(
+        conn, hazard, occ.isoformat(), decided,
+    )
+    if zone_libre_info is not None:
+        trace.update(zone_libre_info)
+    return trace
+
+
+def _emit_zone_libre_if_applicable(
+    conn: sqlite3.Connection,
+    hazard,
+    occurred_at: str,
+    decided_at: str,
+) -> dict | None:
+    """Émet une déviation forecast dédiée zone libre si le hazard
+    a un mapping dans HAZARD_TO_FORECAST_RACINE.
+
+    Renvoie un dict de trace ou None si pas de mapping.
+    """
+    from pilotage_flux.cybernetic.macrs.forecast_emission import (
+        emit_forecast_deviation,
+    )
+    res = emit_forecast_deviation(
+        conn, hazard,
+        occurred_at=occurred_at, decided_at=decided_at,
+    )
+    if res.skipped_reason is not None:
+        return None
+    return {
+        "zone_libre_deviation_id": res.deviation_id,
+        "zone_libre_racine_id": res.racine_id,
+        "zone_libre_categorie_code": res.categorie_code,
+        "zone_libre_delta_decision_id": res.delta_decision_id,
     }
 
 
@@ -132,6 +176,11 @@ def bce_kpis(conn: sqlite3.Connection) -> dict:
     pending = conn.execute(
         "SELECT COUNT(*) AS n FROM approval_queue WHERE status='pending'"
     ).fetchone()
+    # Zone libre : decisions liées aux racines forecast R002/R003/R017
+    from pilotage_flux.cybernetic.macrs.forecast_emission import (
+        count_zone_libre_decisions,
+    )
+    zl = count_zone_libre_decisions(conn)
     return {
         "delta_decisions_by_niveau": by_niveau,
         "delta_decisions_by_cadrage_level": by_cadrage,
@@ -143,6 +192,10 @@ def bce_kpis(conn: sqlite3.Connection) -> dict:
         "macrs_cells_active": int(macrs_active["n"]) if macrs_active else 0,
         "macrs_events_total": int(macrs_events["n"]) if macrs_events else 0,
         "approval_queue_pending": int(pending["n"]) if pending else 0,
+        # Zone libre
+        "zone_libre_n_decisions": zl["n_total"],
+        "zone_libre_by_racine": zl["by_racine"],
+        "zone_libre_by_niveau": zl["by_niveau"],
     }
 
 

@@ -795,6 +795,80 @@ cascade de pannes synthétiques. Il faudrait répliquer sur des
 scénarios industriels réels (mix demande, aléas calibrés) pour
 confirmer le trade-off.
 
+### §24.8.7 Pourquoi EVENT perd-il à tolérance stricte ? — diagnostic technique
+
+**Question posée** : si le flux est censé absorber les chocs et
+l'event sourcing les corriger, pourquoi EVENT (flux + event sourcing)
+livre seulement 85 % à tol=0j vs 100 % pour OF/OF+EVENT ?
+
+**Réponse — défaut doctrinal structurel identifié dans le code** :
+
+#### Cause 1 — Le smoothing ignore les due_dates
+
+Code `src/pilotage_flux/flux/smoothing.py:79` :
+
+```python
+offset_min = int(round((running / total_qty) * horizon_min))
+```
+
+Le smoothing étale les lancements **linéairement sur l'horizon
+entier**, proportionnellement aux quantités cumulées. Il ne
+consulte **jamais** les `due_dates` des SOs parent. Conséquence :
+un OF dont le parent SO est due day 10 peut être planifié day 12 si
+l'horizon va jusqu'à day 18. Le retard est **introduit par le
+smoothing lui-même**.
+
+#### Cause 2 — L'event sourcing ne détecte pas un plan intrinsèquement en retard
+
+Code `src/pilotage_flux/events_v3/dual_tolerance.py` :
+
+Le V3 réagit aux **écarts attendu/réel**. Si le smoothing planifie
+un OF à day 12 et qu'il termine effectivement day 12, **l'event
+sourcing voit `réel == attendu`** et ne déclenche aucune action.
+
+Le retard est dans l'**attendu lui-même**, pas dans l'exécution.
+L'event sourcing est aveugle à ce cas par construction.
+
+#### Cause 3 — V3 actionnel n'a pas d'action de rattrapage
+
+Code `comparative/runner._apply_corrective_actions` couvre 4 types
+d'aléas (`HAZARD_BREAKDOWN`, `HAZARD_QUALITY_NC`, `HAZARD_PO_DELAY`,
+`HAZARD_URGENT_ORDER`). Aucune action « *rattraper retard de plan
+vs due_date* » n'est définie.
+
+#### Verdict
+
+| Possible cause | Vérifiée ? |
+|---|---|
+| Mauvais paramétrage (smoothing trop agressif) | ❌ — c'est l'algorithme entier qui ignore due_date, pas un seuil mal réglé |
+| Objectif de planification incorrect | ✅ — objectif implicite = « minimiser congestion goulot » ≠ « respecter due_dates » |
+| V3 actionnel insuffisant | ✅ — n'a pas d'action « replan due-date aware » |
+| Conception structurelle | ✅ — V0-V11 n'a pas de mécanisme due-date-aware dans le smoothing |
+
+**Implication doctrinale** : la perte d'ontime sur tol=0j n'est
+**pas un échec du flux ni de l'event sourcing en tant que disciplines**.
+C'est un **défaut d'objectif** dans l'algorithme `flux/smoothing.py`
+qui mérite une extension dédiée — proposée comme **V12.6 Due-date
+aware smoothing** (cf. §28.12 ci-après).
+
+### §28.12 V12.6 — Due-date aware smoothing (proposition d'extension)
+
+**Diagnostic §24.8.7** : le smoothing actuel maximise l'étalement
+sans contrainte de deadline. Trois pistes correctives :
+
+| Approche | Mécanisme | Complexité |
+|---|---|---|
+| **V12.6.a Backward scheduling** | Calculer `latest_start = due_date − duration` pour chaque OF ; smoothing borné à `[earliest_start, latest_start]` | Faible (~½ j) |
+| **V12.6.b Slack-priority + smoothing résiduel** | Ordonner les OFs par slack croissant (`due − duration`) puis smoothing uniquement sur l'horizon résiduel | Moyenne (~1 j) |
+| **V12.6.c Optimisation due-date aware** | CP-SAT mixte : objectif = `α × congestion_goulot + β × Σ tardiveté` | Élevée (~2 j) — réutilise V12.2 |
+
+**Effet attendu** : ramener FLUX/EVENT à 95-100 % de disponibilité
+SO-level même sur tolérance stricte (tol=0j), au prix d'une
+fraction de gain coût (estimation : −2 à −5 %).
+
+Cette extension est **identifiée mais non livrée** dans V12 actuel.
+Elle s'inscrit naturellement après V12.5 dans la roadmap.
+
 ### §24.10.1 Lectures clés des matrices
 
 **1. Quelle paire est la plus coûteuse ?**
@@ -989,6 +1063,174 @@ doctrinal n'est pas un artefact**, ni des choix de scénarios
 (§7.3a), ni des choix de seuils internes (§7.3b).
 
 ![Sensibilité directe des 3 paramètres data-driven (480 runs)](charts/point3_direct_sensitivity.png)
+
+---
+
+## §29. Démarche d'implantation progressive (industriel)
+
+L'implantation de la doctrine pilotage par flux dans un atelier
+réel doit être **progressive**, avec des critères Go/No-Go mesurés
+entre chaque phase. Cette section synthétise la séquence
+recommandée tirée des 8 000 runs cumulés et des limites mesurées.
+
+### §29.1 Prérequis (Phase 0, 3-6 mois)
+
+**Conditions techniques** :
+
+- MES capable de capturer événements (start, finish, scrap par OF)
+- ERP exposant due_dates, BOM, routings
+- Lien MES/ERP fiable (latence < 1 h)
+
+**Conditions organisationnelles** :
+
+- Volonté direction (prod + qualité + DSI alignés)
+- Choix du **profil cible** (SMALL/MEDIUM/LARGE V12.5 §28.10.2)
+- Identification du goulot principal (étape 1 TOC Goldratt)
+- Sélection du **produit pilote** : à tolérance ontime large
+  (≥ 3 jours) pour éviter le défaut §24.8.7
+
+**Livrable** : cartographie VSM, KPIs as-is, charte projet.
+
+### §29.2 Baseline mesurée OF-driven (Phase 1, 3 mois)
+
+**Quoi** : instrumenter le pilotage OF existant **avant tout changement**.
+
+| KPI à mesurer | Source | Fréquence |
+|---|---|---|
+| Lead time moyen + dispersion | MES | quotidienne |
+| WIP journalier | MES | quotidienne |
+| Nervosité (replans APS / jour) | ERP/APS | hebdomadaire |
+| Coût opérationnel (matière + MOD + MOI + scrap) | comptabilité | mensuelle |
+| Ontime delivery (% SOs livrées dans due_date) | ERP | quotidienne |
+
+**Critère Go/No-Go** : 90 jours consécutifs de mesure fiable. Sans
+baseline, **pas de comparable post-déploiement**.
+
+### §29.3 Event sourcing seul (Phase 2, 6 mois)
+
+**Quoi** : garder OF, **ajouter par-dessus** la couche événementielle V3.
+
+**Modules à activer** : `events_v3/expected.py`, `matching.py`,
+`dual_tolerance.py`, `comparative/learning.py`.
+
+**Apports validés** (sur 1 600 runs Random) :
+
+- **−2.8 % coût** (modeste mais mesurable)
+- **÷3.9 nervosité** (gain massif)
+- **134 détections + 404 causes attachées / run**
+
+**Risque** : MINIMAL (couche additive, désactivable).
+
+**Critère Go** : nervosité ÷ ≥ 3 + coût ≤ baseline + adoption équipe.
+
+### §29.4 Lissage premier flux (Phase 3, 6-12 mois)
+
+**Quoi** : sur **1 produit ou 1 ligne**, basculer en FLUX.
+
+**Modules** : `flux/contracts.py`, `flux/smoothing.py`,
+`flux/freeze.py`, `flux/buffers.py`, `gates/p3.py`.
+
+**Apports attendus** (sur produit pilote) :
+
+- −15 à −25 % coût
+- ÷1.6 à ÷2.3 lead time
+- −33 à −38 % WIP
+
+**Risques mesurés** :
+
+- ⚠ **Retard ontime sur tolérance stricte** (§24.8.6 / §24.8.7) :
+  FLUX 77-84 % à tol=0j contre 100 % pour OF.
+- **Mitigation obligatoire** : choisir produit à tolérance ≥ 3 j
+  (FLUX remonte à 95-96 %).
+
+**Critère Go** : ontime maintenue dans tolérance produit + coût
+baissé ≥ 10 % + smoothing accepté par opérateurs.
+
+### §29.5 Multi-flux et P3 collective (Phase 4, 12 mois)
+
+**Quoi** : étendre à plusieurs lignes/familles.
+
+**Modules** : `gates/p3_collective.py`, identification multi-goulots,
+seuils Little, tampons DBR.
+
+**Apports** :
+
+- Gestion des arbitrages multi-flux
+- PARTIAL_FREEZE anti-sur-engagement quand goulot saturé > 90 %
+- Convergence vers profil MEDIUM/LARGE V12.5
+
+**Risques** :
+
+- Conflits multi-contrats sur le goulot commun
+- Limite DBR : 2 goulots simultanés cassent la régulation (§24.10.1)
+
+**Critère Go** : ≥ 2 flux stables coexistants + saturation goulot
+maîtrisée < 90 %.
+
+### §29.6 Couche cybernétique V12 (Phase 5, 12-24 mois, optionnelle)
+
+**Quoi** : activer V12 selon besoin opérationnel.
+
+| Brique V12 | Activation recommandée | Apport |
+|---|---|---|
+| V12.4 Workflow humain (rôles, audit, escalation, dashboard) | **dès phase 3** | Traçabilité ISO/IATF |
+| V12.3 Delta engine 4 niveaux (L1-L4) | phase 4 | Gradation autonomie ↔ validation humaine |
+| V12.5 Matrice d'orchestration + profils JSON | phase 4 | Configuration data-driven |
+| V12.2 CP-SAT dynamique zone négociable | phase 5 | Replan automatique optimisé |
+| V12.1 + V12.1.1 Forecasting feedback-aware | phase 5 | Anticipation long terme |
+| V12.2.1 RejectionMemory + FragilityWeights | phase 5 | Apprentissage des échecs |
+
+**Critère Go pour V12** : V11 maîtrisé + nervosité < 0.1 + workflow
+validation humaine stable.
+
+### §29.7 Pilotage cybernétique complet (Phase 6, long terme)
+
+**Indicateurs de pilotage en régime nominal** :
+
+- Disponibilité SO-level réelle ≥ 95 % (Point 2)
+- Lag moyen approbation L3 < seuil profil
+- Taux d'escalation L3 → L4 < 10 %
+- Bias forecast contrôlé (|biais| < 5 %)
+- Rejection rate L3+L4 < 15 %
+
+### §29.8 Vue d'ensemble — calendrier indicatif
+
+| Phase | Durée | Risque | Apport cumulé vs baseline |
+|---|---|---|---|
+| 0. Audit | 3-6 mois | nul | mesure as-is |
+| 1. Baseline | 3 mois | nul | référence |
+| 2. Event sourcing | 6 mois | faible | −3 % coût, ÷4 nervosité, traçabilité |
+| 3. Flux pilote | 6-12 mois | moyen (ontime) | −15 à −25 % coût (produit pilote) |
+| 4. Multi-flux | 12 mois | moyen | gain multi-flux + P3 collective |
+| 5. V12 cybernétique | 12-24 mois | faible | apprentissage + automation |
+| 6. Pilotage cyber | continu | nul | optimisation continue |
+| **Total** | **36-60 mois** | progressif | doctrine complète |
+
+### §29.9 Pièges à éviter (issus des limites mesurées)
+
+| Piège | Conséquence | Mitigation |
+|---|---|---|
+| Sauter phase 2 | Pas de couche de mesure | Toujours mesurer avant changer |
+| Phase 3 sans baseline (phase 1) | Pas de comparable | Phase 1 obligatoire |
+| Produit pilote à tolérance ontime stricte (< 3 j) | Ontime dégradé (§24.8.6) | Choisir produit à tolérance ≥ 3 j ou attendre V12.6 |
+| V12 sans V11 stable | Complexité non maîtrisée | V12 vient après V11 |
+| 2 goulots simultanés | DBR cassé (×1.52 ampli) | Identifier UN goulot avant phase 4 |
+| Appro × Demande sans double-sourcing | Mur intrinsèque (6.8 j MTTR irréductible) | Hors doctrine — sécuriser appro |
+| Activer phase 3 sur produit à due_date serrée | Cf. §24.8.7 défaut smoothing | Attendre V12.6 due-date-aware |
+
+### §29.10 Lien vers les 6 briques V12
+
+Cette démarche s'appuie sur les briques V12 livrées dans le code :
+
+| Phase démarche | Brique V12 mobilisée |
+|---|---|
+| Phase 3 (flux pilote) | V12.1, V12.2 si needed |
+| Phase 4 (multi-flux) | V12.3 Delta engine, V12.4 human loop |
+| Phase 5 (cybernétique) | V12.1.1, V12.2.1, V12.5 orchestration |
+| Phase 6 (régime nominal) | V12.5 matrice + ajustement continu |
+
+V12.6 due-date-aware smoothing (§28.12) est **prérequis** pour
+ateliers à tolérance ontime stricte (aéro, médical, automobile).
 
 ---
 

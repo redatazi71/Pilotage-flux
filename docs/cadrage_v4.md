@@ -1040,6 +1040,98 @@ V12.7 est **livré et mesuré**. Le défaut Q est **résolu**.
 Chart : `docs/charts/v12_7_otif_comparative.png`.
 Données détaillées : `docs/cadrage_v4_v12_7_data.md`.
 
+### §28.14 V12.8 — CPM + Little + BOM topo — LIVRÉ + finding mitigé
+
+V12.7 fonctionne empiriquement avec `safety_factor = 150`, mais ce
+multiplicateur est une **constante magique** qui équivaut, en
+pratique, à clamper les offsets à 0 (l'OF court devient cap = 0
+quand `duration × 150 > horizon`). V12.8 tente de remplacer cette
+heuristique par une composition principielle de **3 modules
+existants** de l'architecture cybernétique :
+
+| Module | Source | Utilisation V12.8 |
+|---|---|---|
+| **CPM** (L11.1) | `aps/cpm_scheduling.py` | Durée par candidate via Σ(unit × qty / capa) × factor |
+| **Heuristique SLACK** (V12.2.3) | `cybernetic/optimization/heuristics.py` | Réordonnement par latest_start_cpm ascendant |
+| **Zone resolver** (V12.2.1) | `cybernetic/optimization/zone_resolver.py` | Borne `horizon - makespan_cpm` |
+
+#### §28.14.1 V12.8 — Implémentation (3 flags)
+
+3 nouveaux paramètres globaux dans `flux/smoothing.py` :
+
+- `smoothing_cpm_aware` (default 0) : active le makespan
+  CPM-équivalent par candidate, incluant un **facteur d'attente
+  par WS** combinant Little's law et concurrence bursty :
+  `factor_ws = max(n_competitors, 1 / (1 − min(ρ, ρ_cap)))`
+- `smoothing_slack_ordering` (default 0) : trie les candidats par
+  slack croissant (heuristique SLACK V12.2.3)
+- `smoothing_bom_topo` (default 0) : trie par profondeur BOM
+  ascendante (composants AVANT articles finis)
+
+Le `safety_factor` V12.7 reste disponible mais devient secondaire.
+
+#### §28.14.2 Étude comparative V11 vs V12.7 vs V12.8 (240 runs)
+
+| Scénario | Doctrine | V11 OTIF | V12.7 OTIF | V12.8 OTIF | Δ V12.7 | Δ V12.8 |
+|---|---|---|---|---|---|---|
+| baseline_xl | FLUX | 0.693 | 0.950 | **0.613** | +25.6 pp | **−8.0 pp** |
+| stress_double_breakdown | FLUX | 0.675 | 0.950 | **0.785** | +27.5 pp | **+11.0 pp** |
+| stress_cascade_nc | FLUX | 0.675 | 0.950 | **0.658** | +27.5 pp | **−1.7 pp** |
+| stress_demand_spike | FLUX | 0.616 | 0.784 | **0.523** | +16.8 pp | **−9.4 pp** |
+
+**V12.8 ne bat V12.7 sur aucun scénario.** Sur 3/4 scénarios il
+dégrade légèrement V11. Seul `stress_double_breakdown_xl` voit un
+gain de +11 pp — l'imprévisibilité des pannes profite d'un cap CPM
+qui sort certains candidats du smoothing.
+
+#### §28.14.3 Cause du gap V12.7 vs V12.8
+
+Le diagnostic révèle :
+
+1. **Steady-state Little sous-estime le queueing dynamique.** Sur
+   baseline_xl, ρ_mean ≈ 5-10 % par WS → facteur Little ≈ 1.05.
+   Avec `max(n_competitors)`, on monte à 10× — mais V12.7 nécessite
+   en pratique 150× pour engager le cap. L'écart vient de la
+   **bursty arrival pattern** (plusieurs OFs lancés
+   simultanément) que les modèles M/M/1 stationnaires ne capturent
+   pas.
+2. **BOM topo amplifie la dégradation.** Trier les composants en
+   premier produit des offsets corrects pour les leaves, mais les
+   parents (articles finis) reçoivent les offsets les plus tardifs.
+   Sans **propagation `earliest_start_parent ≥ earliest_finish(child)`**,
+   les parents sont lancés trop tard pour finir.
+
+Autrement dit, V12.8 a la **bonne plomberie** (CPM + heuristiques
++ BOM) mais lui manque un dernier composant : la propagation des
+contraintes de précédence à travers la BOM. Sans ça, le tri
+topologique seul détériore le résultat.
+
+#### §28.14.4 Lecture doctrinale honnête
+
+V12.7's `safety_factor = 150` **n'est pas du scheduling intelligent**
+— c'est une désactivation effective du smoothing. Le fait que cela
+récupère 25 pp d'OTIF est une démonstration que, **sur ces 4
+scénarios avec BOM dépendant + capacité tendue, le lissage lean
+est doctrinalement défavorable à l'OTIF**.
+
+V12.8 confirme cette lecture : aucune composition simple (CPM,
+SLACK, BOM topo) ne ramène le smoothing à un OTIF acceptable. La
+voie principielle requiert :
+
+- **V12.9** (recherche, non livré) : CPM forward-propagation à
+  travers la BOM avec contraintes de capacité (équivalent CP-SAT
+  réduit), qui calcule `earliest_start_parent ≥ max(eft_child)`.
+- **Compromis pragmatique** (livré) : doctrines V12.7 sf=150 pour
+  OTIF-first, V11 par défaut pour Cost-first.
+
+Cette étude V12.8 est un **finding scientifique d'écart** : entre
+la magie empirique qui fonctionne (V12.7) et la plomberie
+principielle qui ne suffit pas (V12.8), il y a un module manquant
+(propagation BOM). Le diagnostic le localise.
+
+Chart : `docs/charts/v12_8_otif_comparative.png`.
+Données détaillées : `docs/cadrage_v4_v12_8_data.md`.
+
 ### §24.10.1 Lectures clés des matrices
 
 **1. Quelle paire est la plus coûteuse ?**

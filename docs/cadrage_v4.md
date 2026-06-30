@@ -917,9 +917,6 @@ Sur baseline_xl (sans aléa fort), FLUX/EVENT perdent quand même
 31 % — ce qui pointe plutôt vers une saturation du contrat
 (V12.7.a/b).
 
-V12.7 est **identifié mais non livré**. Reste prioritaire pour
-fermer la question Q.
-
 #### §28.12.4 Conclusion honnête sur V12.6
 
 V12.6 est un **finding scientifique négatif** : l'hypothèse
@@ -927,11 +924,121 @@ V12.6 est un **finding scientifique négatif** : l'hypothèse
 V12.6 reste utile comme **garde-fou prudent** (cap due_date
 toujours valide en principe), mais ne résout pas le défaut Q
 observé. La doctrine FLUX/EVENT a un défaut Q **plus profond**,
-non localisé dans le smoothing.
+non localisé dans le smoothing — confirmé et résolu par V12.7
+(§28.13).
 
 C'est précisément ce type de résultat — implémenter, mesurer,
 infirmer — qui distingue une étude reproductible d'un proof of
 concept marketing.
+
+Chart : `docs/charts/v12_6_otif_comparative.png`.
+Données détaillées : `docs/cadrage_v4_v12_6_data.md`.
+
+### §28.13 V12.7 — Horizon-aware smoothing — LIVRÉ (correction du défaut Q)
+
+V12.7 a été investigué après l'échec de V12.6. Le diagnostic
+`docs/diagnose_v12_7.py` a comparé la quantité à 4 étapes (SO →
+candidate → OF → qty_good) sur baseline_xl, seed=42 :
+
+| Étape | OF | FLUX | Δ |
+|---|---|---|---|
+| 1. SO.quantity | 561 | 561 | 0 (identique) |
+| 2. candidate_orders.quantity | 1683 | 1683 | 0 (BOM × 3, identique) |
+| 3. manufacturing_orders.quantity | 561 | 561 | 0 (identique) |
+| 4. **qty_good livré** | **533** (95 %) | **390** (69.5 %) | **−143 (−25 pp)** |
+
+Les hypothèses §28.12.3 (V12.7.a/b/c/d) sont toutes invalidées : la
+quantité demandée (561), la quantité candidate (1683 = BOM × 3),
+et la quantité OF lancée (561) sont identiques entre OF et FLUX.
+**Le défaut Q vient exclusivement de la phase d'exécution des
+OFs**, pas de la génération du plan.
+
+#### §28.13.1 Vraie cause identifiée — OFs stuck `in_progress`
+
+L'inspection détaillée a révélé :
+- **OF-0007 (ART-A, qty=60)** : FLUX → `status=in_progress`,
+  qty_good=0 ; ops 1+2 closes (qty_good=57), ops 3+4 (WS-5, WS-6)
+  restées `pending`
+- **OF-0016 (ART-B, qty=90)** : FLUX → `status=in_progress`,
+  qty_good=0 ; op 1 close, ops 2+3+4 (WS-6, WS-5, WS-6) `pending`
+
+Cause : le **smoothing V1.4** étale les offsets uniformément sur
+l'horizon [horizon_start, horizon_end], sans tenir compte de la
+**durée résiduelle** dont l'OF a besoin pour clore toutes ses
+operations dans le temps restant. Un OF lancé à offset = 16457 min
+(11 jours après horizon_start dans un horizon de 20 jours) doit
+clore 4 operations en 9 jours ; avec queueing sur WS-5/WS-6, ce
+n'est pas suffisant et l'OF reste in_progress.
+
+OF, lui, lance toutes les OFs au démarrage de l'horizon
+(`planned_start = horizon_start`) et a 20 jours pleins pour les
+clore — d'où qty_good = 95 %.
+
+#### §28.13.2 V12.7 — Implémentation horizon-aware
+
+Implémenté dans `flux/smoothing.py` :
+
+```python
+# Borne supplémentaire (V12.7)
+if smoothing_horizon_aware:
+    latest_start_horizon = horizon_total_min - duration × safety_factor
+    offset_min = min(offset_min, latest_start_horizon)
+```
+
+Deux paramètres :
+- `smoothing_horizon_aware` (default 0) : flag d'activation
+- `smoothing_horizon_safety_factor` (default 10) : multiplicateur
+  appliqué à `Σ(unit_time × quantity)` pour absorber le queueing
+  inter-WS (la durée processing-only sous-estime le temps elapsed
+  réel d'un facteur ~100-150× quand utilisation > 0.7)
+
+#### §28.13.3 Étude comparative V11 vs V12.7 (160 runs)
+
+Étude `docs/build_v12_7_comparative.py` — 4 scénarios stress XL,
+10 seeds (3000-3009), 2 doctrines (FLUX, EVENT), 2 régimes,
+`safety_factor = 150` (validé empiriquement sur baseline_xl).
+
+| Scénario | Doctrine | Δ OTIF (pp) | Δ Coût (%) |
+|---|---|---|---|
+| baseline_xl | FLUX | **+25.6 pp** | +29.5 % |
+| baseline_xl | EVENT | **+25.6 pp** | +18.7 % |
+| stress_double_breakdown_xl | FLUX | **+27.5 pp** | +66.9 % |
+| stress_double_breakdown_xl | EVENT | **+27.5 pp** | +29.5 % |
+| stress_cascade_nc_xl | FLUX | **+27.5 pp** | +21.9 % |
+| stress_cascade_nc_xl | EVENT | **+27.5 pp** | +22.0 % |
+| stress_demand_spike_xl | FLUX | **+16.8 pp** | +20.4 % |
+| stress_demand_spike_xl | EVENT | **+16.8 pp** | +20.4 % |
+
+OTIF moyen FLUX (4 scénarios) : 0.658 → 0.909 (+25.1 pp).
+3 scénarios sur 4 atteignent **0.950** (parité avec OF).
+1 scénario (stress_demand_spike) plafonne à 0.784 — la demande
+excède la capacité brute, OTIF ≤ Q_max indépendamment du smoothing.
+
+Coût moyen FLUX : +34.7 % (médiane +25.7 %) — surcoût lié à
+l'inventaire/WIP plus long en l'absence d'étalement.
+
+#### §28.13.4 Bilan V12.7
+
+V12.7 corrige le défaut Q identifié par mesure :
+- Le smoothing V1.4 borne désormais ses offsets pour garantir la
+  closure des OFs avant `horizon_end`.
+- Le paramètre `smoothing_horizon_safety_factor` permet à
+  l'utilisateur d'ajuster le compromis OTIF/cost selon le taux
+  d'utilisation des workstations (Little's law).
+- La doctrine FLUX/EVENT, activée V12.7, **rattrape OF sur
+  l'OTIF** (0.95) en restant moins coûteuse en moyenne (lissage
+  partiel préservé jusqu'au cap horizon).
+
+Trade-off doctrinal explicite : V12.7 sacrifie 20-30 % du gain
+de coût FLUX (vs OF non-smoothing) pour récupérer 25 pp d'OTIF.
+L'arbitrage QCDS § 30 reste pertinent : la doctrine choisie
+dépend de la priorité métier (OTIF-first → V12.7 obligatoire,
+Cost-first → V11 acceptable si OTIF cible < 0.70).
+
+V12.7 est **livré et mesuré**. Le défaut Q est **résolu**.
+
+Chart : `docs/charts/v12_7_otif_comparative.png`.
+Données détaillées : `docs/cadrage_v4_v12_7_data.md`.
 
 ### §24.10.1 Lectures clés des matrices
 

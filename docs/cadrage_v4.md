@@ -1031,18 +1031,104 @@ décrivant les changements (n_ofs_moved, deltas).
 **Tests V12.2** : 14 unitaires (`tests/test_v12_optimization.py`)
 + 2 acceptance E2E (`tests/test_acceptance_v12_2.py`) — tous verts.
 
-### §28.7 Travaux futurs V12 (restants)
+### §28.7 V12.4 Workflow humain complet — LIVRÉ
 
-Avec V12.1, V12.2 et V12.3 livrés, restent :
+V12.4 complète l'écosystème de validation V12.3 avec rôles, audit
+trail immuable, escalation automatique et dashboard. Quatre
+sous-modules en `cybernetic/human_loop/` :
 
-- **V12.4 Workflow humain complet** : audit trail enrichi, UI
-  dédiée, notifications, gestion des rôles (~ 1 j + UI).
+| Module | Rôle |
+|---|---|
+| `roles.py` | 3 rôles hiérarchiques (operator/supervisor/admin) + matrice de permissions par niveau d'autonomie |
+| `audit_log.py` | Log immuable des transitions (submitted/approved/rejected/escalated/role_changed/note_added) avec actor + details JSON |
+| `notifications.py` | Queue persistée de notifications par cible (`role:X` ou `user:Y`) avec kinds (pending_approval, overdue, escalated) |
+| `escalation.py` | Détecte les pending > seuil (240 min par défaut) → escalade L3→L4 + notifie supervisor + log audit |
+| `dashboard.py` | Snapshot agrégé (pending par niveau, overdue, longest_pending_min, lag moyen, escalations 24h, notifs non lues par rôle) |
+
+**Matrice de permissions** :
+
+| Rôle | Peut approuver L3 | Peut approuver L4 |
+|---|---|---|
+| `operator` | ✓ | ✗ |
+| `supervisor` | ✓ | ✓ |
+| `admin` | ✓ | ✓ |
+
+**Schema DB ajouté** :
+
+- `user_roles(user_id, role, created_at, modified_at)`
+- `approval_audit_log(log_id, queue_id, event_type, actor, details, occurred_at)`
+- `notifications(notification_id, target, kind, queue_id, message, read_at, created_at)`
+
+**CLI ajoutées** :
+
+- `role-set <db> <user_id> <operator|supervisor|admin>` : assigne un rôle
+- `human-dashboard <db>` : snapshot agrégé
+- `human-escalate <db> [--threshold MIN]` : escalade les L3 overdue
+- `human-audit <db> [--queue N] [--limit N]` : consulte l'audit trail
+
+**Workflow type V12.3 + V12.4** :
+
+```
+V12.3.dispatch → submit_to_approval_queue (L3 ou L4)
+  → V12.4.log_audit_event(EVENT_SUBMITTED)
+  → V12.4.notify(target_role, KIND_PENDING_APPROVAL)
+  → [Si pending > 4h]
+       V12.4.escalate_overdue
+         → notify(supervisor, KIND_OVERDUE)
+         → si L3 : upgrade en L4 + log EVENT_ESCALATED
+  → user opère via CLI ou API
+  → V12.4.log_audit_event(EVENT_APPROVED ou EVENT_REJECTED)
+```
+
+**Tests V12.4** : 22 unitaires + 2 acceptance E2E — tous verts.
+Le test acceptance `test_v12_4_e2e_escalation_pipeline` couvre :
+décision L3 → 5h d'attente → escalation auto → L4 → notif
+supervisor + audit complet.
+
+### §28.8 Travaux futurs V12 (restants)
+
+Avec V12.1, V12.2, V12.3 et V12.4 livrés, reste :
+
 - **V12.5 Matrice d'orchestration** : configuration runtime des
   seuils L1/L2/L3/L4 par profil d'atelier, sélection automatique
-  algo (CP-SAT vs heuristique) selon contexte (~ 1 j).
+  algo (CP-SAT vs heuristique) selon contexte, profils par
+  configuration JSON (~ 1 j).
 
-Effort restant pour la V12 complète : **~ 2 j** de dev (vs 4 j
-estimés avant livraison V12.2).
+Effort restant pour la V12 complète : **~ 1 j** de dev.
+
+### §28.9 Apprentissage et boucle de rétroaction — extension critique
+
+L'architecture V12 (V12.1 forecasting + V12.2 optim) **n'est pas
+encore close** sur la dimension apprentissage. Les prévisions et les
+plans ne tiennent compte que des **séries observées brutes**, pas
+des **erreurs passées** ni des **patterns d'aléas récurrents**.
+
+Pour fermer la boucle cybernétique, deux extensions sont
+identifiées comme prioritaires :
+
+**V12.1.1 — Forecasting feedback-aware (zone libre)**
+
+| Boucle | Mécanisme | Source |
+|---|---|---|
+| Bias correction | si forecast historique sur-prédit, soustrait le biais moyen | comparaison forecast vs réalisé sur fenêtre |
+| Hazard-aware features | comptage des aléas passés par type/jour-de-semaine ajouté comme features de régression | `event_deviations` |
+| Pattern d'écart | si une décision L3/L4 est rejetée, ré-évalue le forecast amont | `approval_queue.status == 'rejected'` |
+
+**V12.2.1 — Optimisation feedback-aware (zone négociable)**
+
+| Boucle | Mécanisme | Source |
+|---|---|---|
+| Memoize causes d'échec | si CP-SAT a produit un plan rejeté, exclut la cellule de l'espace de recherche au tour suivant | `approval_queue` historique |
+| Pondération par fréquence | pondère le coût d'un poste par sa fréquence historique de panne | `event_deviations` filtré par workstation |
+| Apprentissage des heuristiques | choisit l'heuristique (SLACK/EDD/SPT/ATC) selon le contexte ayant historiquement le meilleur résultat | comparaison KPI par heuristique |
+
+Ces deux extensions sont **techniquement faisables avec les données
+existantes** (event_deviations, tolerance_filter_decisions,
+approval_queue, approval_audit_log) — aucune nouvelle table n'est
+nécessaire. Elles s'inscrivent comme V12.1.1 et V12.2.1 dans la
+roadmap, après livraison V12.5.
+
+Estimation effort : ~2 j cumulés (~1 j par couche).
 
 ---
 

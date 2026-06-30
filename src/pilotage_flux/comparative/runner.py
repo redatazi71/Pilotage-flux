@@ -67,6 +67,7 @@ from pilotage_flux.comparative.scenario import (
     DOCTRINE_FLUX,
     DOCTRINE_OF,
     DOCTRINE_OF_EVENT,
+    DOCTRINE_OF_MILP,
     DOCTRINES,
     HAZARD_BREAKDOWN,
     HAZARD_LOGISTIC_DELAY,
@@ -1603,6 +1604,104 @@ def run_of_event_doctrine(
 
 
 # ----------------------------------------------------------------------
+# §7.1 — Doctrine OF_MILP : OF + planification CP-SAT au jour 0
+# ----------------------------------------------------------------------
+
+
+def run_of_milp_doctrine(
+    scenario: Scenario, db_path: Path,
+    *, fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
+) -> RunResult:
+    """§7.1 — Variante OF avec planification globale CP-SAT.
+
+    Identique à OF (pas de flux, pas d'event sourcing) mais utilise
+    `milp_scheduler.compute_milp_launch_days` pour étaler les OFs sur
+    l'horizon au jour 0, au lieu de tout lancer immédiatement.
+
+    Baseline plus sophistiquée que SLACK+FIFO, comparée aux 4 doctrines
+    pour valider l'absence de biais d'implémentation côté référentiel.
+    """
+    from pilotage_flux.comparative.milp_scheduler import (
+        compute_milp_launch_days,
+    )
+    _bootstrap_db(scenario, db_path, fixtures_dir)
+    result = RunResult(
+        doctrine=DOCTRINE_OF_MILP, scenario_name=scenario.name,
+        db_path=db_path, seed=scenario.seed,
+    )
+    rng = random.Random(scenario.seed)
+    state = HazardState()
+
+    with db_session(db_path) as conn:
+        # Jour 0 : P1 immédiat (pas de contrat de flux)
+        p1 = run_p1_promotion(conn, actor="of_milp.p1")
+        result.aps_recalculations += 1
+        for plan in p1.ofs_created:
+            _arbitrate_of_routing(conn, plan.of_id, result)
+
+        # Résolution CP-SAT après création des OFs
+        milp_res = compute_milp_launch_days(
+            conn, horizon_days=scenario.horizon_days,
+        )
+        result.notes.append(
+            f"milp_status={milp_res.status} "
+            f"solve_time={milp_res.solve_time_sec:.2f}s "
+            f"obj={milp_res.objective_value:.0f}"
+        )
+
+        # Applique les launch_day calculés
+        for plan in p1.ofs_created:
+            scheduled = milp_res.launch_day_by_of.get(plan.of_id, 0)
+            state.scheduled_launch_day[plan.of_id] = scheduled
+            result.of_created_day[plan.of_id] = scheduled
+            if scheduled == 0:
+                _launch_of_at_day(
+                    conn, plan.of_id, horizon_start=scenario.horizon_start,
+                    day=0, actor="of_milp.mes",
+                )
+
+        hazards_by_day: dict[int, list] = {}
+        for h in scenario.hazards:
+            hazards_by_day.setdefault(h.day, []).append(h)
+
+        for day in range(1, scenario.horizon_days + 1):
+            _receive_due_purchase_orders(conn, scenario, day)
+            # Lance les OFs dont le jour MILP est arrivé
+            for of_id, sched_day in list(state.scheduled_launch_day.items()):
+                if sched_day == day and of_id not in result.of_created_day:
+                    pass  # Géré ci-dessous, of déjà créé au jour 0
+                if sched_day == day:
+                    _launch_of_at_day(
+                        conn, of_id, horizon_start=scenario.horizon_start,
+                        day=day, actor="of_milp.mes",
+                    )
+                    state.scheduled_launch_day.pop(of_id, None)
+            # Aléas — replan global comme OF (pas de tolérance dual)
+            for h in hazards_by_day.get(day, []):
+                _apply_hazard(conn, scenario, h, state, result, DOCTRINE_OF)
+                if h.kind == HAZARD_URGENT_ORDER:
+                    new = run_p1_promotion(conn, actor="of_milp.p1")
+                    result.aps_recalculations += 1
+                    for plan in new.ofs_created:
+                        _arbitrate_of_routing(conn, plan.of_id, result)
+                        result.of_created_day[plan.of_id] = day
+                        _launch_of_at_day(
+                            conn, plan.of_id,
+                            horizon_start=scenario.horizon_start,
+                            day=day, actor="of_milp.mes",
+                        )
+                else:
+                    compute_candidates(conn)
+                    result.aps_recalculations += 1
+            _advance_one_day(
+                conn, scenario, day, state, result, rng, actor="of_milp.mes",
+            )
+            _decay_breakdowns(state)
+            _measure_wip(conn, result, day)
+    return result
+
+
+# ----------------------------------------------------------------------
 # Dispatch
 # ----------------------------------------------------------------------
 
@@ -1612,6 +1711,7 @@ _DISPATCH = {
     DOCTRINE_FLUX: run_flux_doctrine,
     DOCTRINE_OF_EVENT: run_of_event_doctrine,
     DOCTRINE_EVENT: run_event_doctrine,
+    DOCTRINE_OF_MILP: run_of_milp_doctrine,
 }
 
 
@@ -1622,8 +1722,8 @@ def run_doctrine(
     *,
     fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
 ) -> RunResult:
-    if doctrine not in DOCTRINES:
+    if doctrine not in _DISPATCH:
         raise ValueError(
-            f"Doctrine inconnue : {doctrine!r} (attendu : {DOCTRINES})"
+            f"Doctrine inconnue : {doctrine!r} (dispatch : {list(_DISPATCH)})"
         )
     return _DISPATCH[doctrine](scenario, db_path, fixtures_dir=fixtures_dir)

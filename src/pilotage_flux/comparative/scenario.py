@@ -28,7 +28,16 @@ DOCTRINE_OF = "of"
 DOCTRINE_FLUX = "flux"
 DOCTRINE_OF_EVENT = "of_event"
 DOCTRINE_EVENT = "event"
+DOCTRINE_OF_MILP = "of_milp"
+# §7.1 — Variante OF avec planification CP-SAT pour lever le biais
+# d'implémentation. Identique à OF (pas de flux, pas d'event sourcing)
+# mais étale les OFs sur l'horizon via solveur global au lieu de tout
+# lancer au jour 0.
 DOCTRINES = (DOCTRINE_OF, DOCTRINE_FLUX, DOCTRINE_OF_EVENT, DOCTRINE_EVENT)
+DOCTRINES_WITH_MILP = DOCTRINES + (DOCTRINE_OF_MILP,)
+# Tuple étendu pour les études §7.1 — réservé aux scripts qui veulent
+# inclure OF_MILP. Le tuple DOCTRINES standard reste à 4 pour ne pas
+# casser les tests d'acceptation V0-V11.
 
 
 HAZARD_BREAKDOWN = "breakdown_ws"

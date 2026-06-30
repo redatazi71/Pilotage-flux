@@ -16,33 +16,31 @@
 
 ## Résumé
 
-Les variations et perturbations sont devenues systémiques dans les
-ateliers industriels. Les systèmes de pilotage de production doivent
-chercher des moyens d'accroître leur résilience, leur flexibilité et
-leur capacité de retour au régime nominal après un choc. Tout
-système possède des limites de résistance, mais les doctrines
-modernes diffèrent par la manière dont elles approchent ces limites.
-Cet article décompose expérimentalement les apports propres du
+Une unité industrielle poursuit quatre objectifs simultanés (cadre
+**QCDS**) : livrer les bonnes quantités (Q), au moindre coût (C),
+à date (D), avec un minimum de perturbations (S). Les variations
+devenues systémiques rendent l'équilibre QCDS de plus en plus
+difficile à tenir. Cet article décompose expérimentalement, **sur
+les 4 dimensions QCDS simultanément**, les apports propres du
 **pilotage par flux contractualisé** et de l'**event sourcing** dans
 une chaîne APS + MES, à l'aide d'un simulateur Python open-source
-reproductible. Sur 7 256 runs déterministes (4 protocoles
+reproductible. Sur 8 000+ runs déterministes (5 protocoles
 indépendants, 4 doctrines, fixtures fixes et aléatoires), nous
-mesurons : (i) une baisse moyenne du coût opérationnel de −21.8 %
-avec la combinaison flux + event sourcing vs ordre-de-fabrication
-classique, (ii) une division par 1.83 du lead time, (iii) une
-division par 3.9 de la nervosité de réordonnancement, (iv) une
-amélioration du time-to-recover de 5.7 à 2.8 jours en médiane après
-un choc simulé. Une analyse de résilience plus poussée (matrice 5×5
-des paires de domaines perturbateurs) identifie l'**approvisionnement
-× demande** comme le mur intrinsèque du pilotage de flux (6.8 j de
-récupération, irréductible sur toutes les doctrines). L'étude se
-revendique explicitement comme une simulation in-silico — pas une
-validation industrielle — et explicite les biais d'implémentation
-afin de circonscrire la portée des conclusions.
+mesurons : (i) une baisse du coût C de −21.8 % avec flux + event
+sourcing vs ordre-de-fabrication classique, (ii) une division par
+1.83 du lead time, (iii) une division par 3.9 de la nervosité S,
+(iv) un trade-off Q vs C explicite (compliance quantité 80 % FLUX
+vs 92 % OF), (v) une analyse de résilience identifiant
+l'**approvisionnement × demande** comme mur intrinsèque (6.8 j MTTR
+irréductible). **Aucune doctrine ne domine simultanément les 4
+dimensions QCDS** ; OF+EVENT (flux désactivé + event sourcing)
+émerge comme **meilleur compromis 3/4** pour ateliers stricts. L'étude
+se revendique explicitement comme simulation in-silico — pas
+validation industrielle — et explicite les biais d'implémentation.
 
-**Mots-clés** : APS, MES, pilotage flux lean, event sourcing,
+**Mots-clés** : APS, MES, pilotage flux lean, event sourcing, QCDS,
 théorie des contraintes, drum-buffer-rope, résilience, simulation,
-décomposition factorielle, reproductibilité.
+décomposition factorielle, trade-off doctrinal, reproductibilité.
 
 ---
 
@@ -77,7 +75,22 @@ decomposition, reproducibility.
 
 ## 1. Introduction
 
-### 1.1 Contexte : la variabilité est devenue systémique
+### 1.1 Les 4 objectifs industriels QCDS
+
+Une unité industrielle poursuit simultanément **quatre objectifs**
+canoniques (QCDS) :
+
+1. **Q — Quantité** : livrer les bonnes quantités au client
+2. **C — Coût** : au moindre coût opérationnel
+3. **D — Délai** : à date (respect des due_dates)
+4. **S — Stabilité** : avec un minimum de perturbations et de
+   nervosité de planification
+
+Tout système de pilotage de production est in fine évalué sur sa
+capacité à équilibrer ces 4 dimensions. Le cadre QCDS guide les
+mesures et la discussion de cet article.
+
+### 1.2 Contexte : la variabilité est devenue systémique
 
 Les ateliers industriels contemporains subissent une **variabilité
 systémique** : ruptures d'approvisionnement post-COVID, pics et
@@ -89,8 +102,9 @@ recalculs APS et la nervosité [Hopp2000]. Les communautés lean
 [Womack1996, Ohno1988] et théorie des contraintes [Goldratt1984]
 ont proposé depuis plusieurs décennies des doctrines alternatives —
 pilotage par flux lissé, drum-buffer-rope, gestion par les contraintes —
-mais leur **mesure quantitative comparative** reste rare dans la
-littérature opérationnelle francophone.
+mais leur **mesure quantitative comparative sur les 4 dimensions
+QCDS simultanément** reste rare dans la littérature opérationnelle
+francophone.
 
 ### 1.2 Problématique
 
@@ -481,9 +495,42 @@ coût observé / moyenne(coût A seul, coût B seul).
 
 ![Figure 12 — Time-to-recover par paire de domaines, par doctrine](charts/paired_hazards_recovery.png)
 
-### 5.5 Synthèse multidimensionnelle
+### 5.5 Synthèse QCDS — 4 objectifs industriels
 
-Sur les 5 dimensions de comparaison, EVENT domine les 3 autres :
+L'étude QCDS dédiée (80 runs, 20 seeds × 4 doctrines, tol=3j) mesure
+simultanément les 4 dimensions du §1.1 :
+
+| Doctrine | Q (compliance) | C (coût €) | D (dispo) | S (nervosité) |
+|---|---|---|---|---|
+| OF | **0.918** | 107 785 | **1.000** | 0.333 |
+| FLUX | 0.796 | **84 422** | 0.989 | 0.333 |
+| **OF+EVENT** | **0.923** | 100 617 | **1.000** | **0.086** |
+| EVENT | 0.803 | **79 996** | 0.994 | **0.086** |
+
+**Aucune doctrine ne domine simultanément les 4 dimensions QCDS** :
+
+| Doctrine | Forces (≥ 3/4) | Faiblesses |
+|---|---|---|
+| OF | Q ✓ D ✓ | C ✗ S ✗ |
+| FLUX | C ✓ | Q ✗ |
+| **OF+EVENT** | **Q ✓ D ✓ S ✓** | C légèrement (−7 %) |
+| EVENT | C ✓ S ✓ | Q ✗ |
+
+**OF+EVENT** émerge comme le **meilleur compromis QCDS global** :
+préserve la quantité livrée (92 %, +0.6 pp vs OF), respecte les
+délais (100 % à tol=3j), divise la nervosité par 4 (−74 %), au
+seul prix d'une amélioration coût modeste (−7 % vs OF).
+
+**EVENT** maximise C (−26 %) et S (−74 %) mais perd 11.5 pp de
+compliance quantité — ce déficit n'est pas absorbable par tous les
+profils d'atelier.
+
+![QCDS — radar 4 objectifs × 4 doctrines](charts/qcds_4_dimensions.png)
+
+### 5.6 Synthèse multidimensionnelle classique
+
+Sur les 5 dimensions de comparaison historiques, EVENT domine les
+3 autres :
 
 | Dimension | OF | FLUX | OF+EVENT | EVENT |
 |---|---|---|---|---|

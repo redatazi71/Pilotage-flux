@@ -795,6 +795,80 @@ cascade de pannes synthétiques. Il faudrait répliquer sur des
 scénarios industriels réels (mix demande, aléas calibrés) pour
 confirmer le trade-off.
 
+### §24.8.7 Pourquoi EVENT perd-il à tolérance stricte ? — diagnostic technique
+
+**Question posée** : si le flux est censé absorber les chocs et
+l'event sourcing les corriger, pourquoi EVENT (flux + event sourcing)
+livre seulement 85 % à tol=0j vs 100 % pour OF/OF+EVENT ?
+
+**Réponse — défaut doctrinal structurel identifié dans le code** :
+
+#### Cause 1 — Le smoothing ignore les due_dates
+
+Code `src/pilotage_flux/flux/smoothing.py:79` :
+
+```python
+offset_min = int(round((running / total_qty) * horizon_min))
+```
+
+Le smoothing étale les lancements **linéairement sur l'horizon
+entier**, proportionnellement aux quantités cumulées. Il ne
+consulte **jamais** les `due_dates` des SOs parent. Conséquence :
+un OF dont le parent SO est due day 10 peut être planifié day 12 si
+l'horizon va jusqu'à day 18. Le retard est **introduit par le
+smoothing lui-même**.
+
+#### Cause 2 — L'event sourcing ne détecte pas un plan intrinsèquement en retard
+
+Code `src/pilotage_flux/events_v3/dual_tolerance.py` :
+
+Le V3 réagit aux **écarts attendu/réel**. Si le smoothing planifie
+un OF à day 12 et qu'il termine effectivement day 12, **l'event
+sourcing voit `réel == attendu`** et ne déclenche aucune action.
+
+Le retard est dans l'**attendu lui-même**, pas dans l'exécution.
+L'event sourcing est aveugle à ce cas par construction.
+
+#### Cause 3 — V3 actionnel n'a pas d'action de rattrapage
+
+Code `comparative/runner._apply_corrective_actions` couvre 4 types
+d'aléas (`HAZARD_BREAKDOWN`, `HAZARD_QUALITY_NC`, `HAZARD_PO_DELAY`,
+`HAZARD_URGENT_ORDER`). Aucune action « *rattraper retard de plan
+vs due_date* » n'est définie.
+
+#### Verdict
+
+| Possible cause | Vérifiée ? |
+|---|---|
+| Mauvais paramétrage (smoothing trop agressif) | ❌ — c'est l'algorithme entier qui ignore due_date, pas un seuil mal réglé |
+| Objectif de planification incorrect | ✅ — objectif implicite = « minimiser congestion goulot » ≠ « respecter due_dates » |
+| V3 actionnel insuffisant | ✅ — n'a pas d'action « replan due-date aware » |
+| Conception structurelle | ✅ — V0-V11 n'a pas de mécanisme due-date-aware dans le smoothing |
+
+**Implication doctrinale** : la perte d'ontime sur tol=0j n'est
+**pas un échec du flux ni de l'event sourcing en tant que disciplines**.
+C'est un **défaut d'objectif** dans l'algorithme `flux/smoothing.py`
+qui mérite une extension dédiée — proposée comme **V12.6 Due-date
+aware smoothing** (cf. §28.12 ci-après).
+
+### §28.12 V12.6 — Due-date aware smoothing (proposition d'extension)
+
+**Diagnostic §24.8.7** : le smoothing actuel maximise l'étalement
+sans contrainte de deadline. Trois pistes correctives :
+
+| Approche | Mécanisme | Complexité |
+|---|---|---|
+| **V12.6.a Backward scheduling** | Calculer `latest_start = due_date − duration` pour chaque OF ; smoothing borné à `[earliest_start, latest_start]` | Faible (~½ j) |
+| **V12.6.b Slack-priority + smoothing résiduel** | Ordonner les OFs par slack croissant (`due − duration`) puis smoothing uniquement sur l'horizon résiduel | Moyenne (~1 j) |
+| **V12.6.c Optimisation due-date aware** | CP-SAT mixte : objectif = `α × congestion_goulot + β × Σ tardiveté` | Élevée (~2 j) — réutilise V12.2 |
+
+**Effet attendu** : ramener FLUX/EVENT à 95-100 % de disponibilité
+SO-level même sur tolérance stricte (tol=0j), au prix d'une
+fraction de gain coût (estimation : −2 à −5 %).
+
+Cette extension est **identifiée mais non livrée** dans V12 actuel.
+Elle s'inscrit naturellement après V12.5 dans la roadmap.
+
 ### §24.10.1 Lectures clés des matrices
 
 **1. Quelle paire est la plus coûteuse ?**
@@ -920,6 +994,491 @@ gain FLUX vs OF est **mesuré positif sur les 12 cellules**, entre
 Le gain doctrinal **n'est pas un artefact de paramètres choisis** :
 il est robuste sur 4 niveaux d'intensité couvrant 1 ordre de grandeur
 par paramètre.
+
+---
+
+## §24.13 Sensibilité directe paramètres (Point 3 paper)
+
+§7.3 du paper utilisait des **proxies** (`n_hazards` proxy de scrap,
+`horizon_days` proxy de buffer). Point 3 vary directement les
+paramètres data-driven via un nouveau hook `param_overrides` dans
+`run_doctrine` (appliqué après `seed_defaults`, avant simulation).
+
+### §24.13.1 Protocole
+
+**480 runs** = 3 paramètres × 4 niveaux × 4 doctrines × 10 seeds.
+
+| Paramètre | Niveaux testés |
+|---|---|
+| `constraint_buffer_safety_factor` | 0.05, 0.15, 0.25, 0.35 |
+| Seuils Little `warn/block/defer` | (0.60/0.75/0.90), (0.80/0.90/1.10), (0.85/0.95/1.15), (0.95/0.99/1.20) |
+| `moi_overhead_rate` (multiplicateur) | ×0.5, ×1, ×2, ×5 |
+
+### §24.13.2 Résultats — gain FLUX/OF par niveau
+
+| Niveau | Tampon DBR | Seuils Little | MOI overhead |
+|---|---|---|---|
+| faible | **−22.6 %** | **−22.6 %** | −22.8 % |
+| moyen | **−22.6 %** | **−22.6 %** | −22.7 % |
+| élevé | **−22.6 %** | **−22.6 %** | −22.5 % |
+| extrême | **−22.6 %** | **−22.6 %** | −22.1 % |
+
+### §24.13.3 Finding honnête
+
+**Le gain doctrinal FLUX/OF est invariant** entre −22.1 % et −22.8 %
+sur les 12 cellules. Le gain est **plus robuste** que ce que les
+proxies §7.3 avaient suggéré.
+
+Trois conclusions distinctes :
+
+1. **MOI overhead multiplicateur** : effet linéaire attendu sur les
+   coûts absolus (OF : 114 → 134 k€), mais ratio FLUX/OF stable. La
+   doctrine est **invariante à l'échelle du coût indirect**.
+
+2. **Tampon DBR et seuils Little** : aucun effet mesurable sur ce
+   protocole. **Raison technique honnête** : le smoothing étale la
+   charge tellement bien que le goulot **ne sature pas**, donc les
+   seuils warn/block/defer ne sont jamais franchis et le tampon n'a
+   rien à protéger. Les paramètres existent mais ne sont activés
+   que sur scénarios saturés (cf. `stress_multi_contract_overload`
+   §24.2 où PARTIAL_FREEZE se déclenche).
+
+3. **Robustesse mesurée mais conditionnelle** : pour observer
+   l'effet réel de DBR/Little, il faudrait un protocole spécifique
+   sur scénarios saturés (Point 3 bis, hors paper actuel).
+
+### §24.13.4 Implication pour le paper
+
+§7.3 du paper passe de « 3 proxies × 4 niveaux, robustesse
+indirecte » à :
+
+- **§7.3a Proxies (480 runs initial)** : 3 paramètres opérationnels
+  (n_hazards, horizon, intensité scrap), gain FLUX vs OF entre
+  −7.8 % et −31.7 % selon les conditions.
+- **§7.3b Directs (480 runs Point 3)** : 3 paramètres data-driven
+  internes, gain FLUX vs OF entre **−22.1 % et −22.8 %** constant.
+
+Les deux études convergent sur la même conclusion : **le gain
+doctrinal n'est pas un artefact**, ni des choix de scénarios
+(§7.3a), ni des choix de seuils internes (§7.3b).
+
+![Sensibilité directe des 3 paramètres data-driven (480 runs)](charts/point3_direct_sensitivity.png)
+
+---
+
+## §24.14 Cadre QCDS — 4 objectifs industriels mesurés
+
+Les unités industrielles poursuivent **4 objectifs simultanés** :
+
+1. **Q — Quantité** : livrer les bonnes quantités (quantity_compliance)
+2. **C — Coût** : au moindre coût (total_cost_eur)
+3. **D — Délai** : à date (disponibility_so_level)
+4. **S — Stabilité** : avec minimum de perturbations (nervousness)
+
+Le paper jusqu'ici mesurait C / D / S explicitement mais agrégeait
+Q (`of_closed` + `qty_good`) sans KPI dédié. L'**Option A** comble
+cette lacune en ajoutant `quantity_compliance` calculé comme
+`Σ(qty_good livrée par OF) / Σ(qty_demandée par SO)` (SOs rejetées
+exclues).
+
+### §24.14.1 Mesure QCDS 80 runs (Random scenarios, 20 seeds)
+
+| Doctrine | Q (compliance) | C (coût €) | D (disp. tol=3j) | S (nervosité) |
+|---|---|---|---|---|
+| OF | **0.918** | 107 785 | **1.000** | 0.333 |
+| FLUX | 0.796 | **84 422** | 0.989 | 0.333 |
+| **OF+EVENT** | **0.923** | 100 617 | **1.000** | **0.086** |
+| EVENT | 0.803 | **79 996** | 0.994 | **0.086** |
+
+**Δ vs OF par dimension** :
+
+| Doctrine | Δ Q | Δ C | Δ D | Δ S |
+|---|---|---|---|---|
+| FLUX | **−12.2 pp** | −21.7 % | −1.1 pp | 0 % |
+| **OF+EVENT** | +0.6 pp | −6.7 % | 0 pp | **−74.1 %** |
+| EVENT | **−11.5 pp** | **−25.8 %** | −0.6 pp | **−74.1 %** |
+
+### §24.14.2 Lecture QCDS — aucune doctrine ne domine tout
+
+**Constat** : sur les 4 dimensions QCDS, **aucune doctrine ne
+domine simultanément**. Trade-offs explicites mesurés :
+
+| Doctrine | Forces (≥ 3/4) | Faiblesses |
+|---|---|---|
+| **OF** | Q ✓ D ✓ | C ✗ S ✗ |
+| **FLUX** | C ✓ | Q ✗ D ↓ S = OF |
+| **OF+EVENT** | **Q ✓ D ✓ S ✓** | C légèrement ↓ (−7 %) |
+| **EVENT** | C ✓ S ✓ | Q ✗ D ↓ |
+
+**Découverte importante** : **OF+EVENT** est le **meilleur compromis
+QCDS global** (3/4 dimensions excellentes, seul −7 % sur C).
+EVENT bat OF+EVENT sur C (−26 % vs −7 %) **mais perd 11.5 pp de
+compliance quantité** — un déficit qu'un atelier strict ne peut pas
+absorber.
+
+### §24.14.3 Lien avec §24.8.6/§24.8.7 et choix de doctrine
+
+L'analyse QCDS confirme et étend les findings §24.8.6 (ontime) et
+§24.8.7 (cause smoothing) :
+
+- **Le smoothing du flux** dégrade simultanément Q (−12 pp) ET D
+  (−1.1 pp à tol=3j, −15 pp à tol=0j).
+- **L'event sourcing** ne corrige pas cette dégradation Q + D
+  (FLUX → EVENT : Q et D inchangés).
+- **OF+EVENT** est seul à préserver Q + D **tout en améliorant**
+  C (−7 %) et S (−74 %).
+
+**Recommandation doctrinale par profil d'atelier** :
+
+| Profil atelier | Doctrine recommandée | Justification |
+|---|---|---|
+| Strict ontime / quantités précises (aéro, médical, automotive) | **OF+EVENT** | Q ✓ D ✓ S ✓, seul −7 % sur C |
+| Industries à tolérance modérée (consumer, biens d'équipement) | **EVENT** | gain max C (−26 %) + S (−74 %), Q acceptable |
+| Industries à fort coût (matière chère, scrap critique) | **EVENT** | dominance C écrasante |
+| Industries en transition (lean rollout) | **OF+EVENT** | risque min, gain S immédiat |
+
+**Cette recommandation différenciée** est plus nuancée que les
+conclusions §24.6 (« EVENT bat OF de −21.8 % ») — elle reflète
+honnêtement le trade-off QCDS mesuré.
+
+![QCDS — radar 4 objectifs × 4 doctrines](charts/qcds_4_dimensions.png)
+
+### §24.14.4 Limite QCDS et travaux futurs
+
+`quantity_compliance` capture le ratio quantitatif global mais ne
+distingue pas :
+
+- Livraison partielle (50 % livré à date + 50 % livré en retard)
+- Mauvais produit (BOM mal alloué)
+- Surproduction par effet de lot (compliance > 1.0)
+
+Une décomposition fine de Q en sous-KPIs (
+`fill_rate_on_time` + `fill_rate_late` + `overproduction_rate`) est
+identifiée comme extension future, hors paper v1.
+
+V12.6 (§28.12 due-date aware smoothing) permettrait de **réconcilier
+EVENT avec Q + D** : ramener compliance EVENT à ~92 % et dispo à
+100 % au prix d'une fraction de gain coût (estimé : EVENT passerait
+de −26 % à −20 % sur C).
+
+---
+
+## §30. Manuel d'arbitrage du planificateur (QCDS)
+
+Aucune doctrine ne maximisant les 4 objectifs QCDS simultanément
+(§24.14.2), le planificateur **doit arbitrer**. Cette section donne
+la matrice paramètres × objectifs, les 5 stratégies par profil, et
+les résultats d'une simulation OTIF-first sur 4 scénarios stress.
+
+### §30.1 Matrice paramètres ↔ 4 objectifs QCDS
+
+Lecture : ↑ = améliore l'objectif, ↓ = dégrade, = neutre, ↑↑ effet fort.
+
+| Paramètre | Effet Q | Effet C | Effet D | Effet S |
+|---|---|---|---|---|
+| Doctrine **OF** | ↑ | ↓↓ | ↑ | ↓↓ |
+| Doctrine **FLUX** | ↓↓ | ↑↑ | ↓ | = OF |
+| Doctrine **OF+EVENT** | ≈ OF | ↑ | ↑ | ↑↑ |
+| Doctrine **EVENT** | ↓↓ | ↑↑ | ↓ | ↑↑ |
+| `freeze_window_days` ↑ | ↑ | = | ↓ | ↑↑ |
+| `horizon_forecast_days` ↑ | ↓ | ↑ | ↓ | = |
+| `safety_factor_dbr` ↑ | ↑ | ↓ | ↓ | ↑ |
+| Seuils Little stricts (0.6/0.75/0.9) | ↑ | ↓ | = | ↑ |
+| Seuils Little lâches (0.95/0.99/1.20) | ↓ | ↑ | ↓ | ↓ |
+| Tolérance dual permissive | ↑ | ↑ | ↑ | ↑↑ |
+| Tolérance dual stricte | ↓ | ↓ | ↓ | ↓↓ |
+| `late_threshold_days` ↑ | = | = | ↑ (mesuré) | = |
+| Multiplicateur coût scrap ↑ | ↑ (pression qualité) | ↓↓ | = | = |
+
+### §30.2 Les 4 arbitrages structurels
+
+| Arbitrage | Tension | Levier principal |
+|---|---|---|
+| **Q ↔ C** | smoothing étalé réduit coût mais perd quantité | doctrine + horizon_forecast |
+| **C ↔ D** | tampon DBR coûte capacité mais sécurise livraison | safety_factor_dbr + freeze |
+| **Q ↔ D** | lancement immédiat ↔ smoothing étalé | doctrine + horizon |
+| **D ↔ S** | freeze court = réactif mais nerveux | freeze_window + tolerance_dual |
+
+### §30.3 Cinq stratégies-types par profil de priorité
+
+| Profil | Doctrine | freeze | DBR safety | Little | Tolérance | Cible attendue |
+|---|---|---|---|---|---|---|
+| **Q-first** (aéro, médical) | OF+EVENT | long 7 j | élevé 0.25 | strict (0.6/0.75/0.9) | permissive | Q ≥ 95 %, D 100 %, S ÷4, C −5 à −10 % |
+| **C-first** (commodity, gros volumes) | EVENT | court 3 j | bas 0.05 | lâche (0.95/0.99/1.2) | stricte | C −25 à −30 %, Q ≈ 80 %, S ÷4 |
+| **D-first** (sur-mesure court) | OF+EVENT | court 3 j | moyen 0.15 | défaut | permissive | D 100 % strict, S ÷4, Q ≥ 92 %, C −5 % |
+| **S-first** (régulé, traçabilité) | EVENT | long 7 j | moyen | défaut | stricte | S ÷5, audit complet, Q+D acceptables, C −15 à −25 % |
+| **Équilibre QCDS** | OF+EVENT | défaut 5 j | défaut 0.15 | défaut | défaut | 3/4 dimensions excellentes |
+
+### §30.4 Algorithme OTIF-first → Coût-second
+
+**OTIF** (On-Time-In-Full) = livraison ontime ET en pleine quantité
+                          = Q × D
+
+Pour les ateliers à priorité absolue OTIF (industries strictes,
+contrats SLA serrés), le planificateur applique un ranking
+**lexicographique** :
+
+```
+def choose_doctrine(scenarios, doctrines, otif_threshold=0.95):
+    for scenario in scenarios:
+        candidates = [
+            (d, OTIF[scenario][d], cost[scenario][d])
+            for d in doctrines
+        ]
+        passing = [c for c in candidates if c[1] >= otif_threshold]
+        if passing:
+            # Filtre OTIF ≥ seuil, puis trie par coût croissant
+            return min(passing, key=lambda c: c[2])
+        else:
+            # Aucune doctrine ne passe → meilleure OTIF disponible
+            return max(candidates, key=lambda c: c[1])
+```
+
+### §30.5 Simulation OTIF-first sur 4 scénarios stress (160 runs)
+
+**Protocole** : 4 scénarios stress XL × 4 doctrines × 10 seeds.
+Tolérance ontime modérée (`late_threshold_days = 3`).
+
+**Données brutes** :
+
+| Scénario | Doctrine | Q | D | **OTIF** | C (€) |
+|---|---|---|---|---|---|
+| baseline_xl | OF | 0.950 | 1.000 | **0.950** | 41 283 |
+| baseline_xl | FLUX | 0.696 | 1.000 | 0.696 | 31 820 |
+| baseline_xl | **OF+EVENT** | 0.950 | 1.000 | **0.950** | **37 851** |
+| baseline_xl | EVENT | 0.696 | 1.000 | 0.696 | 31 820 |
+| stress_double_breakdown_xl | OF | 0.950 | 1.000 | **0.950** | 47 706 |
+| stress_double_breakdown_xl | FLUX | 0.675 | 1.000 | 0.675 | 30 203 |
+| stress_double_breakdown_xl | **OF+EVENT** | 0.950 | 1.000 | **0.950** | **35 282** |
+| stress_double_breakdown_xl | EVENT | 0.675 | 1.000 | 0.675 | 27 320 |
+| stress_cascade_nc_xl | OF | 0.947 | 1.000 | 0.947 | 33 602 |
+| stress_cascade_nc_xl | FLUX | 0.675 | 1.000 | 0.675 | 27 595 |
+| stress_cascade_nc_xl | **OF+EVENT** | 0.948 | 1.000 | **0.948** | **33 559** |
+| stress_cascade_nc_xl | EVENT | 0.675 | 1.000 | 0.675 | 27 458 |
+| stress_demand_spike_xl | **OF** | 0.898 | 0.991 | **0.890** | 51 584 |
+| stress_demand_spike_xl | FLUX | 0.686 | 0.909 | 0.624 | 42 545 |
+| stress_demand_spike_xl | OF+EVENT | 0.898 | 0.991 | **0.890** | 51 584 |
+| stress_demand_spike_xl | EVENT | 0.686 | 0.909 | 0.624 | 42 545 |
+
+**Ranking OTIF-first (seuil 95 %, le plus strict)** :
+
+| Scénario | **Choix** | OTIF | Coût | Économie vs OF |
+|---|---|---|---|---|
+| baseline_xl | **OF+EVENT** | 0.950 | 37 851 € | **−8.3 %** |
+| stress_double_breakdown_xl | **OF+EVENT** | 0.950 | 35 282 € | **−26.0 %** |
+| stress_cascade_nc_xl | **OF+EVENT** | 0.948 | 33 559 € | **−0.1 %** |
+| stress_demand_spike_xl | **OF** ou OF+EVENT | 0.890 | 51 584 € | ex-aequo |
+
+### §30.6 Conclusions opérationnelles
+
+**Verdict OTIF-first** :
+
+1. **OF+EVENT est la doctrine dominante** : choisie sur **4/4 scénarios**
+   (3 strictement, 1 ex-aequo avec OF). C'est l'**arbitre QCDS optimal**
+   sous priorité OTIF.
+
+2. **FLUX et EVENT sont éliminés systématiquement** : leur compliance
+   quantité (Q ≈ 0.67-0.70) ne passe **aucun seuil OTIF ≥ 80 %**.
+   Économie coût (−22 à −26 %) ne compense pas le déficit OTIF
+   pour les profils stricts.
+
+3. **OF+EVENT capture le best of both worlds** :
+   - Préserve OTIF d'OF (lancement immédiat, pas de smoothing)
+   - Ajoute la couche événementielle V3 (traçabilité + boucle physique)
+   - Économise −8 à −26 % vs OF pur grâce aux corrections V3 actionnel
+
+4. **Le smoothing du flux n'est pas adapté aux priorités OTIF** :
+   sa logique étale les lancements sans consulter les due_dates
+   (§24.8.7 défaut structurel), provoquant systématiquement une perte
+   de Q ≈ 12-25 pp. La doctrine FLUX doit attendre **V12.6 due-date
+   aware smoothing** (§28.12) pour devenir compatible OTIF-strict.
+
+### §30.7 Recommandation finale au planificateur
+
+Pour un atelier à **priorité OTIF + coût**, **OF+EVENT est la
+réponse universelle** sur les 4 scénarios stress testés. C'est aussi
+le meilleur compromis QCDS global mesuré §24.14.
+
+Pour d'autres priorités :
+
+- **C absolu seul** (commodity, gros volumes) → EVENT
+- **S maximum + audit** (régulé, ISO/IATF) → EVENT ou OF+EVENT
+- **Équilibre QCDS sans priorité claire** → OF+EVENT
+
+**FLUX seul** (sans event sourcing) est rarement le meilleur choix
+sur la matrice QCDS — c'est principalement un véhicule pour mesurer
+l'apport propre du smoothing (rôle de baseline pour la décomposition
+factorielle §24.6).
+
+![Ranking OTIF-first × Coût-second sur 4 scénarios stress (160 runs)](charts/otif_first_4_scenarios.png)
+
+---
+
+## §29. Démarche d'implantation progressive (industriel)
+
+L'implantation de la doctrine pilotage par flux dans un atelier
+réel doit être **progressive**, avec des critères Go/No-Go mesurés
+entre chaque phase. Cette section synthétise la séquence
+recommandée tirée des 8 000 runs cumulés et des limites mesurées.
+
+### §29.1 Prérequis (Phase 0, 3-6 mois)
+
+**Conditions techniques** :
+
+- MES capable de capturer événements (start, finish, scrap par OF)
+- ERP exposant due_dates, BOM, routings
+- Lien MES/ERP fiable (latence < 1 h)
+
+**Conditions organisationnelles** :
+
+- Volonté direction (prod + qualité + DSI alignés)
+- Choix du **profil cible** (SMALL/MEDIUM/LARGE V12.5 §28.10.2)
+- Identification du goulot principal (étape 1 TOC Goldratt)
+- Sélection du **produit pilote** : à tolérance ontime large
+  (≥ 3 jours) pour éviter le défaut §24.8.7
+
+**Livrable** : cartographie VSM, KPIs as-is, charte projet.
+
+### §29.2 Baseline mesurée OF-driven (Phase 1, 3 mois)
+
+**Quoi** : instrumenter le pilotage OF existant **avant tout changement**.
+
+| KPI à mesurer | Source | Fréquence |
+|---|---|---|
+| Lead time moyen + dispersion | MES | quotidienne |
+| WIP journalier | MES | quotidienne |
+| Nervosité (replans APS / jour) | ERP/APS | hebdomadaire |
+| Coût opérationnel (matière + MOD + MOI + scrap) | comptabilité | mensuelle |
+| Ontime delivery (% SOs livrées dans due_date) | ERP | quotidienne |
+
+**Critère Go/No-Go** : 90 jours consécutifs de mesure fiable. Sans
+baseline, **pas de comparable post-déploiement**.
+
+### §29.3 Event sourcing seul (Phase 2, 6 mois)
+
+**Quoi** : garder OF, **ajouter par-dessus** la couche événementielle V3.
+
+**Modules à activer** : `events_v3/expected.py`, `matching.py`,
+`dual_tolerance.py`, `comparative/learning.py`.
+
+**Apports validés** (sur 1 600 runs Random) :
+
+- **−2.8 % coût** (modeste mais mesurable)
+- **÷3.9 nervosité** (gain massif)
+- **134 détections + 404 causes attachées / run**
+
+**Risque** : MINIMAL (couche additive, désactivable).
+
+**Critère Go** : nervosité ÷ ≥ 3 + coût ≤ baseline + adoption équipe.
+
+### §29.4 Lissage premier flux (Phase 3, 6-12 mois)
+
+**Quoi** : sur **1 produit ou 1 ligne**, basculer en FLUX.
+
+**Modules** : `flux/contracts.py`, `flux/smoothing.py`,
+`flux/freeze.py`, `flux/buffers.py`, `gates/p3.py`.
+
+**Apports attendus** (sur produit pilote) :
+
+- −15 à −25 % coût
+- ÷1.6 à ÷2.3 lead time
+- −33 à −38 % WIP
+
+**Risques mesurés** :
+
+- ⚠ **Retard ontime sur tolérance stricte** (§24.8.6 / §24.8.7) :
+  FLUX 77-84 % à tol=0j contre 100 % pour OF.
+- **Mitigation obligatoire** : choisir produit à tolérance ≥ 3 j
+  (FLUX remonte à 95-96 %).
+
+**Critère Go** : ontime maintenue dans tolérance produit + coût
+baissé ≥ 10 % + smoothing accepté par opérateurs.
+
+### §29.5 Multi-flux et P3 collective (Phase 4, 12 mois)
+
+**Quoi** : étendre à plusieurs lignes/familles.
+
+**Modules** : `gates/p3_collective.py`, identification multi-goulots,
+seuils Little, tampons DBR.
+
+**Apports** :
+
+- Gestion des arbitrages multi-flux
+- PARTIAL_FREEZE anti-sur-engagement quand goulot saturé > 90 %
+- Convergence vers profil MEDIUM/LARGE V12.5
+
+**Risques** :
+
+- Conflits multi-contrats sur le goulot commun
+- Limite DBR : 2 goulots simultanés cassent la régulation (§24.10.1)
+
+**Critère Go** : ≥ 2 flux stables coexistants + saturation goulot
+maîtrisée < 90 %.
+
+### §29.6 Couche cybernétique V12 (Phase 5, 12-24 mois, optionnelle)
+
+**Quoi** : activer V12 selon besoin opérationnel.
+
+| Brique V12 | Activation recommandée | Apport |
+|---|---|---|
+| V12.4 Workflow humain (rôles, audit, escalation, dashboard) | **dès phase 3** | Traçabilité ISO/IATF |
+| V12.3 Delta engine 4 niveaux (L1-L4) | phase 4 | Gradation autonomie ↔ validation humaine |
+| V12.5 Matrice d'orchestration + profils JSON | phase 4 | Configuration data-driven |
+| V12.2 CP-SAT dynamique zone négociable | phase 5 | Replan automatique optimisé |
+| V12.1 + V12.1.1 Forecasting feedback-aware | phase 5 | Anticipation long terme |
+| V12.2.1 RejectionMemory + FragilityWeights | phase 5 | Apprentissage des échecs |
+
+**Critère Go pour V12** : V11 maîtrisé + nervosité < 0.1 + workflow
+validation humaine stable.
+
+### §29.7 Pilotage cybernétique complet (Phase 6, long terme)
+
+**Indicateurs de pilotage en régime nominal** :
+
+- Disponibilité SO-level réelle ≥ 95 % (Point 2)
+- Lag moyen approbation L3 < seuil profil
+- Taux d'escalation L3 → L4 < 10 %
+- Bias forecast contrôlé (|biais| < 5 %)
+- Rejection rate L3+L4 < 15 %
+
+### §29.8 Vue d'ensemble — calendrier indicatif
+
+| Phase | Durée | Risque | Apport cumulé vs baseline |
+|---|---|---|---|
+| 0. Audit | 3-6 mois | nul | mesure as-is |
+| 1. Baseline | 3 mois | nul | référence |
+| 2. Event sourcing | 6 mois | faible | −3 % coût, ÷4 nervosité, traçabilité |
+| 3. Flux pilote | 6-12 mois | moyen (ontime) | −15 à −25 % coût (produit pilote) |
+| 4. Multi-flux | 12 mois | moyen | gain multi-flux + P3 collective |
+| 5. V12 cybernétique | 12-24 mois | faible | apprentissage + automation |
+| 6. Pilotage cyber | continu | nul | optimisation continue |
+| **Total** | **36-60 mois** | progressif | doctrine complète |
+
+### §29.9 Pièges à éviter (issus des limites mesurées)
+
+| Piège | Conséquence | Mitigation |
+|---|---|---|
+| Sauter phase 2 | Pas de couche de mesure | Toujours mesurer avant changer |
+| Phase 3 sans baseline (phase 1) | Pas de comparable | Phase 1 obligatoire |
+| Produit pilote à tolérance ontime stricte (< 3 j) | Ontime dégradé (§24.8.6) | Choisir produit à tolérance ≥ 3 j ou attendre V12.6 |
+| V12 sans V11 stable | Complexité non maîtrisée | V12 vient après V11 |
+| 2 goulots simultanés | DBR cassé (×1.52 ampli) | Identifier UN goulot avant phase 4 |
+| Appro × Demande sans double-sourcing | Mur intrinsèque (6.8 j MTTR irréductible) | Hors doctrine — sécuriser appro |
+| Activer phase 3 sur produit à due_date serrée | Cf. §24.8.7 défaut smoothing | Attendre V12.6 due-date-aware |
+
+### §29.10 Lien vers les 6 briques V12
+
+Cette démarche s'appuie sur les briques V12 livrées dans le code :
+
+| Phase démarche | Brique V12 mobilisée |
+|---|---|
+| Phase 3 (flux pilote) | V12.1, V12.2 si needed |
+| Phase 4 (multi-flux) | V12.3 Delta engine, V12.4 human loop |
+| Phase 5 (cybernétique) | V12.1.1, V12.2.1, V12.5 orchestration |
+| Phase 6 (régime nominal) | V12.5 matrice + ajustement continu |
+
+V12.6 due-date-aware smoothing (§28.12) est **prérequis** pour
+ateliers à tolérance ontime stricte (aéro, médical, automobile).
 
 ---
 

@@ -65,6 +65,15 @@ class KpiSet:
     so_rejected: int = 0
     disponibility_so_level: float = 1.0
     # = so_delivered / so_total (1.0 = aucune SO refusée)
+    # Option A QCDS — compliance quantité livrée vs demandée
+    qty_demanded_total: float = 0.0
+    qty_delivered_total: float = 0.0
+    quantity_compliance: float = 1.0
+    # = qty_delivered / qty_demanded (1.0 = livré exactement la quantité demandée)
+    n_so_underdelivered: int = 0
+    # SOs livrées avec quantité < demandée
+    n_so_overdelivered: int = 0
+    # SOs livrées avec quantité > demandée (effets d'arrondi lots)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -139,6 +148,43 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
             so_delivered / so_total if so_total > 0 else 1.0
         )
 
+        # Option A QCDS — quantity_compliance
+        # Pour chaque SO non rejetée : compare qty demandée vs Σ qty_good
+        # des OFs sur le même article via candidate_orders.
+        qty_rows = conn.execute(
+            """
+            SELECT
+                so.sales_order_id,
+                so.quantity AS demanded,
+                COALESCE(SUM(m.qty_good), 0) AS delivered
+            FROM sales_orders so
+            LEFT JOIN candidate_orders c
+              ON c.sales_order_id = so.sales_order_id
+            LEFT JOIN manufacturing_orders m
+              ON m.candidate_id = c.candidate_id
+              AND m.article_id = so.article_id
+            WHERE so.rejected_at IS NULL
+            GROUP BY so.sales_order_id, so.quantity
+            """
+        ).fetchall()
+        qty_demanded_total = 0.0
+        qty_delivered_total = 0.0
+        n_so_underdelivered = 0
+        n_so_overdelivered = 0
+        for r in qty_rows:
+            demanded = float(r["demanded"] or 0)
+            delivered = float(r["delivered"] or 0)
+            qty_demanded_total += demanded
+            qty_delivered_total += delivered
+            if delivered < demanded - 0.01:
+                n_so_underdelivered += 1
+            elif delivered > demanded + 0.01:
+                n_so_overdelivered += 1
+        quantity_compliance = (
+            qty_delivered_total / qty_demanded_total
+            if qty_demanded_total > 0 else 1.0
+        )
+
         if result.doctrine in (DOCTRINE_EVENT, DOCTRINE_OF_EVENT):
             row = conn.execute(
                 "SELECT COUNT(*) AS n FROM event_deviations"
@@ -195,4 +241,9 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
         so_delivered=so_delivered,
         so_rejected=so_rejected,
         disponibility_so_level=round(disponibility_so_level, 4),
+        qty_demanded_total=round(qty_demanded_total, 2),
+        qty_delivered_total=round(qty_delivered_total, 2),
+        quantity_compliance=round(quantity_compliance, 4),
+        n_so_underdelivered=n_so_underdelivered,
+        n_so_overdelivered=n_so_overdelivered,
     )

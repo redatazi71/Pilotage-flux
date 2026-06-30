@@ -412,6 +412,143 @@ def sheet_resilience(wb: Workbook) -> None:
     _autofit(ws)
 
 
+def sheet_extension(wb: Workbook) -> None:
+    """§24.8.5 + §24.10 — Point de rupture + Matrice paires."""
+    ws = wb.create_sheet("Paires_400_runs")
+    ws.cell(1, 1, "§24.10 — Matrice 5×5 paires de domaines (400 runs)").font = TITLE_FONT
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=7)
+
+    domains = ["Appro", "Logi", "Qual", "Prod", "Dem"]
+    doctrines = [("OF", "of"), ("FLUX", "flux"),
+                 ("OF+EVENT", "of_event"), ("EVENT", "event")]
+
+    # Amplification matrices — données brutes (depuis cadrage_v4_resilience_ext_data.md)
+    amplification = {
+        "of":       [[1.00, 1.49, 1.00, 1.05, 1.03],
+                     [1.49, 1.20, 1.49, 0.74, 1.49],
+                     [1.00, 1.49, 1.00, 1.05, 1.02],
+                     [1.05, 0.74, 1.05, 1.05, 1.07],
+                     [1.03, 1.49, 1.02, 1.07, 1.05]],
+        "flux":     [[1.00, 1.36, 1.00, 1.03, 1.20],
+                     [1.36, 1.70, 1.36, 1.08, 2.20],
+                     [1.00, 1.36, 1.00, 1.01, 1.19],
+                     [1.03, 1.08, 1.01, 1.03, 1.23],
+                     [1.20, 2.20, 1.19, 1.23, 1.05]],
+        "of_event": [[1.00, 1.13, 1.00, 1.01, 1.03],
+                     [1.13, 1.23, 1.13, 0.87, 1.15],
+                     [1.00, 1.13, 1.00, 1.01, 1.02],
+                     [1.01, 0.87, 1.01, 1.01, 1.04],
+                     [1.03, 1.15, 1.02, 1.04, 1.05]],
+        "event":    [[1.00, 0.99, 1.00, 1.01, 1.20],
+                     [0.99, 1.52, 0.99, 1.01, 1.16],
+                     [1.00, 0.99, 1.00, 1.01, 1.19],
+                     [1.01, 1.01, 1.01, 1.01, 1.21],
+                     [1.20, 1.16, 1.19, 1.21, 1.05]],
+    }
+    recovery = {
+        "of":       [[5.8, 5.6, 5.8, 6.6, 5.4],
+                     [5.6, 4.8, 5.6, 5.8, 5.8],
+                     [5.8, 5.6, 5.8, 6.4, 5.6],
+                     [6.6, 5.8, 6.4, 6.6, 5.6],
+                     [5.4, 5.8, 5.6, 5.6, 5.2]],
+        "flux":     [[2.4, 2.8, 2.4, 4.0, 6.8],
+                     [2.8, 3.0, 2.8, 5.0, 5.0],
+                     [2.4, 2.8, 2.4, 4.0, 5.0],
+                     [4.0, 5.0, 4.0, 5.0, 5.8],
+                     [6.8, 5.0, 5.0, 5.8, 6.4]],
+        "of_event": [[5.8, 6.0, 5.8, 6.0, 5.4],
+                     [6.0, 5.8, 6.0, 6.0, 6.2],
+                     [5.8, 6.0, 5.8, 5.8, 5.6],
+                     [6.0, 6.0, 5.8, 6.0, 5.8],
+                     [5.4, 6.2, 5.6, 5.8, 5.2]],
+        "event":    [[2.4, 2.8, 2.4, 2.4, 6.8],
+                     [2.8, 2.8, 2.8, 3.0, 5.2],
+                     [2.4, 2.8, 2.4, 2.4, 5.0],
+                     [2.4, 3.0, 2.4, 2.4, 5.6],
+                     [6.8, 5.2, 5.0, 5.6, 6.4]],
+    }
+
+    row = 3
+    ws.cell(row, 1, "§24.10.A — Amplification de coût (>1 = sur-coût)").font = Font(bold=True, size=11)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=7)
+    row += 1
+    for label, key in doctrines:
+        ws.cell(row, 1, label).font = Font(bold=True, color="1F3A5F")
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=7)
+        row += 1
+        _style_header(ws.cell(row, 1, ""))
+        for j, d in enumerate(domains, start=2):
+            _style_header(ws.cell(row, j, d))
+        row += 1
+        m = amplification[key]
+        for i, d in enumerate(domains):
+            ws.cell(row, 1, d).font = Font(bold=True)
+            for j, val in enumerate(m[i], start=2):
+                cell = ws.cell(row, j, val)
+                cell.number_format = "0.00"
+                if val >= 1.50:
+                    cell.font = Font(bold=True, color="C00000")
+                elif val >= 1.20:
+                    cell.font = Font(color="C04500")
+                elif val < 0.95:
+                    cell.font = Font(color="2CA02C")
+            row += 1
+        row += 1
+
+    row += 1
+    ws.cell(row, 1, "§24.10.B — Time-to-recover par paire (jours)").font = Font(bold=True, size=11)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=7)
+    row += 1
+    for label, key in doctrines:
+        ws.cell(row, 1, label).font = Font(bold=True, color="1F3A5F")
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=7)
+        row += 1
+        _style_header(ws.cell(row, 1, ""))
+        for j, d in enumerate(domains, start=2):
+            _style_header(ws.cell(row, j, d))
+        row += 1
+        m = recovery[key]
+        for i, d in enumerate(domains):
+            ws.cell(row, 1, d).font = Font(bold=True)
+            for j, val in enumerate(m[i], start=2):
+                cell = ws.cell(row, j, val)
+                cell.number_format = "0.0"
+                if val >= 6.0:
+                    cell.font = Font(bold=True, color="C00000")
+                elif val <= 3.0:
+                    cell.font = Font(bold=True, color="2CA02C")
+            row += 1
+        row += 1
+
+    # Point de rupture
+    row += 1
+    ws.cell(row, 1, "§24.8.5 — Point de rupture (cascade poussée)").font = Font(bold=True, size=11)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=7)
+    row += 1
+    bp_headers = ["N pannes", "OF €", "FLUX €", "OF+EVENT €", "EVENT €",
+                  "Dispo OF", "Dispo EVENT"]
+    for j, h in enumerate(bp_headers, start=1):
+        _style_header(ws.cell(row, j, h))
+    row += 1
+    bp_data = [
+        (6, 142517, 85556, 119142, 74483, "99.5%", "94.4%"),
+        (8, 151406, 89425, 122605, 76327, "99.5%", "94.4%"),
+        (10, 151406, 89425, 122605, 76327, "99.5%", "94.4%"),
+        (12, 151406, 89425, 122605, 76327, "99.5%", "94.4%"),
+        (15, 151406, 89425, 122605, 76327, "99.5%", "94.4%"),
+    ]
+    for n_bd, of_c, flux_c, ofe_c, ev_c, of_a, ev_a in bp_data:
+        ws.cell(row, 1, n_bd).font = Font(bold=True)
+        for col, v in enumerate([of_c, flux_c, ofe_c, ev_c], start=2):
+            ws.cell(row, col, f"{v:,} €".replace(",", " "))
+        ws.cell(row, 6, of_a)
+        ws.cell(row, 7, ev_a)
+        ws.cell(row, 5).font = Font(bold=True, color="2CA02C")
+        row += 1
+
+    _autofit(ws)
+
+
 def build_xlsx() -> None:
     wb = Workbook()
     wb.remove(wb.active)  # remove default sheet
@@ -419,6 +556,7 @@ def build_xlsx() -> None:
     sheet_random(wb)
     sheet_decomposition(wb)
     sheet_resilience(wb)
+    sheet_extension(wb)
     wb.save(XLSX_PATH)
     print(f"Excel KPIs généré : {XLSX_PATH}")
 

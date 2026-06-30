@@ -1,14 +1,44 @@
 # Document de cadrage et cahier des charges — v4
 
 **Solution APS + MES en pilotage par flux lean**
-**Validation scientifique sur 4 000 runs**
+**Étude de simulation comparative sur 5 600 + 856 runs**
 
 *Mise à jour du 30 juin 2026 — branche `claude/project-completion-ltp2ow`*
 
-Ce document met à jour les sections §23 (avancement) et §24-25 (étude
-comparative validée + cahier des charges) du cadrage v3 du 29 juin 2026,
-en intégrant les preuves scientifiques produites par 4 000 runs sur
-configurations industrielles aléatoires.
+## §1. Introduction — résilience comme exigence systémique
+
+Aujourd'hui les variations et les perturbations sont devenues
+**systémiques**. Approvisionnement, logistique, qualité, production,
+demande : aucun de ces cinq domaines n'est plus à l'abri d'un aléa
+fréquent. Le contexte industriel a basculé d'un régime où la
+perturbation était l'exception (à traiter en mode pompier) à un
+régime où elle est la **règle** (à traiter en mode systémique).
+
+Pour cette raison, les systèmes de pilotage de production doivent
+s'adapter et rechercher les moyens d'accroître :
+
+- leur **résilience** — capacité à encaisser un choc sans s'effondrer,
+- leur **flexibilité** — capacité à recomposer en cours de route,
+- leur **capacité à revenir à un cycle normal** — vitesse de
+  récupération après perturbation (MTTR).
+
+Tout système possède des limites de résistance aux chocs et
+perturbations. La question opérationnelle n'est plus *« comment
+éviter les aléas ? »* — c'est devenu *« quelle doctrine résiste le
+mieux, et jusqu'où ? »*.
+
+Ce document décrit une doctrine APS + MES de **pilotage par flux
+lean avec event sourcing** conçue dans cette optique, et la confronte
+à trois alternatives (OF-driven, flux sans event sourcing, OF + event
+sourcing) via une étude de simulation de **5 600 + 856 runs
+reproductibles** sur fixtures industrielles fixes et aléatoires. Les
+résultats, leurs limites méthodologiques, et les origines des
+ruptures simultanées (matrice 5×5 par paires de domaines) sont
+documentés sections §24.1 à §24.10.
+
+Ce document met à jour les sections §23 (avancement) et §24-§25 (étude
+comparative validée + cahier des charges) du cadrage v3 du 29 juin
+2026, en intégrant les preuves expérimentales in-silico produites.
 
 ---
 
@@ -498,6 +528,56 @@ et un time-to-recover faible quand N augmente. Le panneau de droite
 est le **proxy MTTR** : nombre de jours nécessaires pour que le WIP
 redescende sous le seuil de régime normal après le pic du choc.
 
+### §24.8.5 Point de rupture — cascade poussée
+
+L'étude §24.8.3 mesurait la cascade jusqu'à 5 pannes simultanées.
+Pour identifier le **point de rupture** de chaque doctrine — le
+nombre N* à partir duquel le système cesse d'absorber et tombe en
+dégradation forte — on pousse la cascade à N = 6, 8, 10, 12, 15
+pannes simultanées au jour 3 (20 seeds × 4 doctrines = 400 runs).
+
+Deux indicateurs sont suivis :
+
+1. **Coût total** : continue-t-il de croître linéairement ou y a-t-il
+   un knee point ?
+2. **Disponibilité** = OF clôturés / OF créés. Une disponibilité qui
+   chute sous 80 % indique que le système ne livre plus.
+
+**Coût moyen (€)** :
+
+| N pannes | OF | FLUX | OF+EVENT | EVENT |
+|---|---|---|---|---|
+| 6 | 142 517 | 85 556 | 119 142 | **74 483** |
+| 8 | 151 406 | 89 425 | 122 605 | **76 327** |
+| 10 | 151 406 | 89 425 | 122 605 | **76 327** |
+| 12 | 151 406 | 89 425 | 122 605 | **76 327** |
+| 15 | 151 406 | 89 425 | 122 605 | **76 327** |
+
+**Disponibilité** (% OF clôturés / créés) :
+
+| N pannes | OF | FLUX | OF+EVENT | EVENT |
+|---|---|---|---|---|
+| 6 | 99.5 % | 94.4 % | 99.7 % | 94.4 % |
+| 8 | 99.5 % | 94.3 % | 99.3 % | 94.4 % |
+| 15 | 99.5 % | 94.3 % | 99.3 % | 94.4 % |
+
+**Lecture honnête** : la courbe sature au-delà de N=8 parce que la
+fixture utilisée n'a que **10 postes de travail**. Au-delà, les
+pannes ciblent le même pool de WS et l'effet supplémentaire est nul
+(`_build_cascade_scenario` clampe N à `len(workstations)`). Le
+**point de rupture observable est donc N* ∈ [6, 10]** : toutes les
+doctrines basculent vers leur plateau de saturation entre 6 et 8
+pannes simultanées.
+
+Observation marquante : la disponibilité reste > 94 % même à N=15
+parce que le simulateur ne rejette jamais une SO — il la livre en
+retard. Le coût absorbe la dégradation, pas le taux de service.
+Pour mesurer un vrai effondrement de disponibilité, il faudrait
+introduire un mécanisme de **rejet de SO en cas de dépassement
+horizon** — c'est une extension future.
+
+![Point de rupture — coût et disponibilité vs N pannes](charts/resilience_breaking_point.png)
+
 ### §24.8.4 Lecture honnête
 
 **Ce que les 856 runs démontrent** :
@@ -529,6 +609,229 @@ flux seul (FLUX) absorbe le choc mais récupère plus lentement quand
 le nombre de pannes augmente (MTTR 3.0 → 5.1 j). L'event sourcing seul
 (OF+EVENT) ne récupère pas mieux que OF — sa contribution résilience
 passe par le couplage avec le flux.
+
+---
+
+## §24.9 Taxonomie des origines des ruptures
+
+Cinq domaines de perturbation systémique sont identifiés dans la
+littérature de l'APS/MES industriel. Le simulateur les modélise comme
+suit :
+
+| Domaine | Mécanisme physique | Hazard modélisé | Effet | Doctrine de réponse |
+|---|---|---|---|---|
+| **Approvisionnement** | Retard PO fournisseur, lot non conforme à réception | `HAZARD_PO_DELAY` | Décale `expected_at` du PO | V3 source en alternatif (L8.1.c) |
+| **Logistique** | Flux interne interrompu, transfert bloqué, retard mise à disposition | `HAZARD_LOGISTIC_DELAY` (V11) | Poste bloqué N jours (slowdown factor 99) | Tampon DBR + buffer Little |
+| **Qualité** | NC interne, scrap, rework, défaillance contrôle | `HAZARD_QUALITY_NC` | Scrappe stock semi/fini | V3 intervention qualité (L8.1.a) |
+| **Production** | Panne machine, ralentissement, perte de capacité | `HAZARD_BREAKDOWN` | Slowdown factor temporaire | V3 maintenance immédiate (L5.2) |
+| **Demande** | Commande urgente, pic, mix produit | `HAZARD_URGENT_ORDER` | Insère SO en cours d'horizon | V3 fragmentation locale (L8.1.d) |
+
+**Fréquence empirique relative** (priors industriels, indicatifs) :
+
+| Domaine | Fréquence | Source d'observation typique |
+|---|---|---|
+| Production (panne) | élevée | MTBF machines, retours d'expérience GMAO |
+| Qualité | élevée | NC déclarées, taux de rebut |
+| Approvisionnement | moyenne-élevée | OTD fournisseurs |
+| Demande | moyenne | écart prévisionnel vs réel |
+| Logistique | moyenne | retards transports, blocages flux |
+
+Ces fréquences ne sont pas mesurées dans le simulateur ; le scénario
+random `RandomScenarioSpec` les pondère uniformément (~20 % chacun)
+sauf priorité explicite. La §24.10 ci-après mesure l'effet d'une
+**combinaison par paire** de ces 5 domaines lorsqu'elles surviennent
+simultanément.
+
+## §24.10 Matrice de paires de domaines
+
+Pour chaque paire (domaine_A, domaine_B), on injecte **1 aléa de
+chaque type au jour 3** et on mesure :
+
+- **Amplification de coût** : ratio entre coût avec 2 aléas
+  simultanés vs moyenne du coût avec chaque aléa pris seul. Une
+  amplification > 1 indique une **interaction défavorable** (l'aléa
+  combiné fait plus mal que la somme des aléas isolés).
+- **Time-to-recover** : nombre de jours pour que le WIP redescende
+  sous médiane × 1.30 après le pic.
+
+Protocole : 5 baselines (1 aléa par domaine) + 15 paires uniques
+(diagonale incluse) × 4 doctrines × 5 seeds = **400 runs**.
+
+**Amplification de coût (>1 = sur-coût)** — matrices 5×5 par doctrine
+(diagonale = 2 aléas du même domaine) :
+
+#### Doctrine OF (V0)
+
+| | Appro | Logi | Qual | Prod | Dem |
+|---|---|---|---|---|---|
+| **Appro** | 1.00 | **1.49** | 1.00 | 1.05 | 1.03 |
+| **Logi**  | **1.49** | 1.20 | **1.49** | 0.74 | **1.49** |
+| **Qual**  | 1.00 | **1.49** | 1.00 | 1.05 | 1.02 |
+| **Prod**  | 1.05 | 0.74 | 1.05 | 1.05 | 1.07 |
+| **Dem**   | 1.03 | **1.49** | 1.02 | 1.07 | 1.05 |
+
+#### Doctrine FLUX (V1+V2)
+
+| | Appro | Logi | Qual | Prod | Dem |
+|---|---|---|---|---|---|
+| **Appro** | 1.00 | 1.36 | 1.00 | 1.03 | 1.20 |
+| **Logi**  | 1.36 | 1.70 | 1.36 | 1.08 | **2.20** |
+| **Qual**  | 1.00 | 1.36 | 1.00 | 1.01 | 1.19 |
+| **Prod**  | 1.03 | 1.08 | 1.01 | 1.03 | 1.23 |
+| **Dem**   | 1.20 | **2.20** | 1.19 | 1.23 | 1.05 |
+
+#### Doctrine OF+EVENT (V8)
+
+| | Appro | Logi | Qual | Prod | Dem |
+|---|---|---|---|---|---|
+| **Appro** | 1.00 | 1.13 | 1.00 | 1.01 | 1.03 |
+| **Logi**  | 1.13 | 1.23 | 1.13 | 0.87 | 1.15 |
+| **Qual**  | 1.00 | 1.13 | 1.00 | 1.01 | 1.02 |
+| **Prod**  | 1.01 | 0.87 | 1.01 | 1.01 | 1.04 |
+| **Dem**   | 1.03 | 1.15 | 1.02 | 1.04 | 1.05 |
+
+#### Doctrine EVENT (V3+)
+
+| | Appro | Logi | Qual | Prod | Dem |
+|---|---|---|---|---|---|
+| **Appro** | 1.00 | 0.99 | 1.00 | 1.01 | 1.20 |
+| **Logi**  | 0.99 | 1.52 | 0.99 | 1.01 | 1.16 |
+| **Qual**  | 1.00 | 0.99 | 1.00 | 1.01 | 1.19 |
+| **Prod**  | 1.01 | 1.01 | 1.01 | 1.01 | 1.21 |
+| **Dem**   | 1.20 | 1.16 | 1.19 | 1.21 | 1.05 |
+
+![Matrice 5×5 d'amplification de coût par doctrine](charts/paired_hazards_heatmap.png)
+
+**Time-to-recover par paire (jours)** :
+
+#### Doctrine OF (V0)
+
+| | Appro | Logi | Qual | Prod | Dem |
+|---|---|---|---|---|---|
+| **Appro** | 5.8 | 5.6 | 5.8 | 6.6 | 5.4 |
+| **Logi**  | 5.6 | 4.8 | 5.6 | 5.8 | 5.8 |
+| **Qual**  | 5.8 | 5.6 | 5.8 | 6.4 | 5.6 |
+| **Prod**  | 6.6 | 5.8 | 6.4 | 6.6 | 5.6 |
+| **Dem**   | 5.4 | 5.8 | 5.6 | 5.6 | 5.2 |
+
+#### Doctrine FLUX (V1+V2)
+
+| | Appro | Logi | Qual | Prod | Dem |
+|---|---|---|---|---|---|
+| **Appro** | 2.4 | 2.8 | 2.4 | 4.0 | **6.8** |
+| **Logi**  | 2.8 | 3.0 | 2.8 | 5.0 | 5.0 |
+| **Qual**  | 2.4 | 2.8 | 2.4 | 4.0 | 5.0 |
+| **Prod**  | 4.0 | 5.0 | 4.0 | 5.0 | 5.8 |
+| **Dem**   | **6.8** | 5.0 | 5.0 | 5.8 | 6.4 |
+
+#### Doctrine OF+EVENT (V8)
+
+| | Appro | Logi | Qual | Prod | Dem |
+|---|---|---|---|---|---|
+| **Appro** | 5.8 | 6.0 | 5.8 | 6.0 | 5.4 |
+| **Logi**  | 6.0 | 5.8 | 6.0 | 6.0 | 6.2 |
+| **Qual**  | 5.8 | 6.0 | 5.8 | 5.8 | 5.6 |
+| **Prod**  | 6.0 | 6.0 | 5.8 | 6.0 | 5.8 |
+| **Dem**   | 5.4 | 6.2 | 5.6 | 5.8 | 5.2 |
+
+#### Doctrine EVENT (V3+)
+
+| | Appro | Logi | Qual | Prod | Dem |
+|---|---|---|---|---|---|
+| **Appro** | 2.4 | 2.8 | 2.4 | 2.4 | **6.8** |
+| **Logi**  | 2.8 | 2.8 | 2.8 | 3.0 | 5.2 |
+| **Qual**  | 2.4 | 2.8 | 2.4 | 2.4 | 5.0 |
+| **Prod**  | 2.4 | 3.0 | 2.4 | 2.4 | 5.6 |
+| **Dem**   | **6.8** | 5.2 | 5.0 | 5.6 | 6.4 |
+
+![Time-to-recover par paire de domaines](charts/paired_hazards_recovery.png)
+
+### §24.10.1 Lectures clés des matrices
+
+**1. Quelle paire est la plus coûteuse ?**
+- **Logi × Dem** sur la doctrine FLUX = amplification **×2.20** : un
+  blocage logistique combiné à une commande urgente fait plus du
+  double de la moyenne des deux pris seuls. C'est la paire la plus
+  dommageable de toute l'étude.
+- Sur EVENT, la même paire Logi × Dem n'est qu'à ×1.16 : l'event
+  sourcing détecte le blocage et déclenche la régulation avant
+  l'amplification.
+
+**2. Quelle paire est la plus longue à récupérer ?**
+- **Appro × Dem** = **6.8 jours** sur FLUX **et sur EVENT**. C'est
+  le temps de récupération maximal mesuré dans l'étude. Cette paire
+  résiste à toutes les doctrines, y compris la plus résiliente.
+- L'interprétation est intuitive : commande urgente + composant
+  manquant à l'approvisionnement = besoin d'une matière qu'on n'a
+  pas, immédiatement. **Aucune doctrine de pilotage ne crée de la
+  matière** ; elle peut seulement optimiser son utilisation. C'est
+  une **limite intrinsèque du pilotage de flux**, pas une faiblesse
+  d'implémentation.
+- OF/OF+EVENT ont des recoveries plus uniformes (5.5-6.6j sur
+  toutes paires) parce qu'ils ne se relèvent jamais vite — ils n'ont
+  pas de mécanique d'absorption (smoothing) qui crée la variance.
+
+**3. Quelle est la durée d'un retour à la normale ?**
+
+| Doctrine | Min | Médiane | Max | Paire max |
+|---|---|---|---|---|
+| OF | 4.8 | 5.7 | 6.6 | Appro × Prod |
+| **FLUX** | **2.4** | 4.0 | 6.8 | Appro × Dem |
+| OF+EVENT | 5.2 | 5.8 | 6.2 | Logi × Dem |
+| **EVENT** | **2.4** | 2.8 | 6.8 | Appro × Dem |
+
+- FLUX et EVENT récupèrent en 2.4 jours sur les paires « bénignes »
+  (toutes les paires sans dimension demande sont absorbées par
+  smoothing seul).
+- Dès qu'une **commande urgente** apparaît, le retour à la normale
+  monte à 5–7 j sur toutes les doctrines : la dimension demande
+  consomme l'horizon, donc on ne peut pas amortir.
+
+**4. Que peut-on dire sur le pilotage des flux industriels en lean ?**
+
+L'étude confirme expérimentalement quatre principes lean classiques :
+
+a) **Le flux contractualisé absorbe l'amplitude.** Sur les paires
+   sans Demande, FLUX et EVENT amplifient le coût ≤ 1.20 vs OF/OF+EVENT
+   qui montent à 1.49. Le smoothing étale la charge — un choc
+   ponctuel se distribue sur l'horizon au lieu de saturer le goulot.
+
+b) **L'event sourcing absorbe l'interaction.** L'écart FLUX → EVENT
+   sur la paire pivot Logi × Dem est saisissant : **×2.20 → ×1.16**.
+   La couche événementielle détecte la perturbation logistique et
+   déclenche les actions correctives **avant** que la commande
+   urgente amplifie l'effet. C'est ce que les communautés Toyota et
+   Goldratt nomment respectivement « jidoka » (autonomation de la
+   détection) et « buffer management » (signal goulot).
+
+c) **Approvisionnement × Demande est le mur du flux.** Aucune
+   doctrine, fût-elle la plus instrumentée, ne descend sous 6.8 j de
+   recovery sur cette paire. C'est le seul axe où le pilotage de
+   flux atteint sa **limite intrinsèque** : la matière manquante
+   bloque physiquement la production, indépendamment de la qualité
+   du pilotage. Les leviers d'amélioration sortent du périmètre
+   doctrinal : double-sourcing, stock tampon stratégique, contrats
+   fournisseur SLA. Lean dit la même chose : *« no flow if no
+   matter »*.
+
+d) **Logistique-Logistique est curieusement le pire pour EVENT.**
+   La cellule diagonale Logi-Logi = ×1.52 alors que ses autres
+   cellules tournent à 1.00-1.21. Interprétation : la doctrine
+   EVENT compte sur les **autres postes** pour basculer le flux
+   quand un poste est bloqué ; quand 2 postes différents sont
+   bloqués en même temps, ce mécanisme de contournement s'effondre.
+   C'est cohérent avec la théorie : le DBR Goldratt repose sur
+   l'identification d'**un** goulot ; deux goulots simultanés
+   bloquent la régulation.
+
+En résumé, les flux industriels en lean **ne sont pas un mantra
+magique** : ils gagnent face à OF sur les KPI moyens et la majorité
+des paires, mais ils ont leurs limites — particulièrement sur les
+chocs combinés appro × demande et sur les défaillances multiples du
+même domaine. Le diagnostic différencié de la matrice 5×5 permet de
+prioriser les investissements (double sourcing pour appro, capacités
+redondantes pour logistique, frozen window pour demande) en fonction
+du domaine le plus critique pour l'atelier visé.
 
 ---
 

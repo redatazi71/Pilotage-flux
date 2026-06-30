@@ -1046,6 +1046,15 @@ CREATE TABLE IF NOT EXISTS causal_cells (
     last_event_at           TEXT,
     transitioned_observing_at  TEXT,
     transitioned_active_at  TEXT,
+    -- A.3 : histogramme cumul des délais (8 bins, cf. spec §2.4)
+    bin_cumul_b0_1h         INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b1_4h         INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b4_24h        INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b1_3j         INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b3_7j         INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b7_14j        INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b14_30j       INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b30_90j       INTEGER NOT NULL DEFAULT 0,
     created_at              TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (racine_id, categorie_code)
 );
@@ -1054,3 +1063,139 @@ CREATE INDEX IF NOT EXISTS idx_causal_cells_status
     ON causal_cells (status);
 CREATE INDEX IF NOT EXISTS idx_causal_cells_racine
     ON causal_cells (racine_id);
+
+-- ---------------------------------------------------------------------
+-- MACRS Couche 2 — A.3 : files événementielles + agrégats temporels
+--
+-- causal_events : liste atomique d'événements par cellule. Sert de
+-- file glissante : les agrégats W_courte (30j) et W_longue (90j)
+-- sont calculés à la demande par filtrage `occurred_at >= now - W`.
+-- Les événements expirés restent en base (cf. §4.3 de la spec :
+-- conservation pour traçabilité, modification rétroactive
+-- éventuelle des fenêtres, audit complet).
+--
+-- causal_cells gagne 8 colonnes bin pour le **cumul** de
+-- l'histogramme des délais (cumul ne s'expire pas).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS causal_events (
+    cell_event_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    cell_id         INTEGER NOT NULL REFERENCES causal_cells(cell_id),
+    occurred_at     TEXT NOT NULL,    -- ISO datetime simulé
+    delay_bin       TEXT,             -- b0_1h | b1_4h | b4_24h | b1_3j
+                                       -- | b3_7j | b7_14j | b14_30j | b30_90j
+    delay_hours     REAL,             -- valeur brute (peut être NULL)
+    impact_score    REAL,             -- score pondéré optionnel
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_causal_events_cell_time
+    ON causal_events (cell_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_causal_events_time
+    ON causal_events (occurred_at);
+
+-- ---------------------------------------------------------------------
+-- MACRS Couche 2 — A.4 : snapshots hebdo + versioning des poids
+--
+-- weight_versions : jeu de coefficients de pondération utilisés par
+-- les indicateurs dérivés (Option B cause/racine, Option D info/
+-- correction). Versionnage explicite cf. spec §5. Une seule version
+-- active à tout instant (status = 'active'), les autres restent
+-- disponibles ('experimental' ou 'archived') pour comparaison.
+--
+-- causal_cell_snapshots : photographies hebdomadaires immuables des
+-- cellules ACTIVE (cf. spec §3.5). Permettent de reconstituer
+-- l'évolution de la matrice. Référencent éventuellement la
+-- weight_version active au moment de la prise. Ne sont JAMAIS
+-- utilisées par le Pareto courant.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS weight_versions (
+    weight_version_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    label               TEXT NOT NULL UNIQUE,
+    description         TEXT NOT NULL,
+    coefficients_json   TEXT NOT NULL,
+        -- JSON sérialisé : {indicateur_key: coefficient_float, ...}
+    status              TEXT NOT NULL DEFAULT 'experimental',
+        -- 'active' | 'archived' | 'experimental'
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    activated_at        TEXT,
+    archived_at         TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_weight_versions_status
+    ON weight_versions (status);
+
+CREATE TABLE IF NOT EXISTS causal_cell_snapshots (
+    snapshot_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    cell_id                  INTEGER NOT NULL REFERENCES causal_cells(cell_id),
+    racine_id                TEXT NOT NULL,
+    categorie_code           TEXT NOT NULL,
+    status                   TEXT NOT NULL,
+    snapshot_at              TEXT NOT NULL,
+    n_w_courte               INTEGER NOT NULL,
+    n_w_longue               INTEGER NOT NULL,
+    n_cumul                  INTEGER NOT NULL,
+    ratio_emergence          REAL,
+    histogram_w_courte_json  TEXT NOT NULL,
+    histogram_w_longue_json  TEXT NOT NULL,
+    histogram_cumul_json     TEXT NOT NULL,
+    weight_version_id        INTEGER REFERENCES weight_versions(weight_version_id),
+    created_at               TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_cell
+    ON causal_cell_snapshots (cell_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_time
+    ON causal_cell_snapshots (snapshot_at);
+
+-- ---------------------------------------------------------------------
+-- Moteur Delta unifié (B.1)
+--
+-- Vocabulaire d'action à 6 niveaux du CDC §11, mappé sur les 4 niveaux
+-- du cadrage v1.3 §3.11 (N1 absorption / N2 ajust. auto / N3 replan
+-- locale / N4 replan complète). Le flag requires_human marque les
+-- niveaux soumis à la subsidiarité humaine (cadrage : N3/N4).
+--
+--   L1 informer            → N1 (passive, scope=none)
+--   L2 surveiller          → N1 (passive, scope=none)
+--   L3 corriger_local      → N2 (automatique, scope=local)
+--   L4 replanifier_local   → N3 (humain, scope=local)
+--   L5 escalader           → N3 (humain, transition)
+--   L6 replanifier_global  → N4 (humain, scope=global)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS delta_action_levels (
+    niveau_code     TEXT PRIMARY KEY,    -- 'L1'..'L6'
+    label           TEXT NOT NULL,
+    cadrage_level   INTEGER NOT NULL,    -- 1..4 (mapping cadrage v1.3)
+    requires_human  INTEGER NOT NULL,    -- 0|1
+    scope           TEXT NOT NULL,       -- 'none'|'local'|'global'
+    description     TEXT NOT NULL,
+    ordre           INTEGER NOT NULL UNIQUE  -- 1..6, ordre d'escalade
+);
+
+-- Décisions Delta : une par déviation, lien optionnel vers approval_queue.
+CREATE TABLE IF NOT EXISTS delta_decisions (
+    delta_decision_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    deviation_id        INTEGER REFERENCES event_deviations(deviation_id),
+    niveau_code         TEXT NOT NULL REFERENCES delta_action_levels(niveau_code),
+    racine_id           TEXT REFERENCES macrs_racines(racine_id),
+    categorie_code      TEXT REFERENCES macrs_categories(categorie_code),
+    score_magnitude     REAL,
+    frequency           REAL,
+    decided_at          TEXT NOT NULL,
+    executed_at         TEXT,
+    status              TEXT NOT NULL DEFAULT 'pending',
+        -- 'pending' | 'executed' | 'rejected' | 'expired'
+    approval_queue_id   INTEGER REFERENCES approval_queue(queue_id),
+    explanation         TEXT,
+    actor               TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_delta_decisions_deviation
+    ON delta_decisions (deviation_id);
+CREATE INDEX IF NOT EXISTS idx_delta_decisions_niveau
+    ON delta_decisions (niveau_code);
+CREATE INDEX IF NOT EXISTS idx_delta_decisions_status
+    ON delta_decisions (status);
+CREATE INDEX IF NOT EXISTS idx_delta_decisions_racine
+    ON delta_decisions (racine_id, categorie_code);

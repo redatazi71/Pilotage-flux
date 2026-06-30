@@ -56,6 +56,12 @@ class HazardEvent:
     day: int
     kind: str
     payload: dict[str, Any]
+    # Étiquetage causal (C.1) : racine MACRS R001..R046 et catégorie Δ
+    # qui correspondent au mécanisme du hazard. Optionnels — si None,
+    # la résolution par défaut s'opère via
+    # `cybernetic.macrs.hazard_labels.resolve_racine`.
+    racine_id: str | None = None
+    categorie_code: str | None = None
 
 
 @dataclass(frozen=True)

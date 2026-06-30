@@ -80,6 +80,14 @@ from pilotage_flux.cybernetic.macrs.hazard_labels import (
     labeled_hazard,
     resolve_racine,
 )
+from pilotage_flux.cybernetic.macrs.hazard_emission import (
+    HAZARD_DEFAULT_DELAY_HOURS,
+    HAZARD_DEFAULT_IMPACT,
+    HAZARD_TO_DEVIATION_KIND,
+    HazardEmissionResult,
+    emit_hazard,
+    emit_hazards_batch,
+)
 
 __all__ = [
     "CATEGORIES",
@@ -143,4 +151,11 @@ __all__ = [
     "default_racine_for",
     "labeled_hazard",
     "resolve_racine",
+    # C.2 — propagation hazard à travers la boucle
+    "HAZARD_DEFAULT_DELAY_HOURS",
+    "HAZARD_DEFAULT_IMPACT",
+    "HAZARD_TO_DEVIATION_KIND",
+    "HazardEmissionResult",
+    "emit_hazard",
+    "emit_hazards_batch",
 ]

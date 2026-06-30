@@ -297,12 +297,128 @@ def sheet_decomposition(wb: Workbook) -> None:
     _autofit(ws)
 
 
+def sheet_resilience(wb: Workbook) -> None:
+    ws = wb.create_sheet("Resilience_856_runs")
+    ws.cell(1, 1, "§24.8 — Analyse de résilience (856 runs : 256 distrib + 300 gradient + 300 cascade)").font = TITLE_FONT
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
+
+    # §24.8.1 — Distributions
+    ws.cell(3, 1, "§24.8.1 — Distributions de coût (256 runs)").font = Font(bold=True, size=11)
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=9)
+    headers = ["Doctrine", "N", "Moyenne", "σ", "P50", "P75", "P95", "P99", "Max"]
+    for j, h in enumerate(headers, start=1):
+        _style_header(ws.cell(4, j, h))
+
+    dist_rows = [
+        ("OF", 64, 152028, 55230, 136213, 174280, 261855, 316851, 359912),
+        ("FLUX", 64, 126940, 49975, 119951, 147237, 222570, 289395, 321560),
+        ("OF+EVENT", 64, 146672, 56155, 135383, 167709, 276428, 310432, 342564),
+        ("EVENT", 64, 121866, 50233, 112829, 141320, 220793, 286827, 314621),
+    ]
+    for i, (name, n, m, s, p50, p75, p95, p99, mx) in enumerate(dist_rows, start=5):
+        ws.cell(i, 1, name).font = Font(bold=True)
+        ws.cell(i, 2, n)
+        for col, v in enumerate([m, s, p50, p75, p95, p99, mx], start=3):
+            ws.cell(i, col, f"{v:,} €".replace(",", " "))
+        if name == "EVENT":
+            ws.cell(i, 7).font = Font(bold=True, color="2CA02C")
+            ws.cell(i, 8).font = Font(bold=True, color="2CA02C")
+
+    # §24.8.2 — Gradient
+    row = 11
+    ws.cell(row, 1, "§24.8.2 — Gradient d'intensité (300 runs) — coût moyen €").font = Font(bold=True, size=11)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=9)
+    row += 1
+    grad_headers = ["Intensité", "OF", "FLUX", "OF+EVENT", "EVENT"]
+    for j, h in enumerate(grad_headers, start=1):
+        _style_header(ws.cell(row, j, h))
+    row += 1
+    grad_data = [
+        (0.5, 114049, 101007, 113191, 100566),
+        (1.0, 117336,  98364, 113029,  97655),
+        (1.5, 119776,  99664, 113464,  99437),
+        (2.0, 117605,  99990, 113980, 100594),
+        (2.5, 114925, 100969, 113484,  99499),
+    ]
+    for intensity, *vals in grad_data:
+        ws.cell(row, 1, f"x{intensity}").font = Font(bold=True)
+        for col, v in enumerate(vals, start=2):
+            ws.cell(row, col, f"{v:,} €".replace(",", " "))
+        row += 1
+    row += 1
+    ws.cell(row, 1, "Note : courbe plate → ces variations d'intensité ne discriminent pas.")
+    ws.cell(row, 1).font = Font(italic=True)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=9)
+
+    # §24.8.3 — Cascade
+    row += 2
+    ws.cell(row, 1, "§24.8.3 — Cascade de pannes simultanées (300 runs) — coût moyen €").font = Font(bold=True, size=11)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=9)
+    row += 1
+    casc_headers = ["Pannes simultanées", "OF", "FLUX", "OF+EVENT", "EVENT"]
+    for j, h in enumerate(casc_headers, start=1):
+        _style_header(ws.cell(row, j, h))
+    row += 1
+    casc_data = [
+        (1, 107116, 68524, 101392, 67198),
+        (2, 112506, 72831, 103452, 68398),
+        (3, 120826, 75345, 105518, 69145),
+        (4, 127923, 78276, 107685, 70087),
+        (5, 131954, 80370, 110331, 70247),
+    ]
+    for n_bd, *vals in casc_data:
+        ws.cell(row, 1, f"{n_bd}").font = Font(bold=True)
+        for col, v in enumerate(vals, start=2):
+            ws.cell(row, col, f"{v:,} €".replace(",", " "))
+        ws.cell(row, 5).font = Font(bold=True, color="2CA02C")
+        row += 1
+
+    # MTTR
+    row += 1
+    ws.cell(row, 1, "Time-to-recover (jours)").font = Font(bold=True, size=11)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=9)
+    row += 1
+    for j, h in enumerate(casc_headers, start=1):
+        _style_header(ws.cell(row, j, h))
+    row += 1
+    mttr_data = [
+        (1, 5.8, 3.0, 5.7, 2.9),
+        (2, 5.9, 3.5, 5.7, 3.0),
+        (3, 5.9, 3.9, 5.7, 3.1),
+        (4, 5.7, 4.9, 5.7, 3.5),
+        (5, 5.5, 5.1, 5.7, 3.5),
+    ]
+    for n_bd, *vals in mttr_data:
+        ws.cell(row, 1, f"{n_bd}").font = Font(bold=True)
+        for col, v in enumerate(vals, start=2):
+            ws.cell(row, col, f"{v:.1f} j")
+        ws.cell(row, 5).font = Font(bold=True, color="2CA02C")
+        row += 1
+
+    # Sensibilité
+    row += 1
+    ws.cell(row, 1, "Sensibilité au choc — Δ relatif 1→5 pannes").font = Font(bold=True, size=11)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=9)
+    row += 1
+    sens_data = [("OF", "+23.2 %"), ("FLUX", "+17.3 %"),
+                 ("OF+EVENT", "+8.8 %"), ("EVENT", "+4.5 %")]
+    for name, delta in sens_data:
+        ws.cell(row, 1, name).font = Font(bold=True)
+        ws.cell(row, 2, delta)
+        if name == "EVENT":
+            ws.cell(row, 2).font = Font(bold=True, color="2CA02C", size=12)
+        row += 1
+
+    _autofit(ws)
+
+
 def build_xlsx() -> None:
     wb = Workbook()
     wb.remove(wb.active)  # remove default sheet
     sheet_xl(wb)
     sheet_random(wb)
     sheet_decomposition(wb)
+    sheet_resilience(wb)
     wb.save(XLSX_PATH)
     print(f"Excel KPIs généré : {XLSX_PATH}")
 

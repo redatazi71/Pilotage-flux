@@ -46,7 +46,32 @@ python docs\run_full_corpus.py --skip validity
 
 # S'arrêter à la première erreur (défaut : continuer)
 python docs\run_full_corpus.py --stop-on-error
+
+# Mode compact (une ligne par script, sans sortie live)
+python docs\run_full_corpus.py --quiet
 ```
+
+## Visuel de progression
+
+Par défaut, l'orchestrateur **streame en direct** la sortie de chaque
+étude (qui imprime déjà sa progression scénario par scénario). Vous
+voyez :
+
+```
+[7/30] ▶ build_v12_6_comparative.py  (écoulé 4 min | ETA ~22 min)
+  ········································ sortie live ·····················
+  → baseline_xl
+  → stress_double_breakdown_xl
+  ...
+  └─ ✓ OK en 265.0s
+```
+
+- `[i/N]` : position dans le bloc
+- `écoulé` : temps depuis le début
+- `ETA` : estimation du temps restant (moyenne des études terminées ×
+  scripts restants)
+- `--quiet` : désactive le streaming, une seule ligne de résumé par
+  script (utile en CI ou pour un log compact).
 
 ## Ce qui est régénéré
 

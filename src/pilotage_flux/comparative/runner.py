@@ -564,6 +564,19 @@ def _apply_hazard(
              "block_days": block_days}
         )
 
+    # ----- Hook BCE : propagation à travers la boucle cybernétique -----
+    # Si la doctrine est BCE, le hazard est aussi propagé via emit_hazard
+    # (C.2) → MACRS Couche 2 + filtre dual + delta_decision +
+    # approval_queue. Pour les doctrines non-BCE, le hook ne fait rien.
+    from pilotage_flux.comparative.bce_wire import bce_apply_hazard_hook
+    bce_info = bce_apply_hazard_hook(
+        conn, hazard, doctrine,
+        day_iso=_day_to_iso(scenario.horizon_start, hazard.day),
+    )
+    if bce_info is not None and result.hazards_observed:
+        # Enrichit la dernière trace hazard avec le résultat BCE
+        result.hazards_observed[-1].update(bce_info)
+
 
 def _get_realistic_capacity_minutes_per_day(
     conn: sqlite3.Connection,
@@ -1798,15 +1811,22 @@ def run_event_doctrine(
     scenario: Scenario, db_path: Path, *,
     fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
     parameter_overrides: dict[str, float] | None = None,
+    doctrine_override: str | None = None,
 ) -> RunResult:
     """Doctrine V3 : V1+V2 + événements attendus, matching, dual tolerance, causes, mémoire.
 
     `parameter_overrides` (L8.3) : dict de paramètres global à injecter en lieu
     et place des défauts, e.g. seuils filtre dual appris par la boucle longue.
+
+    `doctrine_override` : si fourni, surcharge l'identifiant de
+    doctrine porté par le RunResult et passé à `_apply_hazard`.
+    Utilisé par le wrapper BCE (event_bce) pour activer le hook
+    cybernétique tout en réutilisant ce runner.
     """
+    doctrine = doctrine_override or DOCTRINE_EVENT
     _bootstrap_db(scenario, db_path, fixtures_dir)
     result = RunResult(
-        doctrine=DOCTRINE_EVENT, scenario_name=scenario.name,
+        doctrine=doctrine, scenario_name=scenario.name,
         db_path=db_path, seed=scenario.seed,
     )
     rng = random.Random(scenario.seed)
@@ -1849,7 +1869,7 @@ def run_event_doctrine(
             _launch_scheduled_ofs(conn, scenario, state, result, day,
                                   actor="event.mes")
             for h in hazards_by_day.get(day, []):
-                _apply_hazard(conn, scenario, h, state, result, DOCTRINE_EVENT)
+                _apply_hazard(conn, scenario, h, state, result, doctrine)
                 # L8.1.c — EVENT doctrine : V3 crée les OFs pour servir la
                 # demande (équité de production avec OF/FLUX) mais ne compte
                 # un APS replan que pour le 1er urgent. Les suivants sont
@@ -2032,6 +2052,7 @@ def run_of_event_doctrine(
     scenario: Scenario, db_path: Path, *,
     fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
     parameter_overrides: dict[str, float] | None = None,
+    doctrine_override: str | None = None,
 ) -> RunResult:
     """Doctrine OF+EVENT (L8.4) : V0 OF-driven + event sourcing.
 
@@ -2043,10 +2064,15 @@ def run_of_event_doctrine(
     Architecture : P1 direct (comme OF, pas de contrat) + tranche virtuelle
     pour porter les expected_events, puis le même pipeline matching → causes
     → dual tolérance → boucle physique → mémoire qu'EVENT.
+
+    `doctrine_override` : si fourni, surcharge la doctrine portée
+    par le RunResult et passée à `_apply_hazard` (utilisé par le
+    wrapper BCE `of_event_bce`).
     """
+    doctrine = doctrine_override or DOCTRINE_OF_EVENT
     _bootstrap_db(scenario, db_path, fixtures_dir)
     result = RunResult(
-        doctrine=DOCTRINE_OF_EVENT, scenario_name=scenario.name,
+        doctrine=doctrine, scenario_name=scenario.name,
         db_path=db_path, seed=scenario.seed,
     )
     rng = random.Random(scenario.seed)
@@ -2099,7 +2125,7 @@ def run_of_event_doctrine(
         for day in range(1, scenario.horizon_days + 1):
             _receive_due_purchase_orders(conn, scenario, day)
             for h in hazards_by_day.get(day, []):
-                _apply_hazard(conn, scenario, h, state, result, DOCTRINE_OF_EVENT)
+                _apply_hazard(conn, scenario, h, state, result, doctrine)
                 if h.kind == HAZARD_URGENT_ORDER:
                     state.urgent_seen_count += 1
                     compute_candidates(conn)
@@ -2342,12 +2368,23 @@ def _evaluate_rejections(
 # ----------------------------------------------------------------------
 
 
+from pilotage_flux.comparative.bce_wire import (
+    run_event_bce_doctrine,
+    run_of_event_bce_doctrine,
+)
+from pilotage_flux.comparative.scenario import (
+    DOCTRINE_EVENT_BCE,
+    DOCTRINE_OF_EVENT_BCE,
+)
+
 _DISPATCH = {
     DOCTRINE_OF: run_of_doctrine,
     DOCTRINE_FLUX: run_flux_doctrine,
     DOCTRINE_OF_EVENT: run_of_event_doctrine,
     DOCTRINE_EVENT: run_event_doctrine,
     DOCTRINE_OF_MILP: run_of_milp_doctrine,
+    DOCTRINE_OF_EVENT_BCE: run_of_event_bce_doctrine,
+    DOCTRINE_EVENT_BCE: run_event_bce_doctrine,
 }
 
 

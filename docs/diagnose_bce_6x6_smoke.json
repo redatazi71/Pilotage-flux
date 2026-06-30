@@ -1,0 +1,368 @@
+[
+  {
+    "doctrine": "of",
+    "saturation": 0.78,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event",
+    "saturation": 0.78,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event_bce",
+    "saturation": 0.78,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 3,
+      "L5": 1
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "flux",
+    "saturation": 0.78,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event",
+    "saturation": 0.78,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event_bce",
+    "saturation": 0.78,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 4
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "of",
+    "saturation": 0.82,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event",
+    "saturation": 0.82,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event_bce",
+    "saturation": 0.82,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 3,
+      "L5": 1
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "flux",
+    "saturation": 0.82,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event",
+    "saturation": 0.82,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event_bce",
+    "saturation": 0.82,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 4
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "of",
+    "saturation": 0.86,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event",
+    "saturation": 0.86,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event_bce",
+    "saturation": 0.86,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 3,
+      "L5": 1
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "flux",
+    "saturation": 0.86,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event",
+    "saturation": 0.86,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event_bce",
+    "saturation": 0.86,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 4
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "of",
+    "saturation": 0.9,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event",
+    "saturation": 0.9,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event_bce",
+    "saturation": 0.9,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 3,
+      "L5": 1
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "flux",
+    "saturation": 0.9,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event",
+    "saturation": 0.9,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event_bce",
+    "saturation": 0.9,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 4
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "of",
+    "saturation": 0.94,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event",
+    "saturation": 0.94,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event_bce",
+    "saturation": 0.94,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 3,
+      "L5": 1
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "flux",
+    "saturation": 0.94,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event",
+    "saturation": 0.94,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event_bce",
+    "saturation": 0.94,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 4
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "of",
+    "saturation": 1.0,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event",
+    "saturation": 1.0,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "of_event_bce",
+    "saturation": 1.0,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 3,
+      "L5": 1
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  },
+  {
+    "doctrine": "flux",
+    "saturation": 1.0,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event",
+    "saturation": 1.0,
+    "otif": 1.0,
+    "n_decisions": 0,
+    "hazards_observed": 4,
+    "status": "ok"
+  },
+  {
+    "doctrine": "event_bce",
+    "saturation": 1.0,
+    "otif": 1.0,
+    "n_decisions": 4,
+    "hazards_observed": 4,
+    "status": "ok",
+    "delta_by_niveau": {
+      "L4": 4
+    },
+    "delta_by_cadrage": {
+      "3": 4
+    }
+  }
+]

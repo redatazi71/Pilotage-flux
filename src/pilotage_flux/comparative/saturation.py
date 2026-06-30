@@ -41,7 +41,20 @@ from tempfile import TemporaryDirectory
 from pilotage_flux.comparative.scenario import Scenario
 
 
-SATURATION_TARGETS: tuple[float, ...] = (0.78, 0.82, 0.86, 0.90, 0.94)
+SATURATION_TARGETS: tuple[float, ...] = (
+    0.78, 0.82, 0.86, 0.90, 0.94, 1.00,
+)
+# 6 niveaux : balaye la zone Goldilocks (78-94%) puis sur-saturation
+# (100%) qui sert de test de cohérence interne — la doctrine prédit
+# que l'avantage cybernétique s'érode en sur-saturation.
+ROUTING_STRATEGIES: tuple[str, ...] = ("linear", "parallel", "hybrid")
+# Mapping nom → code numérique pour param_overrides (qui n'accepte que
+# value_num) ; lu par aps/routing_arbitrage.py via routing_strategy_code.
+ROUTING_STRATEGY_CODE: dict[str, int] = {
+    "hybrid": 0,    # défaut (savings >= min_savings)
+    "linear": 1,    # min_savings = +inf → jamais d'alternative
+    "parallel": 2,  # min_savings = -inf → bascule dès qu'alternative existe
+}
 DEFAULT_SHIFT_MINUTES = 480  # 1 shift / jour ouvré, doctrine BCE
 DEFAULT_BOTTLENECK_THRESHOLD = 0.001  # ignore WS quasi-vides
 

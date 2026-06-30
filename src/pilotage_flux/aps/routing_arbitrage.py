@@ -112,6 +112,20 @@ def arbitrate_routing_for_of(
         ) or DEFAULT_MIN_SAVINGS_MIN
     )
 
+    # Goldilocks — implantation forcée via routing_strategy_code :
+    #   0 = hybrid (défaut)  1 = linear forcé  2 = parallel forcé
+    forced_code = get_num(
+        conn, scope="global", scope_ref=None,
+        name="routing_strategy_code", default=0,
+    )
+    if forced_code is not None:
+        code = int(float(forced_code))
+        if code == 1:  # linear forcé
+            min_savings = float("inf")
+        elif code == 2:  # parallel forcé
+            min_savings = -float("inf")
+        # code == 0 (hybrid) : laisse min_savings au défaut
+
     of_row = conn.execute(
         "SELECT of_id, article_id, quantity FROM manufacturing_orders "
         "WHERE of_id = ?",

@@ -22,7 +22,7 @@ from pilotage_flux.flux.contracts import (
     fetch_version,
     get_candidates_in_version,
 )
-from pilotage_flux.parameters import get_num
+from pilotage_flux.parameters import get_num, workstation_capacity_factor
 
 
 @dataclass(frozen=True)
@@ -156,6 +156,212 @@ def _compute_latest_start_minutes(
     return max(0, latest_start_min)
 
 
+def _get_cpm_aware_flag(conn: sqlite3.Connection) -> bool:
+    """V12.8 — Lit `smoothing_cpm_aware` (default 0).
+
+    Active la borne CPM data-driven : makespan par candidate calculé
+    via routing_operations × queueing_factor par WS (Little's law).
+    Remplace le `safety_factor` magique de V12.7 par une mesure du
+    taux d'utilisation effectif de chaque workstation.
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_cpm_aware", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _get_slack_ordering_flag(conn: sqlite3.Connection) -> bool:
+    """V12.8 — Lit `smoothing_slack_ordering` (default 0).
+
+    Réordonne les candidats par slack croissant (latest_start_cpm
+    ascendant) avant d'attribuer les offsets linéaires. Aligne le
+    smoothing sur la doctrine SLACK V12.2.3 (heuristique classique
+    de séquencement : least slack first).
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_slack_ordering", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _get_bom_topo_flag(conn: sqlite3.Connection) -> bool:
+    """V12.8 — Lit `smoothing_bom_topo` (default 0).
+
+    Réordonne les candidats par profondeur BOM ascendante (les
+    composants avant les articles finis). Indispensable car le
+    smoothing linéaire historique met les parents en premier
+    (offset=0) alors que leurs composants n'ont pas encore été
+    produits.
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_bom_topo", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _compute_article_bom_level(conn: sqlite3.Connection) -> dict[str, int]:
+    """V12.8 — Profondeur BOM par article (longueur du chemin le plus
+    long depuis l'article jusqu'à une feuille achetée).
+
+    - Article fini sans composants à produire (feuille du graphe
+      produits) : level = 0
+    - Article ayant des composants : level = 1 + max(level(child))
+
+    Renvoie un dict article_id → level (≥ 0).
+    """
+    rows = conn.execute(
+        "SELECT parent_article, child_article FROM bom_lines"
+    ).fetchall()
+    children: dict[str, list[str]] = {}
+    for r in rows:
+        children.setdefault(r["parent_article"], []).append(
+            r["child_article"]
+        )
+    level: dict[str, int] = {}
+
+    def _level(article: str) -> int:
+        if article in level:
+            return level[article]
+        kids = children.get(article, [])
+        if not kids:
+            level[article] = 0
+            return 0
+        level[article] = 1 + max(_level(c) for c in kids)
+        return level[article]
+
+    # Cover all articles that appear in bom_lines
+    seen = set()
+    for r in rows:
+        seen.add(r["parent_article"])
+        seen.add(r["child_article"])
+    for a in seen:
+        _level(a)
+    return level
+
+
+def _get_queueing_rho_cap(conn: sqlite3.Connection) -> float:
+    """V12.8 — Plafond de saturation `smoothing_queueing_rho_cap`
+    (default 0.95).
+
+    Borne supérieure de l'utilisation ρ par workstation dans le
+    calcul du facteur d'attente `1 / (1 - ρ)`. ρ → 1 ⇒ queue → ∞ ;
+    on plafonne pour rester numériquement stable.
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_queueing_rho_cap", default=0.95,
+    )
+    f = float(val) if val is not None else 0.95
+    return min(0.99, max(0.5, f))
+
+
+def _compute_workstation_queueing_factors(
+    conn: sqlite3.Connection,
+    horizon_min: int,
+    rho_cap: float = 0.95,
+) -> dict[str, float]:
+    """V12.8 — Facteur d'attente par workstation, combinant Little (charge
+    moyenne) et concurrence (charge crête bursty).
+
+    Pour chaque WS :
+      n_competitors = nombre de candidates qui routent par ce WS
+      ρ_mean        = total_processing / horizon_capacity (Little)
+      factor_little = 1 / max(1 - min(ρ, ρ_cap), 1 - ρ_cap)
+      factor        = max(n_competitors, factor_little)
+
+    Le `max` capture le pire des deux : steady-state Little
+    sous-estime la concurrence bursty au démarrage du smoothing
+    (plusieurs OFs lancés simultanément sur le même WS), donc on
+    prend le `n_competitors` comme borne inférieure stricte du
+    facteur d'attente effectif.
+    """
+    rows = conn.execute(
+        """
+        SELECT
+            r.workstation_id AS ws,
+            SUM(r.unit_time_min * c.quantity) AS load_raw,
+            COUNT(DISTINCT c.candidate_id) AS n_competitors
+        FROM candidate_orders c
+        JOIN routing_operations r ON r.article_id = c.article_id
+        WHERE c.status IN ('candidate', 'promoted')
+        GROUP BY r.workstation_id
+        """
+    ).fetchall()
+    factors: dict[str, float] = {}
+    for r in rows:
+        ws = r["ws"]
+        load_raw = float(r["load_raw"] or 0.0)
+        n_comp = int(r["n_competitors"] or 1)
+        capa = workstation_capacity_factor(conn, ws)
+        load_eff = load_raw / max(capa, 0.01)
+        rho = min(load_eff / max(horizon_min, 1.0), rho_cap)
+        factor_little = 1.0 / max(1.0 - rho, 1.0 - rho_cap)
+        factors[ws] = max(float(n_comp), factor_little)
+    return factors
+
+
+def _estimate_candidate_makespan_cpm(
+    conn: sqlite3.Connection,
+    candidate_id: str,
+    ws_factors: dict[str, float],
+) -> int:
+    """V12.8 — Makespan CPM par candidate avec queueing par WS.
+
+    makespan = Σ_op ( unit_time × qty / capa_ws × queueing_factor_ws )
+
+    Modélise un routing linéaire séquentiel (chaque op succède à
+    la précédente). Les facteurs queueing reflètent la charge
+    globale du WS — c'est le critical_path en présence de
+    contention de ressources.
+    """
+    rows = conn.execute(
+        """
+        SELECT
+            r.workstation_id AS ws,
+            r.unit_time_min AS unit_time,
+            c.quantity AS qty
+        FROM candidate_orders c
+        JOIN routing_operations r ON r.article_id = c.article_id
+        WHERE c.candidate_id = ?
+        ORDER BY r.sequence_idx
+        """,
+        (candidate_id,),
+    ).fetchall()
+    if not rows:
+        return 960
+    total_min = 0.0
+    for r in rows:
+        ws = r["ws"]
+        capa = workstation_capacity_factor(conn, ws)
+        factor = ws_factors.get(ws, 1.0)
+        op_dur = (
+            float(r["unit_time"]) * float(r["qty"])
+            / max(capa, 0.01)
+            * factor
+        )
+        total_min += op_dur
+    return max(60, int(round(total_min)))
+
+
+def _compute_latest_start_cpm_minutes(
+    conn: sqlite3.Connection,
+    candidate_id: str,
+    horizon_total_min: int,
+    ws_factors: dict[str, float],
+) -> int:
+    """V12.8 — Cap CPM-aware sur l'offset.
+
+    `latest_start_cpm = horizon_total_min - makespan_cpm`.
+    """
+    makespan = _estimate_candidate_makespan_cpm(
+        conn, candidate_id, ws_factors,
+    )
+    return max(0, horizon_total_min - makespan)
+
+
 def _compute_latest_start_horizon_minutes(
     conn: sqlite3.Connection,
     candidate_id: str,
@@ -195,6 +401,13 @@ def compute_smoothing(
     la fin de simulation. Cible la vraie cause du défaut Q (OFs stuck
     `in_progress` avec qty_good=0) identifiée par §28.13 après que
     V12.6 a été invalidé.
+
+    V12.8 (via `smoothing_cpm_aware = 1`) : remplace le multiplicateur
+    constant V12.7 par un facteur de queueing par workstation calculé
+    via Little's law (`1 / (1 − ρ_ws)`). Le makespan CPM par candidate
+    intègre la charge globale du WS. Si `smoothing_slack_ordering = 1`,
+    les candidats sont en plus réordonnés par slack ascendant
+    (heuristique SLACK V12.2.3 : least slack first). Cf. §28.14.
     """
     contract = fetch_contract(conn, contract_id)
     if contract is None:
@@ -222,6 +435,39 @@ def compute_smoothing(
     safety_factor = (
         _get_horizon_safety_factor(conn) if horizon_aware else 1.0
     )
+    cpm_aware = _get_cpm_aware_flag(conn)
+    slack_ordering = _get_slack_ordering_flag(conn)
+    bom_topo = _get_bom_topo_flag(conn)
+    rho_cap = _get_queueing_rho_cap(conn)
+    ws_factors: dict[str, float] = (
+        _compute_workstation_queueing_factors(conn, horizon_min, rho_cap)
+        if cpm_aware else {}
+    )
+
+    # V12.8 BOM topological ordering : composants AVANT produits finis.
+    # Sans ça, le smoothing linéaire met le parent à offset=0 alors que
+    # ses composants ne seront prêts qu'à offset > 0. Le tri par BOM
+    # level ascendant (feuilles d'abord) corrige cette inversion.
+    if bom_topo:
+        levels = _compute_article_bom_level(conn)
+        candidates = sorted(
+            candidates,
+            key=lambda c: (
+                levels.get(c["article_id"], 0),
+                -float(c.get("qty_in_contract") or 0.0),
+            ),
+        )
+
+    # V12.8 SLACK ordering : trie par latest_start_cpm croissant
+    # (least slack first). Appliqué APRÈS le tri BOM si les deux flags
+    # sont actifs ; en pratique on choisit l'un OU l'autre.
+    if cpm_aware and slack_ordering:
+        candidates = sorted(
+            candidates,
+            key=lambda c: _compute_latest_start_cpm_minutes(
+                conn, c["candidate_id"], horizon_min, ws_factors,
+            ),
+        )
 
     # Calcul cumulatif : le i-ème candidate démarre quand on a déjà engagé
     # somme(qty[0..i-1]) sur le total.
@@ -255,6 +501,15 @@ def compute_smoothing(
                 safety_factor=safety_factor,
             )
             offset_min = min(offset_min, latest_start_horizon)
+        if cpm_aware:
+            # V12.8 : borne CPM data-driven via Little's law par WS.
+            latest_start_cpm = _compute_latest_start_cpm_minutes(
+                conn,
+                candidate_id=cand["candidate_id"],
+                horizon_total_min=horizon_min,
+                ws_factors=ws_factors,
+            )
+            offset_min = min(offset_min, latest_start_cpm)
         planned_dt = start_dt + timedelta(minutes=offset_min)
         planned_start_iso = planned_dt.isoformat(sep=" ")
         conn.execute(

@@ -59,6 +59,10 @@ class KpiSet:
     total_cost_eur: float = 0.0
     cost_per_of_eur: float = 0.0
     cost_scrap_eur: float = 0.0
+    cost_per_unit_delivered: float = 0.0
+    # §28.19 — métrique de coût CORRECTE pour comparer des doctrines à
+    # volumes différents : total_cost / qty_delivered. Le coût total brut
+    # est trompeur (sous-produire le diminue artificiellement).
     # Point 2 paper — disponibilité réelle (vs disponibilité OF-level)
     so_total: int = 0
     so_delivered: int = 0
@@ -232,6 +236,9 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
         total_cost_eur=total_cost_eur,
         cost_per_of_eur=cost_per_of_eur,
         cost_scrap_eur=cost_scrap_eur,
+        cost_per_unit_delivered=round(
+            total_cost_eur / qty_delivered_total, 2
+        ) if qty_delivered_total > 0 else 0.0,
         replan_local_actions=replan_local_actions,
         replan_global_actions=replan_global_actions,
         causes_attached=causes_attached,

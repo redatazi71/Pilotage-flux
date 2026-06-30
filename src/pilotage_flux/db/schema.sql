@@ -84,6 +84,11 @@ CREATE TABLE IF NOT EXISTS sales_orders (
     quantity        REAL NOT NULL,
     due_date        TEXT NOT NULL,
     status          TEXT NOT NULL DEFAULT 'open',   -- open | closed | cancelled
+    rejected_at     TEXT,
+        -- Point 2 paper : timestamp si la SO a été rejetée par le client
+        -- (livraison > due_date + late_threshold_days)
+    rejection_reason TEXT,
+        -- 'late_beyond_threshold' | 'unfeasible' | 'manual'
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

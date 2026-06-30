@@ -220,7 +220,11 @@ cette niche dans la littérature francophone APS+MES.
 
 ### 3.1 Vue d'ensemble
 
-La doctrine implémentée se décompose en 3 piliers techniques :
+La doctrine implémentée se décompose en 3 piliers techniques
+(Figure 1) :
+
+![Figure 1 — Architecture doctrinale en 3 piliers](charts/paper_fig1_architecture.png)
+
 
 | Pilier | Rôle | Modules Python (15 au total) |
 |---|---|---|
@@ -323,7 +327,7 @@ Cinq scénarios canoniques sont utilisés pour les fixtures fixes :
 
 ### 4.2 Mécanismes d'aléas modélisés
 
-Cinq types d'aléas couvrent 5 domaines de perturbation :
+Cinq types d'aléas couvrent 5 domaines de perturbation (Figure 3) :
 
 | Domaine | Hazard | Mécanisme dans le simulateur |
 |---|---|---|
@@ -332,6 +336,9 @@ Cinq types d'aléas couvrent 5 domaines de perturbation :
 | Qualité | `HAZARD_QUALITY_NC` | Scrap immédiat d'une quantité de stock interne |
 | Production | `HAZARD_BREAKDOWN` | Slowdown factor sur un poste pendant N jours |
 | Demande | `HAZARD_URGENT_ORDER` | Création d'une SO urgente avec due date courte |
+
+![Figure 3 — Mapping des 5 domaines de perturbation aux mécanismes du simulateur](charts/paper_fig3_domain_mapping.png)
+
 
 ### 4.3 Quatre protocoles de runs
 
@@ -373,6 +380,11 @@ physique crée des écarts incontestables (`stress_double_breakdown_xl` :
 La nervosité (replans APS / horizon) est divisée par 2 à 5 selon
 le scénario quand l'event sourcing est activé.
 
+![Figure 4 — Décomposition 2×2 du coût (Δ vs OF) — étude XL + Random](charts/decomposition_2x2.png)
+
+![Figure 5 — Δ coût par scénario × doctrine — 4 000 runs XL](charts/per_scenario_xl.png)
+
+
 ### 5.2 Étude Random — 1 600 runs (additivité des apports)
 
 Sur 20 fixtures industrielles aléatoires × 20 scénarios aléatoires,
@@ -392,6 +404,11 @@ l'event sourcing paye via la détection et la boucle physique.
 L'interaction marginale provient des cas où le flux a déjà absorbé
 un aléa qui aurait été détecté par l'event sourcing.
 
+![Figure 6 — Additivité quasi-parfaite des deux apports (1 600 runs Random)](charts/additivity.png)
+
+![Figure 7 — Lead time par doctrine — convergence des 2 protocoles (XL et Random)](charts/lead_time_comparison.png)
+
+
 ### 5.3 Étude résilience — 856 runs
 
 **5.3.1 Distributions de coût et statistiques d'ordre (256 runs)**
@@ -405,6 +422,9 @@ un aléa qui aurait été détecté par l'event sourcing.
 
 La doctrine EVENT a la **queue de distribution la plus
 favorable** : P95 inférieur de 16 % à OF, P99 inférieur de 9 %.
+
+![Figure 8 — Distribution du coût par doctrine — boîtes à moustaches P5/P95](charts/resilience_distribution.png)
+
 
 **5.3.2 Sensibilité aux cascades de pannes (300 runs)**
 
@@ -430,6 +450,11 @@ EVENT récupère **1.6× à 2× plus vite** que OF, et **conserve un MTTR
 stable** quand le nombre de pannes augmente, alors que FLUX seul se
 dégrade (3.0 → 5.1 j).
 
+![Figure 9 — Coût et time-to-recover vs N pannes simultanées](charts/resilience_cascade.png)
+
+![Figure 10 — Gradient d'intensité d'aléa : coût moyen et P95 par doctrine](charts/resilience_gradient.png)
+
+
 ### 5.4 Étude matrice 5×5 — 400 runs (paires de domaines)
 
 Pour chaque paire (domaine A, domaine B), nous injectons un aléa de
@@ -452,6 +477,10 @@ coût observé / moyenne(coût A seul, coût B seul).
 - **Doctrine la plus résiliente** : EVENT, amplifications ≤ 1.21
   sur 24/25 cellules (la seule exception est Logi × Logi).
 
+![Figure 11 — Matrice 5×5 d'amplification de coût par doctrine](charts/paired_hazards_heatmap.png)
+
+![Figure 12 — Time-to-recover par paire de domaines, par doctrine](charts/paired_hazards_recovery.png)
+
 ### 5.5 Synthèse multidimensionnelle
 
 Sur les 5 dimensions de comparaison, EVENT domine les 3 autres :
@@ -463,6 +492,8 @@ Sur les 5 dimensions de comparaison, EVENT domine les 3 autres :
 | Nervosité | référence | = OF | ÷3.9 | **÷3.9** |
 | MTTR médian | référence | −30 % | ≈ OF | **−51 %** |
 | Sensibilité cascade | référence | −25 % | −62 % | **−80 %** |
+
+![Figure 2 — Synthèse exécutive : 5 dimensions × 4 doctrines (radar)](charts/paper_fig2_radar_synthesis.png)
 
 ---
 
@@ -515,6 +546,8 @@ simulateur ne rejette jamais une commande — il la livre en retard.
 Cette propriété **biaise la mesure de résilience à la baisse** ; un
 modèle avec rejet de SO en cas de dépassement d'horizon serait
 nécessaire pour mesurer un effondrement réel de disponibilité.
+
+![Figure 13 — Point de rupture : coût et disponibilité vs N pannes simultanées étendues (6-15)](charts/resilience_breaking_point.png)
 
 ---
 

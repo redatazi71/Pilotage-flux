@@ -24,6 +24,7 @@ from pathlib import Path
 
 from pilotage_flux.comparative.scenario import (
     HAZARD_BREAKDOWN,
+    HAZARD_LOGISTIC_DELAY,
     HAZARD_PO_DELAY,
     HAZARD_QUALITY_NC,
     HAZARD_URGENT_ORDER,
@@ -62,6 +63,7 @@ class RandomScenarioSpec:
     nc_scrap_range: tuple[int, int] = (10, 25)
     po_delay_range: tuple[int, int] = (3, 10)
     urgent_qty_range: tuple[int, int] = (20, 60)
+    logistic_block_range: tuple[int, int] = (2, 4)
     # Stocks initiaux : pour chaque composant, niveau aléatoire
     initial_stock_range: tuple[int, int] = (200, 1500)
     # Achats ouverts initiaux
@@ -160,6 +162,17 @@ def _build_hazard(
                 "article_id": article,
                 "quantity": qty,
                 "due_day": due_day,
+            },
+        )
+    if kind == HAZARD_LOGISTIC_DELAY:
+        # §24.9 — Logistique : un poste bloqué (flux interne interrompu)
+        ws = rng.choice(workstations)
+        block_days = rng.randint(*spec.logistic_block_range)
+        return HazardEvent(
+            day=day, kind=HAZARD_LOGISTIC_DELAY,
+            payload={
+                "workstation_id": ws,
+                "block_days": block_days,
             },
         )
     return None

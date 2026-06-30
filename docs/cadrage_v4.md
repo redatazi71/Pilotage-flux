@@ -835,6 +835,45 @@ du domaine le plus critique pour l'atelier visé.
 
 ---
 
+## §24.11 Validations méthodologiques (§7.1 + §7.3 paper HAL)
+
+### §24.11.1 Test du biais d'implémentation — OF_MILP (250 runs)
+
+Pour valider que le gain doctrinal n'est pas un artefact d'un OF
+baseline trop naïf, une **5ᵉ doctrine OF_MILP** est implémentée avec
+solveur **CP-SAT (Google OR-Tools)** :
+
+| Doctrine | Coût moyen | Lead time | Δ vs OF |
+|---|---|---|---|
+| OF (SLACK+FIFO) | 130 089 € | 7.72 j | 0 (réf) |
+| **OF_MILP (CP-SAT)** | **129 959 €** | **6.86 j** | **−131 € (−0.1 %)** |
+| FLUX | 95 261 € | 4.63 j | **−34 828 €** |
+| EVENT | 90 792 € | 4.51 j | **−39 297 €** |
+
+Le solveur CP-SAT améliore le lead time de 11 % mais ne change pas
+le coût (-0.1 % dans le bruit statistique). **Le gain doctrinal
+FLUX/EVENT vs OF n'est pas un artefact de baseline** : il provient
+de l'**architecture** (lissage + freeze + tampons) qu'un solveur
+ponctuel n'imite pas.
+
+### §24.11.2 Sensibilité paramétrique (480 runs)
+
+Sur 3 paramètres × 4 niveaux (faible / moyen / élevé / extrême), le
+gain FLUX vs OF est **mesuré positif sur les 12 cellules**, entre
+−7.8 % et −31.7 %. Robustesse du gain :
+
+| Paramètre | Gain FLUX vs OF min | max | Tendance |
+|---|---|---|---|
+| Intensité scrap | −10.9 % | −26.7 % | gain ↓ si scrap ↑ |
+| Horizon planification | −19.9 % | −31.7 % | gain ↑ si horizon ↓ |
+| Nombre d'aléas | −7.8 % | −25.8 % | gain ↓ si aléas ↑ |
+
+Le gain doctrinal **n'est pas un artefact de paramètres choisis** :
+il est robuste sur 4 niveaux d'intensité couvrant 1 ordre de grandeur
+par paramètre.
+
+---
+
 ## §25. Cahier des charges actualisé
 
 ### §25.1 Exigences fonctionnelles satisfaites

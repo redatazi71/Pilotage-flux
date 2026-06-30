@@ -35,6 +35,11 @@ HAZARD_BREAKDOWN = "breakdown_ws"
 HAZARD_QUALITY_NC = "quality_nc"
 HAZARD_PO_DELAY = "po_delay"
 HAZARD_URGENT_ORDER = "urgent_order"
+HAZARD_LOGISTIC_DELAY = "logistic_delay"
+# §24.9 — Logistique : un poste de travail est complètement bloqué
+# (flux logistique interrompu) pendant N jours. Sémantique distincte
+# du breakdown machine : ce n'est pas la machine qui tombe en panne,
+# c'est le flux entrant qui ne lui parvient pas.
 
 
 @dataclass(frozen=True)

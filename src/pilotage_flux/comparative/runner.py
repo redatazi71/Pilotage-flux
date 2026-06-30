@@ -69,6 +69,7 @@ from pilotage_flux.comparative.scenario import (
     DOCTRINE_OF_EVENT,
     DOCTRINES,
     HAZARD_BREAKDOWN,
+    HAZARD_LOGISTIC_DELAY,
     HAZARD_PO_DELAY,
     HAZARD_QUALITY_NC,
     HAZARD_URGENT_ORDER,
@@ -502,6 +503,20 @@ def _apply_hazard(
              "quantity": payload["quantity"]}
         )
         # La gestion du replan est doctrine-specific (cf. boucle ci-dessous).
+    elif kind == HAZARD_LOGISTIC_DELAY:
+        # §24.9 — Flux logistique interne bloqué : le poste est inopérant
+        # (pas de mise à disposition). Mécaniquement équivalent à un
+        # breakdown sévère, sémantiquement distinct.
+        ws = payload["workstation_id"]
+        block_days = int(payload.get("block_days", 2))
+        # Slowdown factor élevé = arrêt effectif. On garde 99.0 pour rester
+        # détectable dans les KPIs sans diviser par zéro.
+        state.breakdown_ws[ws] = block_days
+        state.breakdown_factor[ws] = 99.0
+        result.hazards_observed.append(
+            {"day": hazard.day, "kind": kind, "workstation_id": ws,
+             "block_days": block_days}
+        )
 
 
 def _apply_corrective_actions(

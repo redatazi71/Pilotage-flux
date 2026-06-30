@@ -27,6 +27,10 @@ from pilotage_flux.comparative.random_scenario import (
 from pilotage_flux.comparative.runner import RunResult, run_doctrine
 from pilotage_flux.comparative.scenario import (
     HAZARD_BREAKDOWN,
+    HAZARD_LOGISTIC_DELAY,
+    HAZARD_PO_DELAY,
+    HAZARD_QUALITY_NC,
+    HAZARD_URGENT_ORDER,
     HazardEvent,
     Scenario,
 )
@@ -163,6 +167,31 @@ class CascadePoint:
     cost_p95: float
     lead_time_mean: float
     recovery_days_mean: float
+    availability_mean: float = 0.0  # % OF clôturés / créés (disponibilité)
+
+
+@dataclass
+class PairedHazardPoint:
+    """§24.10 — Impact d'une paire d'aléas simultanés sur 1 doctrine."""
+
+    doctrine: str
+    domain_a: str  # appro | logi | qual | prod | dem
+    domain_b: str
+    n_runs: int
+    cost_mean: float
+    cost_baseline_mean: float  # 1 seul aléa = baseline
+    amplification: float  # cost_mean / cost_baseline_mean
+
+
+# Map domaine → kind hazard
+DOMAIN_TO_HAZARD = {
+    "appro": HAZARD_PO_DELAY,
+    "logi": HAZARD_LOGISTIC_DELAY,
+    "qual": HAZARD_QUALITY_NC,
+    "prod": HAZARD_BREAKDOWN,
+    "dem": HAZARD_URGENT_ORDER,
+}
+DOMAINS = ["appro", "logi", "qual", "prod", "dem"]
 
 
 def _build_intensity_scenario(
@@ -353,6 +382,11 @@ def run_cascade_curve(
                 compute_time_to_recover(r, shock_day=3)
                 for _, r in per_doctrine[d]
             ]
+            # Disponibilité = OF clôturés / OF créés
+            avail = [
+                (k.of_closed / k.of_total) if k.of_total > 0 else 0.0
+                for k, _ in per_doctrine[d]
+            ]
             points.append(CascadePoint(
                 doctrine=d,
                 n_breakdowns=n_bd,
@@ -361,5 +395,223 @@ def run_cascade_curve(
                 cost_p95=_percentile(costs, 0.95),
                 lead_time_mean=statistics.mean(lts) if lts else 0,
                 recovery_days_mean=statistics.mean(recs) if recs else 0,
+                availability_mean=statistics.mean(avail) if avail else 0,
             ))
     return points
+
+
+# ---------------------------------------------------------------------------
+# 5) §24.10 — Matrice de paires de domaines
+# ---------------------------------------------------------------------------
+
+def _build_hazard(
+    rng_local,
+    kind: str,
+    day: int,
+    fixtures_dir: Path,
+) -> HazardEvent | None:
+    """Construit un aléa unique du domaine demandé."""
+    import csv
+    workstations = []
+    finished = []
+    semis = []
+    components = []
+    with (fixtures_dir / "workstations.csv").open(encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            workstations.append(row["workstation_id"])
+    with (fixtures_dir / "articles.csv").open(encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            aid = row["article_id"]
+            is_purchased = int(row.get("is_purchased") or 0) == 1
+            if is_purchased:
+                components.append(aid)
+            elif aid.startswith("SEMI"):
+                semis.append(aid)
+            else:
+                finished.append(aid)
+
+    if kind == HAZARD_BREAKDOWN:
+        return HazardEvent(day=day, kind=kind, payload={
+            "workstation_id": rng_local.choice(workstations),
+            "slowdown_factor": 2.5,
+            "duration_days": 3,
+        })
+    if kind == HAZARD_QUALITY_NC:
+        targets = finished + semis
+        if not targets:
+            return None
+        return HazardEvent(day=day, kind=kind, payload={
+            "article_id": rng_local.choice(targets),
+            "qty_scrap": 20,
+            "severity": "high",
+        })
+    if kind == HAZARD_PO_DELAY:
+        # Cible un PO virtuel ; en pratique, fragmentation des composants
+        if not components:
+            return None
+        return HazardEvent(day=day, kind=kind, payload={
+            "po_id": "PO-0001",
+            "delay_days": 5,
+        })
+    if kind == HAZARD_URGENT_ORDER:
+        if not finished:
+            return None
+        # ID unique pour éviter conflit en cellule diagonale dem-dem
+        suffix = rng_local.randint(10000, 99999)
+        return HazardEvent(day=day, kind=kind, payload={
+            "sales_order_id": f"SO-URG-PAIR-{day}-{suffix}",
+            "article_id": rng_local.choice(finished),
+            "quantity": 40,
+            "due_day": day + 7,
+        })
+    if kind == HAZARD_LOGISTIC_DELAY:
+        return HazardEvent(day=day, kind=kind, payload={
+            "workstation_id": rng_local.choice(workstations),
+            "block_days": 3,
+        })
+    return None
+
+
+def _build_paired_scenario(
+    base_seed: int,
+    domain_a: str,
+    domain_b: str,
+    fixtures_dir: Path,
+) -> Scenario:
+    """Génère un scénario avec 1 aléa de chaque domaine au jour 3.
+
+    Si domain_a == domain_b, injecte 2 aléas du même type pour mesurer
+    la sensibilité doctrinale à 2 chocs homogènes (cellule diagonale).
+    """
+    import random as _r
+    rng = _r.Random(base_seed)
+
+    base = generate_random_scenario(
+        RandomScenarioSpec(n_hazards=0),
+        seed=base_seed,
+        fixtures_dir=fixtures_dir,
+    )
+    kind_a = DOMAIN_TO_HAZARD[domain_a]
+    kind_b = DOMAIN_TO_HAZARD[domain_b]
+    hazards = []
+    h1 = _build_hazard(rng, kind_a, day=3, fixtures_dir=fixtures_dir)
+    if h1 is not None:
+        hazards.append(h1)
+    h2 = _build_hazard(rng, kind_b, day=3, fixtures_dir=fixtures_dir)
+    if h2 is not None:
+        hazards.append(h2)
+    return Scenario(
+        name=f"pair_{domain_a}_{domain_b}_seed{base_seed}",
+        seed=base_seed,
+        horizon_days=base.horizon_days,
+        horizon_start=base.horizon_start,
+        initial_sales_orders=base.initial_sales_orders,
+        initial_stocks=base.initial_stocks,
+        initial_purchase_orders=base.initial_purchase_orders,
+        hazards=hazards,
+    )
+
+
+def _build_single_domain_scenario(
+    base_seed: int,
+    domain: str,
+    fixtures_dir: Path,
+) -> Scenario:
+    """Scénario avec 1 seul aléa du domaine — baseline pour amplification."""
+    import random as _r
+    rng = _r.Random(base_seed)
+    base = generate_random_scenario(
+        RandomScenarioSpec(n_hazards=0),
+        seed=base_seed,
+        fixtures_dir=fixtures_dir,
+    )
+    h = _build_hazard(rng, DOMAIN_TO_HAZARD[domain], day=3,
+                      fixtures_dir=fixtures_dir)
+    return Scenario(
+        name=f"single_{domain}_seed{base_seed}",
+        seed=base_seed,
+        horizon_days=base.horizon_days,
+        horizon_start=base.horizon_start,
+        initial_sales_orders=base.initial_sales_orders,
+        initial_stocks=base.initial_stocks,
+        initial_purchase_orders=base.initial_purchase_orders,
+        hazards=[h] if h is not None else [],
+    )
+
+
+def run_paired_matrix(
+    *,
+    seeds: list[int],
+    doctrines: list[str],
+    fixtures_dir: Path,
+    work_dir: Path,
+    on_run_complete=None,
+) -> tuple[list[PairedHazardPoint], dict[str, dict[str, float]]]:
+    """Matrice 5×5 — Pour chaque paire (i, j), mesure :
+      - coût moyen avec 1 aléa de i + 1 aléa de j
+      - amplification = coût(i+j) / moyenne(coût(i seul), coût(j seul))
+      - recovery days par paire
+
+    Pour réduire le nombre de runs, on calcule d'abord les baselines
+    (5 single-domain) puis les 15 paires uniques (incl. diagonale).
+    """
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    # Phase 1 — baselines : 5 single-domain
+    baseline_cost: dict[str, dict[str, float]] = {d: {} for d in doctrines}
+    baseline_recovery: dict[str, dict[str, float]] = {d: {} for d in doctrines}
+    for dom in DOMAINS:
+        for d in doctrines:
+            costs = []
+            recs = []
+            for seed in seeds:
+                scen = _build_single_domain_scenario(seed, dom, fixtures_dir)
+                db_path = work_dir / f"single_{dom}_{seed}_{d}.db"
+                result = run_doctrine(scen, d, db_path, fixtures_dir=fixtures_dir)
+                costs.append(compute_kpis(scen, result).total_cost_eur)
+                recs.append(compute_time_to_recover(result, shock_day=3))
+                if on_run_complete is not None:
+                    on_run_complete("single", dom, seed, d)
+            baseline_cost[d][dom] = statistics.mean(costs) if costs else 0
+            baseline_recovery[d][dom] = statistics.mean(recs) if recs else 0
+
+    # Phase 2 — paires (15 uniques avec diagonale)
+    points: list[PairedHazardPoint] = []
+    recovery_per_pair: dict[str, dict[str, float]] = {d: {} for d in doctrines}
+    for i, dom_a in enumerate(DOMAINS):
+        for dom_b in DOMAINS[i:]:
+            for d in doctrines:
+                costs = []
+                recs = []
+                for seed in seeds:
+                    scen = _build_paired_scenario(
+                        seed, dom_a, dom_b, fixtures_dir,
+                    )
+                    db_path = work_dir / f"pair_{dom_a}_{dom_b}_{seed}_{d}.db"
+                    result = run_doctrine(
+                        scen, d, db_path, fixtures_dir=fixtures_dir,
+                    )
+                    costs.append(compute_kpis(scen, result).total_cost_eur)
+                    recs.append(compute_time_to_recover(result, shock_day=3))
+                    if on_run_complete is not None:
+                        on_run_complete("pair", f"{dom_a}_{dom_b}", seed, d)
+                cost_mean = statistics.mean(costs) if costs else 0
+                baseline_avg = (
+                    baseline_cost[d][dom_a] + baseline_cost[d][dom_b]
+                ) / 2
+                ampli = cost_mean / baseline_avg if baseline_avg > 0 else 0
+                points.append(PairedHazardPoint(
+                    doctrine=d,
+                    domain_a=dom_a,
+                    domain_b=dom_b,
+                    n_runs=len(costs),
+                    cost_mean=cost_mean,
+                    cost_baseline_mean=baseline_avg,
+                    amplification=ampli,
+                ))
+                key = f"{dom_a}_{dom_b}"
+                recovery_per_pair[d][key] = (
+                    statistics.mean(recs) if recs else 0
+                )
+
+    return points, recovery_per_pair

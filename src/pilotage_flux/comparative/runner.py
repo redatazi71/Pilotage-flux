@@ -1713,6 +1713,7 @@ DEFAULT_LATE_THRESHOLD_DAYS = 14
 
 def _evaluate_rejections(
     db_path: Path, scenario: Scenario, result: RunResult,
+    *, late_threshold_days: int | None = None,
 ) -> None:
     """Marque comme `cancelled` les SOs dont la livraison réelle a
     dépassé `due_date + late_threshold_days`.
@@ -1721,19 +1722,23 @@ def _evaluate_rejections(
     différence du KPI of_closed/of_total qui reste toujours élevé
     (le simulateur ne refuse jamais une commande).
 
-    Le seuil est lu depuis `parameters` (clé : `late_threshold_days`)
-    ou prend la valeur par défaut `DEFAULT_LATE_THRESHOLD_DAYS`.
+    Si `late_threshold_days` est fourni explicitement, il prime sur
+    la valeur en DB. Sinon le seuil est lu depuis `parameters` (clé
+    `late_threshold_days`), avec fallback sur DEFAULT_LATE_THRESHOLD_DAYS.
     """
     from datetime import datetime, timedelta
     from pilotage_flux.db import db_session
     from pilotage_flux.parameters import get_num
 
     with db_session(db_path) as conn:
-        threshold = int(
-            get_num(conn, scope="global", scope_ref=None,
-                    name="late_threshold_days",
-                    default=DEFAULT_LATE_THRESHOLD_DAYS) or DEFAULT_LATE_THRESHOLD_DAYS
-        )
+        if late_threshold_days is not None:
+            threshold = int(late_threshold_days)
+        else:
+            threshold = int(
+                get_num(conn, scope="global", scope_ref=None,
+                        name="late_threshold_days",
+                        default=DEFAULT_LATE_THRESHOLD_DAYS) or DEFAULT_LATE_THRESHOLD_DAYS
+            )
         base = datetime.fromisoformat(scenario.horizon_start)
         horizon_end = base + timedelta(days=scenario.horizon_days)
 
@@ -1800,6 +1805,7 @@ def run_doctrine(
     *,
     fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
     evaluate_rejections: bool = True,
+    late_threshold_days: int | None = None,
 ) -> RunResult:
     """Lance la doctrine demandée.
 
@@ -1807,6 +1813,9 @@ def run_doctrine(
     post-processing qui marque comme `cancelled` les SOs dont la
     livraison dépasse `due_date + late_threshold_days`. Permet la
     mesure de disponibilité réelle.
+
+    `late_threshold_days` (Point 2 paper) override la valeur par
+    défaut/DB. Utile pour profils stricts (0 = livraison ontime).
     """
     if doctrine not in _DISPATCH:
         raise ValueError(
@@ -1814,5 +1823,8 @@ def run_doctrine(
         )
     result = _DISPATCH[doctrine](scenario, db_path, fixtures_dir=fixtures_dir)
     if evaluate_rejections:
-        _evaluate_rejections(db_path, scenario, result)
+        _evaluate_rejections(
+            db_path, scenario, result,
+            late_threshold_days=late_threshold_days,
+        )
     return result

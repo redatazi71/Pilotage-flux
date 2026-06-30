@@ -191,10 +191,43 @@ def evaluate_dual_tolerance(
     score_combined = score_mag * (1 + math.log1p(freq))
     action = _level_from_score(score_combined, thresholds)
 
+    # V13.C — Mémoire ACTIVE : si une recette retenue existe avec la
+    # même signature (kind, cause, action), on court-circuite la latence.
+    # Le système réagit immédiatement à un pattern déjà connu. Gated par
+    # `memory_active_skip_latency` (default 0 = legacy passif).
+    skip_latency_via_memory = False
+    skip_flag = get_num(
+        conn, scope="global", scope_ref=None,
+        name="memory_active_skip_latency", default=0.0,
+    )
+    if skip_flag and float(skip_flag) > 0.5:
+        # Lookup mémoire : cherche une recette retenue avec cette signature.
+        # Note : on importe ici pour éviter une dépendance circulaire au
+        # niveau module.
+        from pilotage_flux.events_v3.dual_memory import lookup_retained_signature
+
+        top_cause = conn.execute(
+            """
+            SELECT rule_id FROM event_deviation_causes
+            WHERE deviation_id = ?
+            ORDER BY score DESC, attach_id ASC LIMIT 1
+            """,
+            (deviation_id,),
+        ).fetchone()
+        cause_rule_id = top_cause["rule_id"] if top_cause else None
+        retained = lookup_retained_signature(
+            conn,
+            deviation_kind=dev["deviation_kind"],
+            cause_rule_id=cause_rule_id,
+            action_level=action,
+        )
+        if retained is not None:
+            skip_latency_via_memory = True
+
     # Latence : si > 0, triggered_at sera fixé après attente ; en V3 minimal
     # on stocke decided_at + latency_minutes mais on déclenche immédiatement
     # (la simulation temporelle de la latence reste à charge du consommateur)
-    if latency_min == 0:
+    if latency_min == 0 or skip_latency_via_memory:
         triggered_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     else:
         triggered_at = None  # NULL = en attente

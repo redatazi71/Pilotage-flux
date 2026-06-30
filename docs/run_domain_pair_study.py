@@ -48,8 +48,8 @@ if not FIXTURES.exists():
 
 
 PILOTAGE = DOCTRINE_EVENT_BCE
-SATURATION = 0.86      # zone de stress haute mais soutenable
-                       # pour la formation de contrats FLUX
+SATURATION = 0.92      # zone de stress haute proche rupture
+                       # (testé feasible sur horizon 15j / 8 hazards)
 N_SEEDS_DEFAULT = 5
 
 

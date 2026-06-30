@@ -7,7 +7,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 2.0533333333333332,
-    "yield_mean": 0.9497757377229514,
+    "yield_mean": 0.9500481625670835,
     "wip_mean": 6.32,
     "lateness_mean_days": 3.8673611111111112,
     "combined_impact_score": 0.06844444444444445
@@ -20,7 +20,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 2.0,
-    "yield_mean": 0.9498479554777215,
+    "yield_mean": 0.9501152204039888,
     "wip_mean": 6.2,
     "lateness_mean_days": 3.8506944444444446,
     "combined_impact_score": 0.06666666666666667
@@ -33,7 +33,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 1.9,
-    "yield_mean": 0.9496538916027957,
+    "yield_mean": 0.9499053844767723,
     "wip_mean": 7.48,
     "lateness_mean_days": 96.11069444444445,
     "combined_impact_score": 0.06333333333333332
@@ -46,7 +46,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 1.82,
-    "yield_mean": 0.946046949551185,
+    "yield_mean": 0.9465602065727498,
     "wip_mean": 6.226666666666667,
     "lateness_mean_days": 3.7340277777777775,
     "combined_impact_score": 0.06066666666666667
@@ -59,7 +59,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 1.75,
-    "yield_mean": 0.9498212025293041,
+    "yield_mean": 0.9500884281484729,
     "wip_mean": 6.96,
     "lateness_mean_days": 5.2340277777777775,
     "combined_impact_score": 0.058333333333333334
@@ -72,7 +72,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 1.75,
-    "yield_mean": 0.9497031553389772,
+    "yield_mean": 0.9499777573897229,
     "wip_mean": 6.986666666666666,
     "lateness_mean_days": 5.2340277777777775,
     "combined_impact_score": 0.058333333333333334
@@ -85,7 +85,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 1.75,
-    "yield_mean": 0.9472473628665091,
+    "yield_mean": 0.9476785564611644,
     "wip_mean": 6.906666666666666,
     "lateness_mean_days": 4.664027777777777,
     "combined_impact_score": 0.058333333333333334
@@ -98,7 +98,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 1.7266666666666666,
-    "yield_mean": 0.9496603745300749,
+    "yield_mean": 0.949966472386915,
     "wip_mean": 6.92,
     "lateness_mean_days": 97.81402777777778,
     "combined_impact_score": 0.057555555555555554
@@ -111,7 +111,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 1.6833333333333333,
-    "yield_mean": 0.9497417685483419,
+    "yield_mean": 0.9500126349602562,
     "wip_mean": 12.413333333333334,
     "lateness_mean_days": 4.907361111111111,
     "combined_impact_score": 0.05611111111111111
@@ -124,7 +124,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 1.0,
-    "yield_mean": 0.9464878969783961,
+    "yield_mean": 0.9470777798377407,
     "wip_mean": 0.5866666666666667,
     "lateness_mean_days": 148.73388888888888,
     "combined_impact_score": 0.03333333333333333
@@ -137,7 +137,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.85,
-    "yield_mean": 0.9502786377708978,
+    "yield_mean": 0.9507321237059247,
     "wip_mean": 0.5333333333333333,
     "lateness_mean_days": 110.60041666666667,
     "combined_impact_score": 0.028333333333333332
@@ -150,7 +150,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.85,
-    "yield_mean": 0.9502786377708978,
+    "yield_mean": 0.9507321237059247,
     "wip_mean": 0.5333333333333333,
     "lateness_mean_days": 72.86694444444444,
     "combined_impact_score": 0.028333333333333332
@@ -163,7 +163,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.85,
-    "yield_mean": 0.9502786377708978,
+    "yield_mean": 0.9507321237059247,
     "wip_mean": 0.5466666666666666,
     "lateness_mean_days": 72.86694444444444,
     "combined_impact_score": 0.028333333333333332
@@ -176,7 +176,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.85,
-    "yield_mean": 0.9482146542827657,
+    "yield_mean": 0.9488034833973423,
     "wip_mean": 0.5333333333333333,
     "lateness_mean_days": 72.86694444444444,
     "combined_impact_score": 0.028333333333333332
@@ -189,7 +189,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9504643962848297,
+    "yield_mean": 0.9508196721311475,
     "wip_mean": 0.2,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -202,7 +202,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9504643962848297,
+    "yield_mean": 0.9508196721311475,
     "wip_mean": 0.2,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -215,7 +215,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9504643962848297,
+    "yield_mean": 0.9508196721311475,
     "wip_mean": 0.21333333333333335,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -228,7 +228,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9480908152734778,
+    "yield_mean": 0.9486017357762777,
     "wip_mean": 0.2,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -241,7 +241,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9504643962848297,
+    "yield_mean": 0.9508196721311475,
     "wip_mean": 0.22666666666666668,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -254,7 +254,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9504643962848297,
+    "yield_mean": 0.9508196721311475,
     "wip_mean": 0.21333333333333335,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -267,7 +267,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9504643962848297,
+    "yield_mean": 0.9508196721311475,
     "wip_mean": 0.21333333333333335,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -280,7 +280,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9480908152734778,
+    "yield_mean": 0.9486017357762777,
     "wip_mean": 0.21333333333333335,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -293,7 +293,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9437564499484004,
+    "yield_mean": 0.9445515911282546,
     "wip_mean": 0.2,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -306,7 +306,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9452012383900928,
+    "yield_mean": 0.9459016393442623,
     "wip_mean": 0.21333333333333335,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334
@@ -319,7 +319,7 @@
     "otif_mean": 1.0,
     "otif_sd": 0.0,
     "recovery_mean_days": 0.4,
-    "yield_mean": 0.9422084623323014,
+    "yield_mean": 0.9431051108968177,
     "wip_mean": 0.2,
     "lateness_mean_days": 0.0,
     "combined_impact_score": 0.013333333333333334

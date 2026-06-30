@@ -387,7 +387,24 @@ après chaque exécution.
 
 ### §24.8.1 Distributions de coût (statistiques d'ordre)
 
-<!-- TABLE_DIST -->
+Étude sur **256 runs** (8 fixtures × 8 scénarios × 4 doctrines) avec
+distributions brutes conservées :
+
+| Doctrine | N | Moyenne | σ | P50 | P75 | P95 | P99 | Max |
+|---|---|---|---|---|---|---|---|---|
+| OF | 64 | 152 028 € | 55 230 € | 136 213 | 174 280 | **261 855** | **316 851** | 359 912 |
+| FLUX | 64 | 126 940 € | 49 975 € | 119 951 | 147 237 | **222 570** | **289 395** | 321 560 |
+| OF+EVENT | 64 | 146 672 € | 56 155 € | 135 383 | 167 709 | **276 428** | **310 432** | 342 564 |
+| EVENT | 64 | 121 866 € | 50 233 € | 112 829 | 141 320 | **220 793** | **286 827** | 314 621 |
+
+Ratios P95/P50 et P99/P50 — indicateurs de queue lourde :
+
+| Doctrine | P95/P50 | P99/P50 |
+|---|---|---|
+| OF | 1.92 | 2.33 |
+| FLUX | 1.86 | 2.41 |
+| OF+EVENT | 2.04 | 2.29 |
+| **EVENT** | **1.96** | **2.54** |
 
 ![Distribution du coût par doctrine — boîtes à moustaches](charts/resilience_distribution.png)
 
@@ -398,7 +415,33 @@ P99/P50 et P95/P50 par doctrine quantifient ce risque de queue.
 
 ### §24.8.2 Gradient d'intensité d'aléa
 
-<!-- TABLE_GRADIENT -->
+Étude sur **300 runs** (5 intensités × 15 seeds × 4 doctrines) sur
+fixture industrielle fixe (seed 42).
+
+| Intensité | OF | FLUX | OF+EVENT | EVENT |
+|---|---|---|---|---|
+| 0.5 | 114 049 € | 101 007 € | 113 191 € | 100 566 € |
+| 1.0 | 117 336 € | 98 364 € | 113 029 € | 97 655 € |
+| 1.5 | 119 776 € | 99 664 € | 113 464 € | 99 437 € |
+| 2.0 | 117 605 € | 99 990 € | 113 980 € | 100 594 € |
+| 2.5 | 114 925 € | 100 969 € | 113 484 € | 99 499 € |
+
+**Constat honnête** : la courbe est quasi-plate pour les 4 doctrines.
+Deux interprétations co-existent :
+
+1. **Robustesse intrinsèque** : sur cette fixture industrielle, les
+   doctrines sont déjà saturées par leurs autres contraintes (capacité
+   goulot, BOM, lead time minimum). Augmenter l'amplitude d'un aléa
+   ne déplace pas le point d'équilibre — l'aléa pèse peu face au coût
+   nominal de production.
+2. **Limite méthodologique** : `_build_intensity_scenario` scale la
+   magnitude et la durée des 5 aléas mais conserve leur type/cible.
+   Un protocole plus discriminant ferait varier le **nombre** d'aléas,
+   pas seulement leur magnitude.
+
+La courbe plate **ne valide pas** la résilience en gradient — elle
+indique qu'il faut un protocole différent (cf. §24.8.3 cascade qui
+donne, lui, un gradient clair).
 
 ![Coût moyen et P95 vs intensité d'aléa](charts/resilience_gradient.png)
 
@@ -409,7 +452,43 @@ indique la résilience en queue de distribution.
 
 ### §24.8.3 Cascade de défaillances simultanées
 
-<!-- TABLE_CASCADE -->
+Étude sur **300 runs** (5 niveaux × 15 seeds × 4 doctrines). On injecte
+1 à 5 pannes au jour 3 sur des postes distincts (slowdown ×2.5,
+durée 3 jours).
+
+**Coût moyen (€)** :
+
+| Pannes | OF | FLUX | OF+EVENT | EVENT |
+|---|---|---|---|---|
+| 1 | 107 116 | 68 524 | 101 392 | **67 198** |
+| 2 | 112 506 | 72 831 | 103 452 | **68 398** |
+| 3 | 120 826 | 75 345 | 105 518 | **69 145** |
+| 4 | 127 923 | 78 276 | 107 685 | **70 087** |
+| 5 | 131 954 | 80 370 | 110 331 | **70 247** |
+
+**Δ relatif 1→5 pannes** (sensibilité au choc) :
+
+| Doctrine | 1 panne | 5 pannes | Pente |
+|---|---|---|---|
+| OF | 107 116 | 131 954 | **+23.2 %** |
+| FLUX | 68 524 | 80 370 | +17.3 % |
+| OF+EVENT | 101 392 | 110 331 | +8.8 % |
+| **EVENT** | 67 198 | 70 247 | **+4.5 %** |
+
+**Time-to-recover (jours)** — proxy MTTR, retour du WIP sous
+médiane × 1.30 :
+
+| Pannes | OF | FLUX | OF+EVENT | EVENT |
+|---|---|---|---|---|
+| 1 | 5.8 | 3.0 | 5.7 | **2.9** |
+| 2 | 5.9 | 3.5 | 5.7 | **3.0** |
+| 3 | 5.9 | 3.9 | 5.7 | **3.1** |
+| 4 | 5.7 | 4.9 | 5.7 | **3.5** |
+| 5 | 5.5 | 5.1 | 5.7 | **3.5** |
+
+**EVENT est la doctrine la plus résiliente sur ce protocole** :
+sensibilité 5× plus faible que OF (+4.5 % vs +23.2 %), et MTTR 1.5 à 2×
+plus court que OF/OF+EVENT.
 
 ![Coût et recovery time vs N pannes simultanées](charts/resilience_cascade.png)
 
@@ -421,13 +500,35 @@ redescende sous le seuil de régime normal après le pic du choc.
 
 ### §24.8.4 Lecture honnête
 
-Ces mesures restent des **proxies in-silico** : pas d'observation
-d'atelier réel, pas de loi de probabilité physique des pannes calibrée.
-Elles permettent de **comparer les doctrines entre elles** sur des
-chocs synthétiques contrôlés, mais elles **ne valident pas** un MTBF
-ou une disponibilité au sens IEC 60050. Pour franchir ce pas, il
-faudrait calibrer les distributions d'aléas sur un historique
-industriel et croiser avec une simulation Monte-Carlo de défaillances.
+**Ce que les 856 runs démontrent** :
+
+- EVENT a la queue de distribution la plus favorable (P95 = 220 793 €
+  vs 261 855 € pour OF, soit 16 % de mieux sur le risque P95).
+- EVENT est **5 × moins sensible** que OF à la cascade de pannes
+  (+4.5 % vs +23.2 % entre 1 et 5 pannes simultanées).
+- EVENT récupère **1.6 à 2 × plus vite** que OF après un choc
+  (MTTR 2.9–3.5 j vs 5.5–5.9 j).
+- OF+EVENT (event sourcing sans flux) absorbe le choc côté **coût**
+  mais pas côté **MTTR** : preuve qu'event sourcing et flux jouent
+  sur des leviers complémentaires de résilience.
+
+**Ce que les 856 runs ne démontrent pas** :
+
+- Le gradient d'intensité §24.8.2 est plat → le protocole ne
+  discrimine pas les amplitudes d'aléas isolées.
+- Pas d'observation d'atelier réel, pas de loi de probabilité physique
+  des pannes calibrée. Ces chiffres ne valident **pas** un MTBF ou
+  une disponibilité au sens IEC 60050.
+- L'avantage EVENT ici est mesuré uniquement sur **5 pannes max
+  simultanées** sur 1 fixture industrielle. La généralisation à
+  d'autres ateliers reste à démontrer.
+
+**Verdict résilience** : sur le protocole simulé, la doctrine
+**EVENT (flux + event sourcing)** est la plus résiliente des 4. Le
+flux seul (FLUX) absorbe le choc mais récupère plus lentement quand
+le nombre de pannes augmente (MTTR 3.0 → 5.1 j). L'event sourcing seul
+(OF+EVENT) ne récupère pas mieux que OF — sa contribution résilience
+passe par le couplage avec le flux.
 
 ---
 

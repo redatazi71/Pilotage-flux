@@ -10,10 +10,12 @@ from pilotage_flux.data_factory.random_fixtures import (
     DEFAULT_SPEC,
     FixtureSpec,
     generate_random_fixtures,
+    seed_random_routing_alternatives,
 )
 
 __all__ = [
     "DEFAULT_SPEC",
     "FixtureSpec",
     "generate_random_fixtures",
+    "seed_random_routing_alternatives",
 ]

@@ -66,6 +66,10 @@ class FixtureSpec:
     # Moi & overhead par défaut (insérés en parameters)
     moi_overhead_rate: float = 0.30
     moi_fixed_per_of: float = 50.0
+    # L11.3 — proportion d'opérations recevant une alternative routing
+    routing_alternatives_ratio: float = 0.30
+    # facteur multiplicateur du unit_time sur l'alternative (e.g. 1.2 = 20% plus lent)
+    routing_alternative_time_factor_range: tuple[float, float] = (1.05, 1.40)
 
 
 DEFAULT_SPEC = FixtureSpec()
@@ -96,6 +100,58 @@ def _write_csv(path: Path, headers: list[str], rows: list[list]) -> None:
         w.writerow(headers)
         for r in rows:
             w.writerow(r)
+
+
+def seed_random_routing_alternatives(
+    conn, spec: FixtureSpec, seed: int,
+) -> int:
+    """Ajoute des alternatives routing en DB selon `spec.routing_alternatives_ratio`.
+
+    Pour chaque (article, sequence_idx), avec probabilité `ratio`, choisit
+    un poste alternatif (différent du préféré) et ajoute une ligne dans
+    `routing_alternatives` avec un unit_time légèrement plus élevé.
+
+    Renvoie le nombre d'alternatives ajoutées. Idempotent : ne dupplique
+    pas si une alternative existe déjà.
+    """
+    import random as _random
+
+    rng = _random.Random(seed * 1000 + 7)
+    ops = conn.execute(
+        "SELECT article_id, sequence_idx, workstation_id, unit_time_min "
+        "FROM routing_operations ORDER BY article_id, sequence_idx"
+    ).fetchall()
+    ws_all = [r["workstation_id"] for r in conn.execute(
+        "SELECT workstation_id FROM workstations ORDER BY workstation_id"
+    ).fetchall()]
+    if not ws_all:
+        return 0
+    n_added = 0
+    for op in ops:
+        if rng.random() >= spec.routing_alternatives_ratio:
+            continue
+        candidates = [w for w in ws_all if w != op["workstation_id"]]
+        if not candidates:
+            continue
+        alt_ws = rng.choice(candidates)
+        # Vérifie absence
+        existing = conn.execute(
+            "SELECT 1 FROM routing_alternatives WHERE article_id = ? "
+            "AND sequence_idx = ? AND workstation_id = ?",
+            (op["article_id"], op["sequence_idx"], alt_ws),
+        ).fetchone()
+        if existing:
+            continue
+        factor = rng.uniform(*spec.routing_alternative_time_factor_range)
+        alt_time = round(float(op["unit_time_min"]) * factor, 2)
+        conn.execute(
+            "INSERT INTO routing_alternatives "
+            "(article_id, sequence_idx, workstation_id, unit_time_min, preference_order) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (op["article_id"], op["sequence_idx"], alt_ws, alt_time, 200),
+        )
+        n_added += 1
+    return n_added
 
 
 def generate_random_fixtures(
@@ -275,6 +331,30 @@ def generate_random_fixtures(
         so_rows,
     )
 
+    # --- Routing alternatives (L11.3) : écrit dans CSV pour bootstrap
+    alt_rows: list[list] = []
+    if spec.routing_alternatives_ratio > 0:
+        alt_rng = random.Random(seed * 1000 + 7)
+        for op_row in routing_rows:
+            article_id, seq, ws, ut = op_row
+            if alt_rng.random() >= spec.routing_alternatives_ratio:
+                continue
+            candidates = [w for w in ws_ids if w != ws]
+            if not candidates:
+                continue
+            alt_ws = alt_rng.choice(candidates)
+            factor = alt_rng.uniform(
+                *spec.routing_alternative_time_factor_range
+            )
+            alt_time = round(float(ut) * factor, 2)
+            alt_rows.append([article_id, seq, alt_ws, alt_time, 200])
+    _write_csv(
+        out_dir / "routing_alternatives.csv",
+        ["article_id", "sequence_idx", "workstation_id",
+         "unit_time_min", "preference_order"],
+        alt_rows,
+    )
+
     return {
         "finished_articles": finished_ids,
         "semi_articles": semi_ids,
@@ -282,4 +362,5 @@ def generate_random_fixtures(
         "workstations": ws_ids,
         "bottleneck_workstations": sorted(bottleneck_set),
         "sales_orders": [r[0] for r in so_rows],
+        "n_routing_alternatives": len(alt_rows),
     }

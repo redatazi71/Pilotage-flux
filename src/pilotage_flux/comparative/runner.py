@@ -28,7 +28,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from pilotage_flux.aps import compute_candidates
+from pilotage_flux.aps import (
+    arbitrate_routing_for_of,
+    compute_candidates,
+    routing_strategy_of,
+)
 from pilotage_flux.db import db_session, init_schema
 from pilotage_flux.events_v3 import (
     attach_causes_to_deviation,
@@ -237,12 +241,69 @@ def _setup_stocks_and_pos(
 def _bootstrap_db(
     scenario: Scenario, db_path: Path, fixtures_dir: Path
 ) -> None:
-    """Crée la DB, importe les référentiels et applique l'état initial."""
+    """Crée la DB, importe les référentiels et applique l'état initial.
+
+    L11.3 : si `<fixtures_dir>/routing_alternatives.csv` existe, l'utilise
+    pour seeder la table routing_alternatives. Sinon, fixtures sans
+    alternatives (l'arbitrage L11.2 sera linéaire pur).
+    """
     init_schema(db_path, drop_existing=True)
     with db_session(db_path) as conn:
         import_referentials(conn, fixtures_dir)
+        _seed_routing_alternatives_from_csv(conn, fixtures_dir)
         _import_sales_orders(conn, scenario)
         _setup_stocks_and_pos(conn, scenario)
+
+
+def _seed_routing_alternatives_from_csv(
+    conn: sqlite3.Connection, fixtures_dir: Path,
+) -> int:
+    """Lit `routing_alternatives.csv` (si présent) et seed la table."""
+    import csv as _csv
+
+    csv_path = fixtures_dir / "routing_alternatives.csv"
+    if not csv_path.exists():
+        return 0
+    n_added = 0
+    with csv_path.open(encoding="utf-8") as f:
+        for row in _csv.DictReader(f):
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO routing_alternatives "
+                    "(article_id, sequence_idx, workstation_id, "
+                    " unit_time_min, preference_order) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (
+                        row["article_id"],
+                        int(row["sequence_idx"]),
+                        row["workstation_id"],
+                        float(row["unit_time_min"]),
+                        int(row.get("preference_order") or 200),
+                    ),
+                )
+                n_added += 1
+            except (sqlite3.IntegrityError, KeyError, ValueError):
+                continue
+    return n_added
+
+
+def _arbitrate_of_routing(
+    conn: sqlite3.Connection,
+    of_id: str,
+    result: RunResult,
+) -> None:
+    """L11.4 : appelle l'arbitrage CPM-aware sur un OF nouvellement créé.
+
+    Trace la stratégie résultante (linear/parallel/hybrid) dans
+    `result.notes` la première fois qu'elle apparaît pour observabilité.
+    """
+    decisions = arbitrate_routing_for_of(conn, of_id)
+    strategy = routing_strategy_of(decisions)
+    if strategy != "linear":
+        savings = sum(d.savings_min for d in decisions)
+        result.notes.append(
+            f"arbitrage OF {of_id}: {strategy} (économie {savings:.0f} min)"
+        )
 
 
 # ----------------------------------------------------------------------
@@ -801,6 +862,8 @@ def run_of_doctrine(
         p1 = run_p1_promotion(conn, actor="of.p1")
         result.aps_recalculations += 1
         for plan in p1.ofs_created:
+            # L11.4 : arbitrage CPM-aware avant lancement
+            _arbitrate_of_routing(conn, plan.of_id, result)
             result.of_created_day[plan.of_id] = 0
             _launch_of_at_day(
                 conn, plan.of_id, horizon_start=scenario.horizon_start,
@@ -821,6 +884,7 @@ def run_of_doctrine(
                     new = run_p1_promotion(conn, actor="of.p1")
                     result.aps_recalculations += 1
                     for plan in new.ofs_created:
+                        _arbitrate_of_routing(conn, plan.of_id, result)
                         result.of_created_day[plan.of_id] = day
                         _launch_of_at_day(
                             conn, plan.of_id,
@@ -1047,6 +1111,8 @@ def _promote_frozen_candidates_to_ofs(
     for row in cids_rows:
         cand_id = row["candidate_id"]
         plan = promote_candidate_to_of(conn, cand_id, actor=f"{actor_prefix}.p1")
+        # L11.4 : arbitrage routing CPM-aware juste après création
+        _arbitrate_of_routing(conn, plan.of_id, result)
         scheduled = scheduled_day_by_cand.get(cand_id, 0)
         of_to_day[plan.of_id] = scheduled
         result.of_created_day[plan.of_id] = scheduled
@@ -1136,6 +1202,7 @@ def run_flux_doctrine(
                     result.aps_recalculations += 1
                     p1 = run_p1_promotion(conn, actor="flux.p1")
                     for plan in p1.ofs_created:
+                        _arbitrate_of_routing(conn, plan.of_id, result)
                         result.of_created_day[plan.of_id] = day
                         _launch_of_at_day(
                             conn, plan.of_id,
@@ -1235,6 +1302,7 @@ def run_event_doctrine(
                         })
                     p1 = run_p1_promotion(conn, actor="event.p1")
                     for plan in p1.ofs_created:
+                        _arbitrate_of_routing(conn, plan.of_id, result)
                         result.of_created_day[plan.of_id] = day
                         _launch_of_at_day(
                             conn, plan.of_id,
@@ -1440,6 +1508,7 @@ def run_of_event_doctrine(
         result.aps_recalculations += 1
         initial_of_ids: list[str] = []
         for plan in p1.ofs_created:
+            _arbitrate_of_routing(conn, plan.of_id, result)
             result.of_created_day[plan.of_id] = 0
             _launch_of_at_day(
                 conn, plan.of_id, horizon_start=scenario.horizon_start,
@@ -1479,6 +1548,7 @@ def run_of_event_doctrine(
                     p1 = run_p1_promotion(conn, actor="of_event.p1")
                     new_of_ids: list[str] = []
                     for plan in p1.ofs_created:
+                        _arbitrate_of_routing(conn, plan.of_id, result)
                         result.of_created_day[plan.of_id] = day
                         _launch_of_at_day(
                             conn, plan.of_id,

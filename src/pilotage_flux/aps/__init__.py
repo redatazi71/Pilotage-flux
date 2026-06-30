@@ -18,6 +18,18 @@ from pilotage_flux.aps.pegging import (
     get_root_demand,
 )
 from pilotage_flux.aps.planner import promote_candidate_to_of, PlanningResult
+from pilotage_flux.aps.cpm_scheduling import (
+    CpmReport,
+    OperationNode,
+    compute_cpm_for_of,
+    compute_makespan,
+    list_critical_operations,
+)
+from pilotage_flux.aps.routing_arbitrage import (
+    ArbitrageDecision,
+    arbitrate_routing_for_of,
+    routing_strategy_of,
+)
 from pilotage_flux.aps.routing_alternatives import (
     RoutingAlternative,
     WorkstationChoice,
@@ -55,4 +67,14 @@ __all__ = [
     "available_workstations_for",
     "list_alternatives_for",
     "pick_workstation",
+    # CPM (L11.1)
+    "CpmReport",
+    "OperationNode",
+    "compute_cpm_for_of",
+    "compute_makespan",
+    "list_critical_operations",
+    # Arbitrage routing (L11.2)
+    "ArbitrageDecision",
+    "arbitrate_routing_for_of",
+    "routing_strategy_of",
 ]

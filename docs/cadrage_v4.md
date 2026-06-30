@@ -924,22 +924,72 @@ Le lag réel est tracé dans `approval_queue.approval_lag_min` pour
 audit a posteriori. En production, ce champ enregistre le temps
 réel écoulé entre `submitted_at` et `approved_at`.
 
-### §28.5 Travaux futurs V12
+### §28.5 V12.1 Forecasting zone libre — LIVRÉ
 
-V12.3 est la **première brique livrée**. Les couches restantes sont
-documentées comme axes d'extension prioritaires :
+V12.1 fournit la couche de prévision statistique pour la zone libre
+du planning (horizon long, > 4 semaines). Quatre forecasters
+individuels + un ensemble pondéré sont implémentés :
 
-- **V12.1 Forecasting zone libre** : régression linéaire + ARIMA pour
-  les prévisions long-terme (~ 4 j de dev).
+| Forecaster | Source | Cas d'usage |
+|---|---|---|
+| `LinearTrendForecaster` | numpy polyfit ordre 1 | Tendance pure, baseline minimaliste |
+| `RegressionForecaster` | sklearn LinearRegression + lags + sin/cos | Tendance + saisonnalité 7j + autorégression |
+| `ArimaForecaster` | statsmodels ARIMA(p,d,q) | Tendances stochastiques sans saisonnalité forte |
+| `ExponentialSmoothingForecaster` | statsmodels Holt-Winters additif | Saisonnalité forte + tendance |
+| `EnsembleForecaster` | Combinaison pondérée | Robustesse face à modèle inconnu |
+
+**API commune** :
+
+```python
+forecaster = ArimaForecaster(order=(1,1,1))
+forecaster.fit(historical_demand)            # série 1-D
+result = forecaster.predict(n_steps=14)      # ForecastResult
+# result.values, result.lower_ci, result.upper_ci, result.method_name
+```
+
+**Pondération de l'ensemble** :
+
+- `weighting="equal"` : poids uniformes 1/N
+- `weighting="inverse_rmse"` : poids ∝ 1/RMSE sur holdout, donne
+  davantage de voix aux forecasters précis sur la série historique
+
+**Résultats sur série synthétique** (60 jours trend + saison 7j + bruit σ=2.5) :
+
+| Forecaster | RMSE holdout (14 j) | Poids ensemble |
+|---|---|---|
+| Linear trend | 8.20 | 0.097 |
+| Regression+lags+saison | 3.16 | 0.429 |
+| ARIMA(1,1,1) | 8.90 | 0.085 |
+| Holt-Winters | 3.46 | 0.389 |
+| **Ensemble inv-RMSE** | **3.14** | — |
+
+L'ensemble pondéré domine légèrement le meilleur composant
+(Regression 3.16 → 3.14) en absorbant les biais marginaux des
+modèles complémentaires.
+
+**Tests V12.1** : 20 tests unitaires (`tests/test_v12_forecasting.py`)
++ 3 acceptance E2E (`tests/test_acceptance_v12_1.py`) — tous verts.
+
+**Démo visuelle** : `docs/build_paper_fig4_forecasting.py` génère
+la figure 4 (`charts/paper_fig4_forecasting_demo.png`) qui montre
+train + holdout + 5 forecasters superposés.
+
+![Figure 4 — V12.1 forecasting : 4 forecasters + ensemble pondéré sur série synthétique](charts/paper_fig4_forecasting_demo.png)
+
+### §28.6 Travaux futurs V12 (restants)
+
+V12.3 (Delta engine) et V12.1 (Forecasting) sont les **deux briques
+livrées**. Les couches restantes :
+
 - **V12.2 CP-SAT dynamique zone négociable** : extension de
   `milp_scheduler` (§7.1) pour optimisation quotidienne (~ 2 j).
-- **V12.4 Workflow humain complet** : audit trail, notifications,
-  UI dédiée (~ 1 j + UI).
+- **V12.4 Workflow humain complet** : audit trail enrichi, UI
+  dédiée, notifications (~ 1 j + UI).
 - **V12.5 Matrice d'orchestration** : configuration runtime des
   seuils L1/L2/L3/L4 par profil d'atelier (~ 1 j).
 
-L'effort total estimé pour la V12 complète est de **~ 7 j** de
-développement, à mesurer par un protocole comparatif V11 vs V12.
+Avec V12.1 + V12.3 livrés, l'effort restant pour la V12 complète
+est de **~ 4 j** de développement.
 
 ---
 

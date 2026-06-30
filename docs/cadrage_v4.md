@@ -365,6 +365,72 @@ Les trois piliers se manifestent ainsi :
 
 ---
 
+## §24.8 Analyse de résilience (placeholder — sera rempli par l'étude résilience)
+
+Cette section comble cinq manques identifiés pour parler de **résilience
+au sens technique** et non plus seulement de supériorité moyenne :
+
+1. **Distributions de coût** : statistiques d'ordre P50/P75/P95/P99
+   au lieu de moyenne ± écart-type seul.
+2. **Time-to-recover (proxy MTTR)** : nombre de jours entre le pic de
+   WIP post-choc et le retour sous médiane × 1.30.
+3. **Gradient d'intensité** : performance en fonction d'un facteur
+   d'amplification des aléas (×0.5 à ×2.5).
+4. **Cascade de défaillances** : 1 à 5 pannes simultanées au même
+   jour sur des postes différents.
+5. **Tail risk** : visualisation P95/P99 sur boîtes à moustaches.
+
+L'étude est produite par `python docs/build_resilience_analysis.py`
+(module `pilotage_flux.comparative.resilience`). Les chiffres sont
+écrits dans `docs/cadrage_v4_resilience_data.md` et insérés ci-dessous
+après chaque exécution.
+
+### §24.8.1 Distributions de coût (statistiques d'ordre)
+
+<!-- TABLE_DIST -->
+
+![Distribution du coût par doctrine — boîtes à moustaches](charts/resilience_distribution.png)
+
+**Lecture résilience** : P95 et P99 mesurent le « pire raisonnable »
+et le « pire extrême ». Une doctrine résiliente présente une P95
+proche de sa médiane (queue de distribution courte). Les ratios
+P99/P50 et P95/P50 par doctrine quantifient ce risque de queue.
+
+### §24.8.2 Gradient d'intensité d'aléa
+
+<!-- TABLE_GRADIENT -->
+
+![Coût moyen et P95 vs intensité d'aléa](charts/resilience_gradient.png)
+
+**Lecture résilience** : la **pente** de la courbe coût vs intensité
+mesure la sensibilité doctrinale aux aléas plus durs. Une doctrine
+résiliente a une pente plus faible. La pente de P95 (panneau de droite)
+indique la résilience en queue de distribution.
+
+### §24.8.3 Cascade de défaillances simultanées
+
+<!-- TABLE_CASCADE -->
+
+![Coût et recovery time vs N pannes simultanées](charts/resilience_cascade.png)
+
+**Lecture résilience** : on injecte 1 à 5 pannes au jour 3 sur des
+postes distincts. Une doctrine résiliente conserve un coût quasi-stable
+et un time-to-recover faible quand N augmente. Le panneau de droite
+est le **proxy MTTR** : nombre de jours nécessaires pour que le WIP
+redescende sous le seuil de régime normal après le pic du choc.
+
+### §24.8.4 Lecture honnête
+
+Ces mesures restent des **proxies in-silico** : pas d'observation
+d'atelier réel, pas de loi de probabilité physique des pannes calibrée.
+Elles permettent de **comparer les doctrines entre elles** sur des
+chocs synthétiques contrôlés, mais elles **ne valident pas** un MTBF
+ou une disponibilité au sens IEC 60050. Pour franchir ce pas, il
+faudrait calibrer les distributions d'aléas sur un historique
+industriel et croiser avec une simulation Monte-Carlo de défaillances.
+
+---
+
 ## §25. Cahier des charges actualisé
 
 ### §25.1 Exigences fonctionnelles satisfaites

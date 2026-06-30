@@ -746,6 +746,55 @@ Protocole : 5 baselines (1 aléa par domaine) + 15 paires uniques
 
 ![Time-to-recover par paire de domaines](charts/paired_hazards_recovery.png)
 
+### §24.8.6 Disponibilité SO-level réelle — finding contre-intuitif
+
+**Point 2 paper** : ajout d'un mécanisme de rejet de SO
+(`sales_orders.rejected_at` + `_evaluate_rejections`) qui marque
+comme `cancelled` toute SO non livrée dans `due_date + late_threshold_days`.
+Permet de mesurer la **disponibilité réelle** (vs OF-level biaisée
+> 94 % par construction).
+
+Étude **900 runs** (3 tolérances × 5 niveaux cascade × 15 seeds × 4 doctrines) :
+
+| Tolérance | OF | FLUX | OF+EVENT | **EVENT** |
+|---|---|---|---|---|
+| **0 j** (strict, ontime) | 99–100 % | **77–84 %** | 100 % | **85 %** |
+| **3 j** (modéré) | 100 % | 95–96 % | 100 % | 95.8 % |
+| **14 j** (tolérant) | 100 % | 100 % | 100 % | 100 % |
+
+**Découverte contre-intuitive** : sur tolérance stricte (livraison
+ontime), **OF bat FLUX et EVENT**. Le smoothing étale les
+lancements sur l'horizon, ce qui décale certaines livraisons
+au-delà de leur due_date. **L'event sourcing ne corrige pas** ce
+retard (EVENT 85 % vs FLUX 77 %).
+
+**Trade-off doctrinal mesuré pour la première fois** :
+
+| Critère prioritaire | Doctrine optimale | Compromis |
+|---|---|---|
+| **Coût opérationnel** | EVENT > FLUX > OF+EVENT > OF | mesuré §24.2 / §24.6 |
+| **Ontime strict (tol=0)** | **OF / OF+EVENT** > EVENT > FLUX | mesure Point 2 ci-dessus |
+| **Ontime modéré (tol=3)** | Tous équivalents > 95 % | seuil pratique |
+
+Implication industrielle :
+- **Industries à tolérance large** (consumer, biens d'équipement) :
+  doctrine flux (EVENT) optimale — gain coût sans perte ontime.
+- **Industries à tolérance stricte** (aéronautique, médical, automobile) :
+  OF+EVENT préférable — préserve l'ontime (100 %) **et** ajoute la
+  traçabilité event sourcing, au prix d'un coût plus élevé que FLUX/EVENT.
+
+Cette mesure **complète et nuance** les conclusions §24.2-§24.6 :
+les gains coût du flux ne sont **pas gratuits** — ils s'achètent
+contre une fraction de retards ontime que les ateliers à due_date
+serrées ne peuvent absorber.
+
+![Disponibilité SO-level réelle vs OF-level biaisée — 3 tolérances × cascade](charts/point2_real_disponibility.png)
+
+**Limite assumée** : ce résultat est mesuré uniquement sur la
+cascade de pannes synthétiques. Il faudrait répliquer sur des
+scénarios industriels réels (mix demande, aléas calibrés) pour
+confirmer le trade-off.
+
 ### §24.10.1 Lectures clés des matrices
 
 **1. Quelle paire est la plus coûteuse ?**

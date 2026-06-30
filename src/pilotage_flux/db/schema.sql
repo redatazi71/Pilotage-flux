@@ -1146,3 +1146,56 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_cell
     ON causal_cell_snapshots (cell_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_time
     ON causal_cell_snapshots (snapshot_at);
+
+-- ---------------------------------------------------------------------
+-- Moteur Delta unifié (B.1)
+--
+-- Vocabulaire d'action à 6 niveaux du CDC §11, mappé sur les 4 niveaux
+-- du cadrage v1.3 §3.11 (N1 absorption / N2 ajust. auto / N3 replan
+-- locale / N4 replan complète). Le flag requires_human marque les
+-- niveaux soumis à la subsidiarité humaine (cadrage : N3/N4).
+--
+--   L1 informer            → N1 (passive, scope=none)
+--   L2 surveiller          → N1 (passive, scope=none)
+--   L3 corriger_local      → N2 (automatique, scope=local)
+--   L4 replanifier_local   → N3 (humain, scope=local)
+--   L5 escalader           → N3 (humain, transition)
+--   L6 replanifier_global  → N4 (humain, scope=global)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS delta_action_levels (
+    niveau_code     TEXT PRIMARY KEY,    -- 'L1'..'L6'
+    label           TEXT NOT NULL,
+    cadrage_level   INTEGER NOT NULL,    -- 1..4 (mapping cadrage v1.3)
+    requires_human  INTEGER NOT NULL,    -- 0|1
+    scope           TEXT NOT NULL,       -- 'none'|'local'|'global'
+    description     TEXT NOT NULL,
+    ordre           INTEGER NOT NULL UNIQUE  -- 1..6, ordre d'escalade
+);
+
+-- Décisions Delta : une par déviation, lien optionnel vers approval_queue.
+CREATE TABLE IF NOT EXISTS delta_decisions (
+    delta_decision_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    deviation_id        INTEGER REFERENCES event_deviations(deviation_id),
+    niveau_code         TEXT NOT NULL REFERENCES delta_action_levels(niveau_code),
+    racine_id           TEXT REFERENCES macrs_racines(racine_id),
+    categorie_code      TEXT REFERENCES macrs_categories(categorie_code),
+    score_magnitude     REAL,
+    frequency           REAL,
+    decided_at          TEXT NOT NULL,
+    executed_at         TEXT,
+    status              TEXT NOT NULL DEFAULT 'pending',
+        -- 'pending' | 'executed' | 'rejected' | 'expired'
+    approval_queue_id   INTEGER REFERENCES approval_queue(queue_id),
+    explanation         TEXT,
+    actor               TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_delta_decisions_deviation
+    ON delta_decisions (deviation_id);
+CREATE INDEX IF NOT EXISTS idx_delta_decisions_niveau
+    ON delta_decisions (niveau_code);
+CREATE INDEX IF NOT EXISTS idx_delta_decisions_status
+    ON delta_decisions (status);
+CREATE INDEX IF NOT EXISTS idx_delta_decisions_racine
+    ON delta_decisions (racine_id, categorie_code);

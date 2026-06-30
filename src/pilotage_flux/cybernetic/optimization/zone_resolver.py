@@ -102,8 +102,8 @@ def resolve_negotiable_zone(
     *,
     reference_day: int = 0,
     horizon_start: str | None = None,
-    freeze_window_days: int = 5,
-    horizon_forecast_days: int = 28,
+    freeze_window_days: int | None = None,
+    horizon_forecast_days: int | None = None,
     adaptive: bool = False,
 ) -> NegotiableZone:
     """Identifie tous les OFs et candidats situés dans la zone négociable.
@@ -132,6 +132,18 @@ def resolve_negotiable_zone(
         horizon_start = row["value"]
 
     base = datetime.fromisoformat(horizon_start)
+    # Si l'appelant n'a pas fixé les périodes, on lit les périodes
+    # territoriales doctrinales (cadrage v1.3 §3.9 — défauts 14/70/270).
+    if freeze_window_days is None or horizon_forecast_days is None:
+        from pilotage_flux.cybernetic.zone_periods import get_zone_periods
+        periods = get_zone_periods(conn)
+        if freeze_window_days is None:
+            freeze_window_days = periods.gelee_days
+        if horizon_forecast_days is None:
+            # zone négociable = freeze + negociable_days
+            horizon_forecast_days = (
+                periods.gelee_days + periods.negociable_days
+            )
     # V13.3 — adaptation de la freeze_window selon nervosité observée
     if adaptive:
         freeze_window_days = compute_adaptive_freeze_window(

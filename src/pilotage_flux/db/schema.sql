@@ -974,3 +974,83 @@ CREATE INDEX IF NOT EXISTS idx_pc_origin
     ON production_contracts (origin_kind, origin_ref);
 CREATE INDEX IF NOT EXISTS idx_pc_status
     ON production_contracts (status);
+
+-- ---------------------------------------------------------------------
+-- MACRS Couche 1 — Matrice d'incidence causale enrichie
+--   46 racines × 7 catégories Δ = 175 cellules d'incidence binaire.
+--   Référence : matrice_incidence_causale.md (couche 1).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS macrs_categories (
+    categorie_code  TEXT PRIMARY KEY,    -- Mat | Cap | Op | Qual | Temp | Info | Sync
+    label           TEXT NOT NULL,
+    definition      TEXT NOT NULL,
+    ordre           INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS macrs_racines (
+    racine_id           TEXT PRIMARY KEY,    -- R001..R046, identifiant stable
+    domaine             TEXT NOT NULL,
+        -- demande | approvisionnement | logistique | production | qualite
+    sous_domaine        TEXT NOT NULL,
+    label               TEXT NOT NULL,
+    predictibilite      TEXT NOT NULL,
+        -- 'forte' | 'moyenne' | 'faible'
+    c1_precurseur       TEXT NOT NULL,    -- 'O' | 'N'
+    c2_cumulative       TEXT NOT NULL,    -- 'O' | 'N' | 'P' (partiel)
+    c3_aleatoire        TEXT NOT NULL,    -- 'non' | 'partiel' | 'dominant'
+    mecanisme           TEXT,
+    observabilite       TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_macrs_racines_domaine
+    ON macrs_racines (domaine, sous_domaine);
+
+-- Incidence binaire : 1 ligne par couple actif (175 attendus).
+CREATE TABLE IF NOT EXISTS macrs_incidence (
+    racine_id       TEXT NOT NULL REFERENCES macrs_racines(racine_id),
+    categorie_code  TEXT NOT NULL REFERENCES macrs_categories(categorie_code),
+    PRIMARY KEY (racine_id, categorie_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_macrs_incidence_cat
+    ON macrs_incidence (categorie_code);
+
+-- ---------------------------------------------------------------------
+-- MACRS Couche 2 — Matrice opérationnelle dynamique (cellules)
+--
+-- Une cellule existe pour chaque couple (racine, catégorie) actif
+-- en Couche 1. Cycle de vie :
+--
+--   INACTIVE  (jamais matérialisée — implicite via incidence = 0)
+--   INCOMING  (créée au seed, en attente du 1er événement)
+--   OBSERVING (1+ événement observé, sous-domaine n'a pas atteint K)
+--   ACTIVE    (sous-domaine a atteint K et la cellule a 1+ événement)
+--
+-- Transition unidirectionnelle dans une simulation. Le seuil K
+-- s'applique au **sous-domaine entier** : toutes les cellules
+-- d'un même sous-domaine basculent en ACTIVE simultanément
+-- (cf. matrice_operationnelle_specification.md §3.3).
+--
+-- Les agrégats temporels W_courte/W_longue/bins/cumul sont ajoutés
+-- dans la migration A.3 (compteurs simples ici en A.2).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS causal_cells (
+    cell_id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    racine_id               TEXT NOT NULL REFERENCES macrs_racines(racine_id),
+    categorie_code          TEXT NOT NULL REFERENCES macrs_categories(categorie_code),
+    status                  TEXT NOT NULL DEFAULT 'INCOMING',
+        -- 'INCOMING' | 'OBSERVING' | 'ACTIVE'
+    n_events_total          INTEGER NOT NULL DEFAULT 0,
+    first_event_at          TEXT,
+    last_event_at           TEXT,
+    transitioned_observing_at  TEXT,
+    transitioned_active_at  TEXT,
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (racine_id, categorie_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_causal_cells_status
+    ON causal_cells (status);
+CREATE INDEX IF NOT EXISTS idx_causal_cells_racine
+    ON causal_cells (racine_id);

@@ -563,6 +563,79 @@ def _apply_hazard(
         )
 
 
+def _get_realistic_capacity_minutes_per_day(
+    conn: sqlite3.Connection,
+) -> int:
+    """V13.A — Lit `realistic_capacity_minutes_per_day` (default 0).
+
+    0  → legacy : 1 op / WS / jour (sérialisation simplifiée)
+    >0 → réaliste : un WS peut traiter N ops tant que la somme des
+         durées (qty × unit_time / capacity_factor) ne dépasse pas
+         ce budget journalier. Typique : 480 (1 shift 8h) ou 960
+         (2 shifts).
+
+    Cible le finding de l'audit §28.16 : la sérialisation 1-op-par-jour
+    favorise structurellement les doctrines qui lancent le plus tôt.
+    """
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="realistic_capacity_minutes_per_day", default=0.0,
+    )
+    return int(val) if val is not None else 0
+
+
+def _compute_op_duration_min(
+    conn: sqlite3.Connection,
+    of_id: str,
+    sequence_idx: int,
+    qty: float,
+    workstation_id: str,
+    state: "HazardState",
+) -> float:
+    """V13.A — Durée réelle d'une op en minutes.
+
+    duration = qty × unit_time_min / capacity_factor(ws)
+    Si le WS est en breakdown, on multiplie par le slowdown_factor.
+
+    Cherche unit_time_min via `order_operations` (lié à `of_id` +
+    `sequence_idx`) avec fallback sur `routing_operations`.
+    """
+    from pilotage_flux.parameters import workstation_capacity_factor
+    row = conn.execute(
+        """
+        SELECT o.unit_time_min
+        FROM order_operations o
+        WHERE o.of_id = ? AND o.sequence_idx = ?
+        """,
+        (of_id, sequence_idx),
+    ).fetchone()
+    unit_time = float(row["unit_time_min"]) if row and row["unit_time_min"] else 0.0
+    if unit_time <= 0:
+        # Fallback : lit via routing
+        of_art = conn.execute(
+            "SELECT article_id FROM manufacturing_orders WHERE of_id = ?",
+            (of_id,),
+        ).fetchone()
+        if of_art:
+            r = conn.execute(
+                "SELECT unit_time_min FROM routing_operations "
+                "WHERE article_id = ? AND sequence_idx = ?",
+                (of_art["article_id"], sequence_idx),
+            ).fetchone()
+            unit_time = float(r["unit_time_min"]) if r and r["unit_time_min"] else 1.0
+        else:
+            unit_time = 1.0
+    capa = workstation_capacity_factor(conn, workstation_id)
+    if capa <= 0:
+        capa = 1.0
+    base_dur = qty * unit_time / capa
+    if workstation_id in state.breakdown_ws:
+        factor = state.breakdown_factor.get(workstation_id, 1.5)
+        base_dur *= factor
+    return max(1.0, base_dur)
+
+
 def _get_event_driven_smoothing_advance_days(
     conn: sqlite3.Connection,
 ) -> int:
@@ -933,7 +1006,11 @@ def _advance_one_day(
         ORDER BY of_id ASC
         """
     ).fetchall()
-    busy_ws: set[str] = set()
+    # V13.A — bascule legacy (1 op/WS/jour) ⟷ réaliste (budget min/WS/jour)
+    daily_capa_min = _get_realistic_capacity_minutes_per_day(conn)
+    realistic = daily_capa_min > 0
+    busy_ws: set[str] = set()  # legacy
+    ws_minutes_used: dict[str, float] = {}  # realistic
     # Scrap cumulé des NC du jour (et précédents) à appliquer au 1er OF avancé.
     # V3 qc_intervention_active divise par 2 (l'intervention qualité limite
     # le dommage). Cumulatif : un cascade_nc voit chaque NC consommé tour à tour.
@@ -966,13 +1043,53 @@ def _advance_one_day(
         ).fetchone()
         qty = float(qty_row["quantity"])
         ws = op["workstation_id"]
-        # Sérialisation : un poste ne peut traiter qu'un OF par jour
-        if ws in busy_ws:
+        if realistic:
+            # V13.A — réaliste : N ops/WS/jour tant que cap minutes pas dépassé
+            op_dur = _compute_op_duration_min(
+                conn, of_id, int(op["sequence_idx"]), qty, ws, state,
+            )
+            used = ws_minutes_used.get(ws, 0.0)
+            if used + op_dur > daily_capa_min:
+                continue
+            start_min = int(used)
+            end_min = int(min(daily_capa_min, used + op_dur))
+            ws_minutes_used[ws] = used + op_dur
+            base_scrap = max(0.0, round(qty * 0.05))
+            scrap_extra = 0.0
+            if pending_scrap > 0:
+                scrap_extra = pending_scrap
+                pending_scrap = 0.0
+            qty_scrap = min(qty, base_scrap + scrap_extra)
+            qty_good = max(0.0, qty - qty_scrap)
+            sid, fid = _execute_op(
+                conn, op["of_op_id"],
+                horizon_start=scenario.horizon_start, day=day,
+                qty_good=qty_good, qty_scrap=qty_scrap, actor=actor,
+            )
+            # Réécrit les timestamps avec les minutes réelles
+            _stamp_event_at_day(
+                conn, sid, scenario.horizon_start, day, start_min,
+            )
+            _stamp_event_at_day(
+                conn, fid, scenario.horizon_start, day, end_min,
+            )
+            _stamp_op_actual(
+                conn, op["of_op_id"], scenario.horizon_start,
+                start_day=day, end_day=day,
+                minutes_offset_start=start_min,
+                minutes_offset_end=end_min,
+            )
+            if ws in state.breakdown_ws:
+                # Le breakdown ralentit déjà via op_dur ; pas de delayed_of_until
+                # supplémentaire en mode réaliste
+                pass
+        elif ws in busy_ws:
+            # Legacy : un poste ne peut traiter qu'un OF par jour
             continue
-        busy_ws.add(ws)
-        # Effet panne : retard proportionnel au slowdown_factor.
-        # factor=1.5 -> +1 jour ; factor=2.0 -> +2 jours ; factor=3.0 -> +3 jours.
-        if ws in state.breakdown_ws:
+        elif ws in state.breakdown_ws:
+            busy_ws.add(ws)
+            # Effet panne : retard proportionnel au slowdown_factor.
+            # factor=1.5 -> +1 jour ; factor=2.0 -> +2 jours ; factor=3.0 -> +3 jours.
             factor = state.breakdown_factor.get(ws, 1.5)
             delay_days = max(1, int(round((factor - 1.0) * 2)))
             end_day = day + delay_days
@@ -998,6 +1115,7 @@ def _advance_one_day(
             # avant que sa prochaine op puisse être avancée
             state.delayed_of_until[of_id] = end_day
         else:
+            busy_ws.add(ws)
             base_scrap = max(0.0, round(qty * 0.05))
             scrap_extra = 0.0
             if pending_scrap > 0:

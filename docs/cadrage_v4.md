@@ -1217,6 +1217,107 @@ pas. V13.0 le ferme.
 Chart : aucun (4 scénarios suffisent pour la table § 28.15.2).
 Diagnostic : `docs/diagnose_v13_0.py`.
 
+### §28.16 Audit simulation + Matrice QCDS 5 doctrines (Option 1)
+
+La V13.0 a révélé un résultat dérangeant : **OF+EVENT bat FLUX+EVENT
+sur l'OTIF dans 3/4 scénarios stress XL** (`docs/diagnose_v13_0_matrix.py`).
+Avant de pousser V13.1/V13.3, audit complet du pipeline simulation
++ mesure QCDS étendue.
+
+#### §28.16.1 Audit `_advance_one_day` — 6 simplifications de modèle
+
+`docs/audit_simulation_v13_0.md` documente 6 simplifications dans
+`comparative/runner.py` :
+
+1. **Sérialisation `1 op / WS / jour`** (lignes 970-972) : un WS ne
+   traite qu'UN OF par jour, indépendamment de qty/unit_time
+2. **Durée d'op fixée à 480 min** dans `_execute_op` (ligne 379)
+3. **qty_good = qty_good de la dernière op** dans `close_of`
+   (`mes/closure.py:62`), scrap non compoundé
+4. V13.0 inactif sur stress_demand_spike (urgent_absorbed
+   n'invoque pas `_apply_corrective_actions`)
+5. `_apply_corrective_actions` appelé uniquement EVENT/OF+EVENT
+6. `open_nc + scrap_nc` doctrine-gated FLUX/EVENT vs OF/OF+EVENT
+
+**Aucun bug détecté.** Les vérifications de cohérence (pegging_links,
+KPI quantity_compliance, blocage BOM) sont passantes 3/3 doctrines.
+Le résultat OF > FLUX sur OTIF est *cohérent* avec la sérialisation
+1-op/jour qui favorise structurellement les doctrines qui lancent au
+plus tôt.
+
+#### §28.16.2 Option 1 — Matrice QCDS 5 doctrines × 4 scénarios
+
+100 runs (5 doctrines × 4 scénarios × 5 seeds) mesurant les 4
+dimensions QCDS — `docs/build_qcds_matrix_5_doctrines.py`.
+
+**Verdict par objectif** :
+
+| Objectif | Doctrine gagnante 4/4 |
+|---|---|
+| **OTIF** (Q × D) | **OF / OF+EVENT** (0.885-0.950) |
+| **Coût** | **FLUX / EVENT** (jusqu'à −45 % vs OF) |
+| **Stabilité** (WIP σ) | **FLUX** (σ 1.4-4.2 vs σ 6.2-7.7 pour OF) |
+
+**Cas emblématique — `stress_double_breakdown_xl`** :
+
+| Doctrine | OTIF | Coût | WIP pic | WIP σ |
+|---|---|---|---|---|
+| OF | 0.950 | 48 735 € | 18 | 6.23 |
+| EVENT | 0.675 | **27 320 € (−44 %)** | **7 (−61 %)** | **1.44 (−77 %)** |
+
+EVENT économise **21 415 €** et lisse **4× mieux** la production,
+au prix de **27.5 pp d'OTIF**. Le choix doctrinal est un **arbitrage
+QCDS** (§30), pas une supériorité univoque.
+
+**Lecture doctrinale honnête** : **FLUX n'est pas OTIF-first**
+(comme on aurait pu le croire) — **FLUX est Cost-first ET
+Stability-first**. Sa préférence dépend de la priorité métier du
+planificateur.
+
+#### §28.16.3 Option 2 — Capacité réaliste (N ops / WS / jour)
+
+Modification de `_advance_one_day` : nouveau paramètre
+`realistic_capacity_minutes_per_day` (default 0 = legacy). Quand
+> 0, le WS traite N ops tant que `Σ(qty × unit_time / capa)` <
+budget journalier. La durée d'op est calculée via `routing_operations`.
+
+Mesure sur 100 runs en mode réaliste (cap=480) —
+`docs/build_qcds_realistic_capacity.py` :
+
+| Doctrine | Legacy OTIF | Réaliste OTIF | Δ |
+|---|---|---|---|
+| OF (4 scénarios) | 0.885 (spike) à 0.950 | **0.950 partout** | +6.5 pp sur spike |
+| FLUX | 0.606-0.694 | **0.694-0.745** | +0 à +13.9 pp |
+| EVENT V13.0 | 0.606-0.950 | **0.745-0.950** | +6.9 à +13.9 pp |
+
+**Découvertes du mode réaliste** :
+
+1. **OF passe à 0.950 partout** : la sérialisation 1-op/jour
+   pénalisait OF sur `stress_demand_spike_xl`. Levée, OF retrouve
+   son plafond.
+2. **FLUX reste à OTIF 0.694** en mode réaliste sur baseline — la
+   sérialisation **n'était PAS** la cause de son défaut.
+3. **Coûts −30 à −40 % en réaliste** : capacité plus généreuse =
+   moins de WIP carrying.
+4. **Hiérarchie QCDS préservée** : OF gagne OTIF, FLUX gagne Coût
+   et Stabilité, dans les deux modes.
+
+**Conséquence cruciale** : le défaut OTIF de FLUX est doctrinalement
+causé par le **smoothing qui place les parents avant les composants**
+(BOM cascade). Le mode réaliste lève la sérialisation WS mais ne
+change rien à cette mauvaise ordonnance.
+
+→ **V13.1 (BOM-op linkage avec consommation par op)** reste la
+voie principielle pour fermer le gap OTIF FLUX sans détruire son
+avantage Cost/Stability. Le « parent peut démarrer op 1 dès que
+SEMI-1 est prêt, sans attendre SEMI-2 » ouvre une fenêtre que
+V13.0 (pull-forward) seul ne peut pas exploiter.
+
+Chart : aucun.
+Données : `docs/cadrage_v4_qcds_matrix_5_doctrines.md` (legacy),
+`docs/cadrage_v4_qcds_realistic_capacity.md` (réaliste).
+Audit : `docs/audit_simulation_v13_0.md`.
+
 ### §24.10.1 Lectures clés des matrices
 
 **1. Quelle paire est la plus coûteuse ?**

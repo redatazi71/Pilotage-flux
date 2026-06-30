@@ -1171,16 +1171,101 @@ existantes :
   parse pas — il prend juste le pattern numérique (kind, score).
   Une extension NLP/regex pourrait extraire les motifs.
 
-### §28.10 Travaux futurs V12 (restants)
+### §28.10 V12.5 — Matrice d'orchestration — LIVRÉ
 
-Avec V12.1, V12.1.1, V12.2, V12.2.1, V12.3 et V12.4 livrés, reste :
+V12.5 est la **dernière brique V12** : elle unifie les 5 précédentes
+en exposant une configuration runtime data-driven (profils JSON) et
+un sélecteur automatique d'algorithmes selon contexte.
 
-- **V12.5 Matrice d'orchestration** : configuration runtime des
-  seuils L1/L2/L3/L4 par profil d'atelier, sélection automatique
-  algo (CP-SAT vs heuristique) selon contexte, profils par
-  configuration JSON (~ 1 j).
+#### §28.10.1 WorkshopProfile — configuration data-driven
 
-Effort restant pour la V12 complète : **~ 1 j** de dev.
+Module `cybernetic/orchestration/profile.py` — dataclass
+sérialisable JSON capturant **toutes les politiques V12** :
+
+| Catégorie | Paramètres |
+|---|---|
+| V12.2 zones | `freeze_window_days`, `horizon_forecast_days` |
+| V12.3 delta engine | `score_threshold_L1/L2/L3/L4` |
+| V12.4 human loop | `overdue_threshold_minutes`, `auto_approve_l3_in_simulation`, mean+std lag |
+| V12.2.1 fragilité | `fragility_max_weight`, `fragility_window_days` |
+| V12.1 forecasting | `forecast_horizon_days`, `forecast_holdout_size`, `forecast_seasonal_period` |
+| V12.2 sélection | `cp_sat_max_ofs`, `cp_sat_timeout_sec` |
+
+Validation automatique sur chargement :
+- Seuils L1/L2/L3/L4 strictement croissants
+- `horizon_forecast_days > freeze_window_days`
+- `fragility_max_weight >= 1.0`
+- `cp_sat_timeout_sec > 0`
+
+#### §28.10.2 Trois profils défaut
+
+| Profil | OFs cible | freeze | horizon | overdue | L4 seuil |
+|---|---|---|---|---|---|
+| **SMALL** | < 20 | 3 j | 14 j | 2 h | 1.00 |
+| **MEDIUM** (≈ V11) | 20–50 | 5 j | 28 j | 4 h | 1.20 |
+| **LARGE** | 50+ | 7 j | 42 j | 6 h | 1.40 |
+
+#### §28.10.3 OrchestrationMatrix — sélection algo
+
+Module `cybernetic/orchestration/matrix.py` — produit une
+`OrchestrationDecision` complète selon contexte :
+
+| Règle | Source | Décision |
+|---|---|---|
+| `n_of_zone > cp_sat_max_ofs` | OrchestrationContext | optimizer = `heuristic_atc` |
+| `has_two_bottlenecks` | DBR Goldratt cassé | optimizer = `heuristic_slack` |
+| `|historical_bias| > 5.0` | V12.1.1 HistoricalContext | forecaster = `bias_corrected_ensemble` |
+| `recent_hazard_count >= 5` | event_deviations | forecaster = `hazard_aware_regression` |
+| `n_recent_rejections >= 3` | V12.2.1 RejectionMemory | forecaster = `ensemble_inv_rmse` |
+| `n_pending_approvals >= 5` | V12.4 dashboard | overdue → min(profile, 120 min) |
+
+Tous les choix sont accompagnés d'une `rationale: list[str]`
+audit-friendly explicitant la décision (pour traçabilité MES).
+
+#### §28.10.4 Architecture finale V12 complète
+
+![Figure 6 — Architecture cybernétique V12 complète (6 briques)](charts/paper_fig6_v12_complete.png)
+
+#### §28.10.5 Tests V12.5
+
+**26 tests verts** (`tests/test_v12_orchestration.py`) :
+- Validation profils (croissance seuils, freeze/horizon, fragilité)
+- Roundtrip JSON save/load
+- 3 profils défaut cohérents
+- select_optimizer : 4 chemins (default CP-SAT, scale → ATC, 2 goulots → SLACK, profil-dépendant)
+- select_forecaster : 4 chemins (default, biais, hazard, rejets)
+- decide() : tous champs présents, overdue réduit sous charge, rationale audit-friendly
+
+**+ 2 acceptance E2E** (`tests/test_acceptance_v12_complete.py`) :
+- 6 briques V12 ensemble (profil JSON → orchestration → forecasting feedback → optim feedback → delta engine → human loop → audit final)
+- 3 scenarios distincts → 3 décisions différentes
+
+### §28.11 V12 — synthèse finale
+
+**État final** : 6 briques V12 livrées (V12.1, V12.1.1, V12.2,
+V12.2.1, V12.3, V12.4, V12.5).
+
+**Cumul tests V12** :
+
+| Brique | Tests unitaires | Acceptance | Statut |
+|---|---|---|---|
+| V12.1 forecasting | 20 | 3 | ✅ |
+| V12.1.1 forecasting feedback | (inclus ci-dessous) | — | ✅ |
+| V12.2 optimization | 14 | 2 | ✅ |
+| V12.2.1 optim feedback | (inclus ci-dessous) | — | ✅ |
+| V12.1.1 + V12.2.1 combinés | 20 | — | ✅ |
+| V12.3 delta engine | 21 | 3 | ✅ |
+| V12.4 human loop | 22 | 2 | ✅ |
+| V12.5 orchestration | 26 | 2 | ✅ |
+| **TOTAL V12** | **123** | **12** | ✅ |
+
+**Effort V12 cumulé** : 8 jours de dev (vs estimation initiale 7 j),
+0 régression V11 (320 tests V11 toujours verts), 8 figures
+embarquées dans cadrage v4 + paper HAL.
+
+V12 est **mécaniquement complet**. Reste à mesurer son impact
+quantitatif par un protocole comparatif V11 vs V12 — un travail
+de simulation distinct, hors périmètre du paper actuel.
 
 ---
 

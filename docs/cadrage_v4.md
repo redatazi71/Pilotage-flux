@@ -976,20 +976,73 @@ train + holdout + 5 forecasters superposés.
 
 ![Figure 4 — V12.1 forecasting : 4 forecasters + ensemble pondéré sur série synthétique](charts/paper_fig4_forecasting_demo.png)
 
-### §28.6 Travaux futurs V12 (restants)
+### §28.6 V12.2 CP-SAT dynamique zone négociable — LIVRÉ
 
-V12.3 (Delta engine) et V12.1 (Forecasting) sont les **deux briques
-livrées**. Les couches restantes :
+V12.2 complète V12.1 en optimisant la zone située entre la freeze
+window et l'horizon de forecast — la **zone négociable**, là où le
+replan est utile et possible.
 
-- **V12.2 CP-SAT dynamique zone négociable** : extension de
-  `milp_scheduler` (§7.1) pour optimisation quotidienne (~ 2 j).
+**Architecture en 3 zones temporelles** (figure 5) :
+
+| Zone | Plage temporelle | Algorithme V12 |
+|---|---|---|
+| **Gelée** | `[t, t + freeze_window[` (5 j par défaut) | V12.3 surveille, jamais de replan |
+| **Négociable** | `[t + freeze, t + horizon_forecast[` (5-28 j) | **V12.2 CP-SAT dynamique** + 4 heuristiques |
+| **Libre** | `[t + horizon, ∞[` (> 28 j) | V12.1 forecasting |
+
+![Figure 5 — V12 architecture cybernétique : 3 zones temporelles × couches algorithmiques](charts/paper_fig5_zones_architecture.png)
+
+**Modules cybernetic/optimization/** :
+
+| Module | Rôle |
+|---|---|
+| `zone_resolver.py` | Identifie les OFs/candidats dans la zone négociable depuis SQLite + `run_metadata.horizon_start` |
+| `cp_sat_dynamic.py` | CP-SAT zone-aware ; objectif = 10×tardiveté + Σ|déplacement| ; fallback heuristique SLACK |
+| `heuristics.py` | 4 règles classiques : SLACK, EDD, SPT, ATC (Apparent Tardiness Cost) |
+
+**Spécificités du CP-SAT dynamique** :
+
+- Respecte strictement la **freeze window** : domaines des
+  variables = `[freeze_end_day, horizon_end_day[`, les OFs gelés ne
+  sont jamais touchés
+- **Minimise les déplacements** : pas seulement la tardiveté, mais
+  aussi `Σ|new_day − current_day|`, ce qui produit un replan
+  *conservateur* (peu de OFs déplacés)
+- Indicateurs produits dans `ProposedReplan` : `n_ofs_moved`,
+  `max_delta_days`, `total_delta_days` → permettent à l'opérateur
+  d'évaluer l'amplitude du replan avant approbation
+- **Fallback heuristique SLACK** automatique si OR-Tools indispo
+  ou solveur infaisable dans le timeout
+
+**4 heuristiques de séquencement fournies (`schedule_heuristic`)** :
+
+| Heuristique | Logique | Cas d'usage |
+|---|---|---|
+| **SLACK** | tri par `due − duration` croissant | priorité à l'urgent qui prend du temps |
+| **EDD** | tri par `due_date` croissant | priorité à l'échéance proche |
+| **SPT** | tri par `duration` croissant | maximise débit court terme |
+| **ATC** | priorité ∝ `1/dur × exp(−slack/k·avg_dur)` | équilibre durée + urgence |
+
+**Intégration V12.3 ↔ V12.2** : quand le Delta engine V12.3 classifie
+une déviation en L3 ou L4, V12.2 peut être appelé pour proposer le
+replan associé qui sera enqueue dans `approval_queue` avec un payload
+décrivant les changements (n_ofs_moved, deltas).
+
+**Tests V12.2** : 14 unitaires (`tests/test_v12_optimization.py`)
++ 2 acceptance E2E (`tests/test_acceptance_v12_2.py`) — tous verts.
+
+### §28.7 Travaux futurs V12 (restants)
+
+Avec V12.1, V12.2 et V12.3 livrés, restent :
+
 - **V12.4 Workflow humain complet** : audit trail enrichi, UI
-  dédiée, notifications (~ 1 j + UI).
+  dédiée, notifications, gestion des rôles (~ 1 j + UI).
 - **V12.5 Matrice d'orchestration** : configuration runtime des
-  seuils L1/L2/L3/L4 par profil d'atelier (~ 1 j).
+  seuils L1/L2/L3/L4 par profil d'atelier, sélection automatique
+  algo (CP-SAT vs heuristique) selon contexte (~ 1 j).
 
-Avec V12.1 + V12.3 livrés, l'effort restant pour la V12 complète
-est de **~ 4 j** de développement.
+Effort restant pour la V12 complète : **~ 2 j** de dev (vs 4 j
+estimés avant livraison V12.2).
 
 ---
 

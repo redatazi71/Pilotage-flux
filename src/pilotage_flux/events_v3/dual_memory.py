@@ -403,34 +403,3 @@ def list_memory_decisions(
         params.append(decision)
     sql += " ORDER BY decision_id ASC"
     return [_row_decision(r) for r in conn.execute(sql, params)]
-
-
-# --- V13.C — Mémoire ACTIVE : réutilisation des recettes retenues -----
-
-def lookup_retained_signature(
-    conn: sqlite3.Connection,
-    deviation_kind: str | None,
-    cause_rule_id: str | None,
-    action_level: str | None,
-) -> MemoryRecipe | None:
-    """V13.C — Cherche dans `memory_recipes` une recette **retenue**
-    (`is_retained = 1`) avec exactement la même signature
-    (deviation_kind, cause_rule_id, action_level).
-
-    Renvoie la recette la plus récente correspondante, ou None.
-
-    Permet de transformer la mémoire passive en signal actif :
-    un appelant (ex. evaluate_dual_tolerance) peut décider d'agir
-    sans latence si une recette retenue prédit une action efficace.
-    """
-    sig = _make_signature(deviation_kind, cause_rule_id, action_level)
-    row = conn.execute(
-        """
-        SELECT * FROM memory_recipes
-        WHERE deviation_signature = ? AND is_retained = 1
-        ORDER BY recipe_id DESC
-        LIMIT 1
-        """,
-        (sig,),
-    ).fetchone()
-    return _row_recipe(row) if row else None

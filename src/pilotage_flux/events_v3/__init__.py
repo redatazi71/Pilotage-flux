@@ -50,7 +50,6 @@ from pilotage_flux.events_v3.dual_memory import (
     capture_recipe,
     list_memory_decisions,
     list_recipes,
-    lookup_retained_signature,
     update_parameter_from_learning,
 )
 
@@ -94,6 +93,5 @@ __all__ = [
     "capture_recipe",
     "list_memory_decisions",
     "list_recipes",
-    "lookup_retained_signature",
     "update_parameter_from_learning",
 ]

@@ -1046,6 +1046,15 @@ CREATE TABLE IF NOT EXISTS causal_cells (
     last_event_at           TEXT,
     transitioned_observing_at  TEXT,
     transitioned_active_at  TEXT,
+    -- A.3 : histogramme cumul des délais (8 bins, cf. spec §2.4)
+    bin_cumul_b0_1h         INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b1_4h         INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b4_24h        INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b1_3j         INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b3_7j         INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b7_14j        INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b14_30j       INTEGER NOT NULL DEFAULT 0,
+    bin_cumul_b30_90j       INTEGER NOT NULL DEFAULT 0,
     created_at              TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (racine_id, categorie_code)
 );
@@ -1054,3 +1063,32 @@ CREATE INDEX IF NOT EXISTS idx_causal_cells_status
     ON causal_cells (status);
 CREATE INDEX IF NOT EXISTS idx_causal_cells_racine
     ON causal_cells (racine_id);
+
+-- ---------------------------------------------------------------------
+-- MACRS Couche 2 — A.3 : files événementielles + agrégats temporels
+--
+-- causal_events : liste atomique d'événements par cellule. Sert de
+-- file glissante : les agrégats W_courte (30j) et W_longue (90j)
+-- sont calculés à la demande par filtrage `occurred_at >= now - W`.
+-- Les événements expirés restent en base (cf. §4.3 de la spec :
+-- conservation pour traçabilité, modification rétroactive
+-- éventuelle des fenêtres, audit complet).
+--
+-- causal_cells gagne 8 colonnes bin pour le **cumul** de
+-- l'histogramme des délais (cumul ne s'expire pas).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS causal_events (
+    cell_event_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    cell_id         INTEGER NOT NULL REFERENCES causal_cells(cell_id),
+    occurred_at     TEXT NOT NULL,    -- ISO datetime simulé
+    delay_bin       TEXT,             -- b0_1h | b1_4h | b4_24h | b1_3j
+                                       -- | b3_7j | b7_14j | b14_30j | b30_90j
+    delay_hours     REAL,             -- valeur brute (peut être NULL)
+    impact_score    REAL,             -- score pondéré optionnel
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_causal_events_cell_time
+    ON causal_events (cell_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_causal_events_time
+    ON causal_events (occurred_at);

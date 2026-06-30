@@ -1533,6 +1533,51 @@ OTIF identiques 530 u / 0.950) :
 - **Règle méthodologique** : toujours rapporter le **€/unité livrée**,
   jamais le coût total brut, entre doctrines à volumes différents.
 
+### §28.20 V13.B (item 4) — Modèle de rendement composé — LIVRÉ
+
+Réponse au Finding 1 de l'audit (§28.19.1) : l'OTIF plafonnait
+mécaniquement à 0.95 (scrap forfaitaire 5 %). V13.B introduit un
+modèle de **rendement composé par poste**, gated par le paramètre
+`yield_compounding_aware` (default 0 = legacy préservé).
+
+#### §28.20.1 Mécanisme
+
+Quand actif, chaque opération applique le `yield_rate` de son
+workstation à la **quantité bonne entrante** (= sortie bonne de l'op
+précédente). Le rendement se **compose** le long de la gamme :
+
+```
+qty_good_final = qty × Π_ops (yield_rate_poste)
+```
+
+Les yields par poste sont seedés au bootstrap dans [0.96, 0.99]
+(étalement déterministe, `_seed_workstation_yields`, idempotent —
+n'écrase pas les yields existants des fixtures aléatoires).
+
+#### §28.20.2 Effet : l'OTIF discrimine enfin
+
+Sur baseline_xl (seed=42), comparaison des ratios qty_good/qty :
+
+| Modèle | Ratios distincts observés |
+|---|---|
+| Legacy (flat 5 %) | 0.943, 0.950, 0.951, 0.956 (plateau ~0.95) |
+| Compounding | 0.71, 0.90, 0.92, 0.93, 0.94, 0.95, 0.97 (étalé) |
+
+L'OTIF varie désormais selon :
+- la **longueur de routing** (4-op finis < 2-op semi-finis)
+- la **qualité des postes** traversés (yield_rate par WS)
+- les **NC cumulés** (qui s'ajoutent au scrap composé)
+
+Le plafond mécanique 0.95 est levé : l'OTIF devient un KPI de
+qualité discriminant, pas un binaire « tout clôturé ».
+
+#### §28.20.3 Rétrocompatibilité
+
+Le mode legacy (flag off) est **byte-identique** à l'historique
+(plateau 0.95 préservé, vérifié). Les études historiques restent
+reproductibles. Le mode composé est opt-in pour les nouvelles
+analyses qualité. Tests : 8 nouveaux (V13.B), 496 au total.
+
 ### §24.10.1 Lectures clés des matrices
 
 **1. Quelle paire est la plus coûteuse ?**

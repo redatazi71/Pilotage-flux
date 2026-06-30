@@ -296,6 +296,7 @@ def _bootstrap_db(
         import_referentials(conn, fixtures_dir)
         _seed_routing_alternatives_from_csv(conn, fixtures_dir)
         _seed_bom_op_consumption_from_routing(conn)  # V13.1
+        _seed_workstation_yields(conn)               # V13.B (item 4)
         _import_sales_orders(conn, scenario)
         _setup_stocks_and_pos(conn, scenario)
         _apply_pending_param_overrides(conn)
@@ -635,6 +636,106 @@ def _compute_op_duration_min(
         factor = state.breakdown_factor.get(workstation_id, 1.5)
         base_dur *= factor
     return max(1.0, base_dur)
+
+
+def _get_yield_compounding_flag(conn: sqlite3.Connection) -> bool:
+    """V13.B (item 4) — Lit `yield_compounding_aware` (default 0).
+
+    0 = legacy : scrap forfaitaire round(qty × 0.05) à chaque op,
+        non-compounding, qty_good = 0.95 × qty (plafond OTIF mécanique).
+    1 = modèle de rendement composé : chaque op applique le
+        `yield_rate` de son workstation à la quantité bonne ENTRANTE
+        (= sortie bonne de l'op précédente). Le qty_good final compose
+        les pertes le long de la gamme → OTIF discrimine enfin par
+        longueur de routing et qualité de poste. Brise le plafond 0.95.
+    """
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="yield_compounding_aware", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _seed_workstation_yields(conn: sqlite3.Connection) -> int:
+    """V13.B — Seed un `yield_rate` par workstation s'il est absent.
+
+    Étalement déterministe dans [0.96, 0.99] selon l'ordre des WS, pour
+    que l'OTIF discrimine selon les postes traversés. N'écrase jamais
+    une valeur existante (idempotent ; respecte les fixtures aléatoires
+    qui seedent déjà leurs yields).
+    """
+    spread = [0.99, 0.985, 0.98, 0.975, 0.97, 0.965, 0.96]
+    ws_rows = conn.execute(
+        "SELECT workstation_id FROM workstations ORDER BY workstation_id"
+    ).fetchall()
+    n = 0
+    for i, w in enumerate(ws_rows):
+        wid = w["workstation_id"]
+        existing = conn.execute(
+            "SELECT 1 FROM parameters WHERE scope='workstation' "
+            "AND scope_ref=? AND name='yield_rate' "
+            "AND (valid_to IS NULL OR valid_to > datetime('now')) LIMIT 1",
+            (wid,),
+        ).fetchone()
+        if existing is not None:
+            continue
+        conn.execute(
+            "INSERT INTO parameters (scope, scope_ref, name, value_num) "
+            "VALUES ('workstation', ?, 'yield_rate', ?)",
+            (wid, spread[i % len(spread)]),
+        )
+        n += 1
+    return n
+
+
+def _compute_op_qty_good_scrap(
+    conn: sqlite3.Connection,
+    of_id: str,
+    op: sqlite3.Row,
+    of_qty: float,
+    pending_scrap: float,
+    *,
+    compounding: bool,
+) -> tuple[float, float, float]:
+    """Calcule (qty_good, qty_scrap, pending_restant) pour une op.
+
+    `compounding=False` (legacy) : scrap = round(qty × 0.05) + pending,
+    sur la quantité de l'OF (non-compounding).
+
+    `compounding=True` (V13.B) : la quantité bonne entrante est la
+    sortie bonne de l'op précédente (seq_idx-1) ; on lui applique le
+    `yield_rate` du poste. Le scrap composé + le pending sont retirés.
+    """
+    from pilotage_flux.parameters import workstation_yield_rate
+
+    pending_remaining = pending_scrap
+    if not compounding:
+        base_scrap = max(0.0, round(of_qty * 0.05))
+        extra = 0.0
+        if pending_scrap > 0:
+            extra = pending_scrap
+            pending_remaining = 0.0
+        qty_scrap = min(of_qty, base_scrap + extra)
+        return max(0.0, of_qty - qty_scrap), qty_scrap, pending_remaining
+
+    # Compounding : quantité bonne entrante = bonne de l'op précédente
+    seq = int(op["sequence_idx"])
+    prev = conn.execute(
+        "SELECT qty_good FROM order_operations "
+        "WHERE of_id = ? AND sequence_idx = ? AND status = 'done'",
+        (of_id, seq - 1),
+    ).fetchone()
+    incoming = float(prev["qty_good"]) if prev and prev["qty_good"] else of_qty
+    y = workstation_yield_rate(conn, op["workstation_id"])
+    base_good = round(incoming * y)
+    base_scrap = incoming - base_good
+    extra = 0.0
+    if pending_scrap > 0:
+        extra = pending_scrap
+        pending_remaining = 0.0
+    qty_scrap = min(incoming, base_scrap + extra)
+    return max(0.0, incoming - qty_scrap), qty_scrap, pending_remaining
 
 
 def _get_event_driven_smoothing_advance_days(
@@ -1135,6 +1236,8 @@ def _advance_one_day(
     realistic = daily_capa_min > 0
     # V13.1 — BOM-op linkage : déblocage phase par phase
     bom_op_aware = _get_bom_op_linkage_flag(conn)
+    # V13.B (item 4) — rendement composé par poste
+    compounding = _get_yield_compounding_flag(conn)
     busy_ws: set[str] = set()  # legacy
     ws_minutes_used: dict[str, float] = {}  # realistic
     # Scrap cumulé des NC du jour (et précédents) à appliquer au 1er OF avancé.
@@ -1184,13 +1287,9 @@ def _advance_one_day(
             start_min = int(used)
             end_min = int(min(daily_capa_min, used + op_dur))
             ws_minutes_used[ws] = used + op_dur
-            base_scrap = max(0.0, round(qty * 0.05))
-            scrap_extra = 0.0
-            if pending_scrap > 0:
-                scrap_extra = pending_scrap
-                pending_scrap = 0.0
-            qty_scrap = min(qty, base_scrap + scrap_extra)
-            qty_good = max(0.0, qty - qty_scrap)
+            qty_good, qty_scrap, pending_scrap = _compute_op_qty_good_scrap(
+                conn, of_id, op, qty, pending_scrap, compounding=compounding,
+            )
             sid, fid = _execute_op(
                 conn, op["of_op_id"],
                 horizon_start=scenario.horizon_start, day=day,
@@ -1223,13 +1322,9 @@ def _advance_one_day(
             factor = state.breakdown_factor.get(ws, 1.5)
             delay_days = max(1, int(round((factor - 1.0) * 2)))
             end_day = day + delay_days
-            base_scrap = max(0.0, round(qty * 0.05))
-            scrap_extra = 0.0
-            if pending_scrap > 0:
-                scrap_extra = pending_scrap
-                pending_scrap = 0.0  # consommé par cet OF
-            qty_scrap = min(qty, base_scrap + scrap_extra)
-            qty_good = max(0.0, qty - qty_scrap)
+            qty_good, qty_scrap, pending_scrap = _compute_op_qty_good_scrap(
+                conn, of_id, op, qty, pending_scrap, compounding=compounding,
+            )
             sid, fid = _execute_op(
                 conn, op["of_op_id"],
                 horizon_start=scenario.horizon_start, day=day,
@@ -1246,13 +1341,9 @@ def _advance_one_day(
             state.delayed_of_until[of_id] = end_day
         else:
             busy_ws.add(ws)
-            base_scrap = max(0.0, round(qty * 0.05))
-            scrap_extra = 0.0
-            if pending_scrap > 0:
-                scrap_extra = pending_scrap
-                pending_scrap = 0.0
-            qty_scrap = min(qty, base_scrap + scrap_extra)
-            qty_good = max(0.0, qty - qty_scrap)
+            qty_good, qty_scrap, pending_scrap = _compute_op_qty_good_scrap(
+                conn, of_id, op, qty, pending_scrap, compounding=compounding,
+            )
             _execute_op(
                 conn, op["of_op_id"],
                 horizon_start=scenario.horizon_start, day=day,

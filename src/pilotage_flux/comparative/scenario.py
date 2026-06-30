@@ -29,6 +29,14 @@ DOCTRINE_FLUX = "flux"
 DOCTRINE_OF_EVENT = "of_event"
 DOCTRINE_EVENT = "event"
 DOCTRINE_OF_MILP = "of_milp"
+# BCE (Boucle Cybernétique Étendue) — pilotages 5 et 6 du banc
+# 6-pilotages. Activent la chaîne MACRS Couche 2 + moteur Delta
+# (B.1/B.2/B.3) + propagation hazard étiquetée (C.1/C.2). Les
+# fondations OF_EVENT / EVENT restent identiques ; le BCE est un
+# overlay piloté par le paramètre `bce_enabled` (lu par
+# `_apply_hazard` pour déclencher `emit_hazard`).
+DOCTRINE_OF_EVENT_BCE = "of_event_bce"
+DOCTRINE_EVENT_BCE = "event_bce"
 # §7.1 — Variante OF avec planification CP-SAT pour lever le biais
 # d'implémentation. Identique à OF (pas de flux, pas d'event sourcing)
 # mais étale les OFs sur l'horizon via solveur global au lieu de tout
@@ -38,6 +46,20 @@ DOCTRINES_WITH_MILP = DOCTRINES + (DOCTRINE_OF_MILP,)
 # Tuple étendu pour les études §7.1 — réservé aux scripts qui veulent
 # inclure OF_MILP. Le tuple DOCTRINES standard reste à 4 pour ne pas
 # casser les tests d'acceptation V0-V11.
+
+# Banc 6-pilotages cible (OF, OF+EVENT, OF+EVENT+BCE, FLUX,
+# FLUX+EVENT, FLUX+EVENT+BCE). Réservé aux nouveaux scripts ; ne
+# remplace pas `DOCTRINES`.
+BCE_DOCTRINES = (DOCTRINE_OF_EVENT_BCE, DOCTRINE_EVENT_BCE)
+DOCTRINES_6_PILOTAGES = (
+    DOCTRINE_OF, DOCTRINE_OF_EVENT, DOCTRINE_OF_EVENT_BCE,
+    DOCTRINE_FLUX, DOCTRINE_EVENT, DOCTRINE_EVENT_BCE,
+)
+
+
+def is_bce_doctrine(doctrine: str) -> bool:
+    """True si la doctrine active la couche cybernétique BCE."""
+    return doctrine in BCE_DOCTRINES
 
 
 HAZARD_BREAKDOWN = "breakdown_ws"

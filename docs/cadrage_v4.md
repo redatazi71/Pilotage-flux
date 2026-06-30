@@ -1452,6 +1452,87 @@ la boucle cybernétique complète**.
 
 Tests : 488 OK.
 
+> **⚠ ATTENTION — voir §28.19.** L'affirmation « dominante sur les
+> 4 dimensions QCDS » ci-dessus a été **partiellement invalidée par
+> l'audit forensique §28.19**. Les gains de Coût (−30 à −42 %) étaient
+> un artefact de comparaison (legacy vs réaliste + sous-production).
+> À mode et volume égaux, l'avantage réel d'EVENT V13 sur OF se réduit
+> à la **Stabilité (WIP σ −25 %)**, avec parité Coût et OTIF. Lire
+> §28.19 avant toute citation des chiffres §28.16/§28.17.
+
+### §28.19 Audit forensique — corrections aux §28.16/§28.17
+
+Un audit objectif step-by-step (`docs/audit_forensique_simulation.md`)
+mené après la série V13 a révélé **deux erreurs de mesure** (pas de
+bug de code) qui ont surévalué l'apport doctrinal de FLUX/EVENT.
+
+#### §28.19.1 OTIF=0.950 est un plafond mécanique
+
+Tout OF clôturé a `qty_good ≈ 0.95 × qty` (scrap fixe 5 %). Donc
+`quantity_compliance ≤ 0.95` toujours, et « OTIF 0.950 » signifie
+**« 100 % des OFs clôturés »**, pas « qualité quasi-parfaite ». Le
+KPI est binaire au niveau OF (clôturé → 0.95 ; stuck → 0).
+
+#### §28.19.2 La MOD legacy facture 8 h forfaitaires par op
+
+`costing/engine.py` calcule MOD = `(actual_end − actual_start) ×
+taux`. En legacy, chaque op est tamponnée `0→480 min` quelle que
+soit `qty × unit_time`. Deux effets pervers :
+
+1. La MOD legacy est proportionnelle au **nombre d'ops exécutées**,
+   pas au travail réel.
+2. **Un OF stuck facture moins de MOD** — ne pas finir « coûte »
+   moins cher.
+
+Le « −38 % » du mode réaliste vs legacy est **à ~95 % un correctif
+de facturation** (MOD enfin au temps réel), pas un gain doctrinal.
+
+#### §28.19.3 « FLUX est Cost-first » : FAUX au coût par unité
+
+Conséquence du §28.19.2. Baseline legacy :
+
+| Doctrine | Coût total | Unités livrées | **Coût / unité** |
+|---|---|---|---|
+| OF | 37 744 € | 533 | **70.8 €/u** |
+| FLUX | 31 731 € | 390 | **81.4 €/u** |
+
+Le coût total inférieur de FLUX vient de sa **sous-production**
+(390 vs 533 u). Par unité livrée, FLUX est **15 % plus cher** sur
+baseline. L'étude Option 1 (§28.16) comparait des coûts **totaux à
+volumes différents** — métrique invalide. FLUX n'est moins cher par
+unité que sur les scénarios à panne sévère (double_breakdown :
+85.3 vs 98.7 €/u), où le lissage évite de concentrer des ops longues
+pendant la panne (avantage partiellement réel, partiellement artefact
+de sous-production).
+
+#### §28.19.4 L'avantage V13 réel vs OF (même mode) : Stabilité, pas Coût
+
+Comparaison apples-to-apples (les deux en mode réaliste, volume et
+OTIF identiques 530 u / 0.950) :
+
+| baseline | Coût / u | WIP σ |
+|---|---|---|
+| EVENT V13 cyber+réal | 44.1 €/u | 3.69 |
+| OF réaliste | 44.4 €/u | 4.95 |
+
+À output égal, l'avantage Coût d'EVENT V13 sur OF est **~1 %** (pas
+−38 %). Le seul avantage doctrinal **robuste** est la **Stabilité**
+(WIP σ −25 %), conséquence réelle du lissage.
+
+#### §28.19.5 Verdict corrigé
+
+- **Pas de bug de calcul** ; déterminisme, jointures, invariants
+  matière/scrap : tous vérifiés (488 tests OK).
+- **Erreur de mesure** : comparaison de coûts totaux à volumes
+  différents + modèle MOD legacy forfaitaire.
+- **Conclusion doctrinale corrigée** : à output et OTIF égaux,
+  FLUX/EVENT n'est **pas moins cher** qu'OF ; son seul gain robuste
+  est la **réduction du WIP (−25 % de variance)**. L'OTIF plafonne
+  à 0.95 pour tous (modèle scrap). La « domination 4 dimensions »
+  de §28.17 se réduit à **avantage Stabilité réel + parité Coût/OTIF**.
+- **Règle méthodologique** : toujours rapporter le **€/unité livrée**,
+  jamais le coût total brut, entre doctrines à volumes différents.
+
 ### §24.10.1 Lectures clés des matrices
 
 **1. Quelle paire est la plus coûteuse ?**

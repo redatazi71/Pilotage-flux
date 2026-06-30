@@ -1857,6 +1857,19 @@ def run_event_doctrine(
             conn, scenario, batch_id, result,
             state=state, use_smoothing=True, actor_prefix="event",
         )
+        # Wiring zone négociable → grain opération (Goldilocks #5)
+        # Active uniquement pour les doctrines BCE ; sinon no-op.
+        from pilotage_flux.comparative.bce_wire import (
+            bce_distribute_pcs_after_freeze,
+        )
+        pc_info = bce_distribute_pcs_after_freeze(
+            conn, batch_id, doctrine,
+        )
+        if pc_info is not None:
+            result.notes.append(
+                f"BCE PCs: via={pc_info['pcs_via']}, "
+                f"n_pcs={pc_info['n_pcs']}, n_ofs={pc_info['n_ofs']}"
+            )
         generate_expected_from_batch(conn, batch_id)
 
         hazards_by_day: dict[int, list] = {}
@@ -2117,6 +2130,20 @@ def run_of_event_doctrine(
         _generate_expected_from_ofs(
             conn, initial_of_ids, scenario.horizon_start, batch_id
         )
+
+        # Wiring zone négociable → grain opération (Goldilocks #5)
+        # Pour OF+EVENT+BCE : tranche virtuelle → fallback per-OF.
+        from pilotage_flux.comparative.bce_wire import (
+            bce_distribute_pcs_after_freeze,
+        )
+        pc_info = bce_distribute_pcs_after_freeze(
+            conn, batch_id, doctrine,
+        )
+        if pc_info is not None:
+            result.notes.append(
+                f"BCE PCs: via={pc_info['pcs_via']}, "
+                f"n_pcs={pc_info['n_pcs']}, n_ofs={pc_info['n_ofs']}"
+            )
 
         hazards_by_day: dict[int, list] = {}
         for h in scenario.hazards:

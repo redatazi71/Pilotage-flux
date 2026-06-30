@@ -1,0 +1,541 @@
+cost_per_good_unit,doctrine,error,implantation,lateness_mean_days,lead_time_mean_days,mean_recovery_days,n1,n2,n3,n4,n_delta_decisions,n_hazards_observed,n_of_closed,n_recoveries_observed,n_so_late,n_so_total,otif,saturation,seed,status,wip_mean,wip_p95,wip_sd,yield_pct
+13.57520105165481,of,,linear,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9484415108177484
+13.166479885612706,of_event,,linear,0.0,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9489182251558489
+13.166479885612706,of_event_bce,,linear,0.0,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,0,5,1.0,0.78,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9489182251558489
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,42,crashed,,,,
+13.497028633171258,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500659920809503
+13.111754264104345,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500659920809503
+13.111754264104345,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,0.78,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500659920809503
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,43,crashed,,,,
+13.534090031657787,of,,linear,1.667361111111111,2.4,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,44,ok,1.0166666666666666,6.0,1.9527613362001492,0.9492084432717678
+13.148637170874835,of_event,,linear,1.667361111111111,2.133333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,44,ok,0.95,6.0,1.934740380253395,0.9492084432717678
+13.148637170874835,of_event_bce,,linear,1.667361111111111,2.133333333333333,0.0,2,5,5,4,16,12,15,0,1,5,1.0,0.78,44,ok,0.95,6.0,1.934740380253395,0.9492084432717678
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,44,crashed,,,,
+13.534101418002466,of,,linear,0.0,2.4,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,45,ok,0.95,6.0,1.934740380253395,0.949162460683198
+13.130262296344798,of_event,,linear,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,45,ok,0.95,6.0,1.9082781306006769,0.9495647721454173
+13.130262296344798,of_event_bce,,linear,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,0.78,45,ok,0.95,6.0,1.9082781306006769,0.9495647721454173
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,45,crashed,,,,
+13.54034126003706,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9490730563493808
+13.154918159357628,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9490730563493808
+13.154918159357628,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,0.78,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9490730563493808
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.78,46,crashed,,,,
+13.505031689596537,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9488815548221489
+13.106989143453232,of_event,,parallel,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491382471580492
+13.106989143453232,of_event_bce,,parallel,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,0.78,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491382471580492
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,42,crashed,,,,
+13.44806668210234,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.78,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500659920809503
+13.062792313035425,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.78,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500659920809503
+13.062792313035425,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.78,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500659920809503
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,43,crashed,,,,
+13.516736207695875,of,,parallel,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9485488126649076
+13.115328467153285,of_event,,parallel,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,44,ok,1.15,6.0,2.0237990789266624,0.9488786279683378
+13.115328467153285,of_event_bce,,parallel,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,0.78,44,ok,1.15,6.0,2.0237990789266624,0.9488786279683378
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,44,crashed,,,,
+13.446685146685146,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.9499670836076366
+13.062300762300763,of_event,,parallel,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499670836076366
+13.062300762300763,of_event_bce,,parallel,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,0.78,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499670836076366
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,45,crashed,,,,
+13.49136040765905,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.78,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9490730563493808
+13.105937306979618,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.78,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9490730563493808
+13.105937306979618,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.78,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9490730563493808
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.78,46,crashed,,,,
+13.505031689596537,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9488815548221489
+13.106989143453232,of_event,,hybrid,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491382471580492
+13.106989143453232,of_event_bce,,hybrid,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,0.78,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491382471580492
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,42,crashed,,,,
+13.44806668210234,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.78,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500659920809503
+13.062792313035425,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.78,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500659920809503
+13.062792313035425,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.78,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500659920809503
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,43,crashed,,,,
+13.516736207695875,of,,hybrid,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9485488126649076
+13.115328467153285,of_event,,hybrid,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.78,44,ok,1.15,6.0,2.0237990789266624,0.9488786279683378
+13.115328467153285,of_event_bce,,hybrid,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,0.78,44,ok,1.15,6.0,2.0237990789266624,0.9488786279683378
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,44,crashed,,,,
+13.446685146685146,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.9499670836076366
+13.062300762300763,of_event,,hybrid,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.78,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499670836076366
+13.062300762300763,of_event_bce,,hybrid,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,0.78,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499670836076366
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,45,crashed,,,,
+13.49136040765905,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.78,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9490730563493808
+13.105937306979618,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.78,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9490730563493808
+13.105937306979618,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.78,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9490730563493808
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.78,46,crashed,,,,
+13.390776358276007,of,,linear,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9485950193101611
+13.019821084020347,of_event,,linear,0.0,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9490278332667466
+13.019821084020347,of_event_bce,,linear,0.0,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,0,5,1.0,0.86,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9490278332667466
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,42,crashed,,,,
+13.320124728470324,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500699021370081
+12.970324434167193,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500699021370081
+12.970324434167193,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,0.86,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500699021370081
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,43,crashed,,,,
+13.353697861899755,of,,linear,1.667361111111111,2.4,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,44,ok,1.0166666666666666,6.0,1.9527613362001492,0.9492912757037333
+13.003750438135295,of_event,,linear,1.667361111111111,2.133333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,44,ok,0.95,6.0,1.934740380253395,0.9492912757037333
+13.003750438135295,of_event_bce,,linear,1.667361111111111,2.133333333333333,0.0,2,5,5,4,16,12,15,0,1,5,1.0,0.86,44,ok,0.95,6.0,1.934740380253395,0.9492912757037333
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,44,crashed,,,,
+13.354023792862142,of,,linear,0.0,2.4,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,45,ok,0.95,6.0,1.934740380253395,0.9492493689384881
+12.9873736490504,of_event,,linear,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,45,ok,0.95,6.0,1.9082781306006769,0.949614720340109
+12.9873736490504,of_event_bce,,linear,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,0.86,45,ok,0.95,6.0,1.9082781306006769,0.949614720340109
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,45,crashed,,,,
+13.359385952614609,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9491683300066533
+13.00946305902145,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9491683300066533
+13.00946305902145,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,0.86,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9491683300066533
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.86,46,crashed,,,,
+13.327154083637385,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9489945398854708
+12.965844761670935,of_event,,parallel,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492275935544013
+12.965844761670935,of_event_bce,,parallel,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,0.86,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492275935544013
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,42,crashed,,,,
+13.275670941069302,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.86,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500699021370081
+12.92587064676617,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.86,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500699021370081
+12.92587064676617,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.86,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500699021370081
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,43,crashed,,,,
+13.337829685746353,of,,parallel,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9486923537632262
+12.973465166018022,of_event,,parallel,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,44,ok,1.15,6.0,2.0237990789266624,0.9489918147334797
+12.973465166018022,of_event_bce,,parallel,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,0.86,44,ok,1.15,6.0,2.0237990789266624,0.9489918147334797
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,44,crashed,,,,
+13.274777987553318,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.9499800717417298
+12.925711488707083,of_event,,parallel,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499800717417298
+12.925711488707083,of_event_bce,,parallel,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,0.86,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499800717417298
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,45,crashed,,,,
+13.314916584887145,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.86,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491683300066533
+12.964993691293985,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.86,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491683300066533
+12.964993691293985,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.86,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491683300066533
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.86,46,crashed,,,,
+13.327154083637385,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9489945398854708
+12.965844761670935,of_event,,hybrid,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492275935544013
+12.965844761670935,of_event_bce,,hybrid,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,0.86,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492275935544013
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,42,crashed,,,,
+13.275670941069302,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.86,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500699021370081
+12.92587064676617,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.86,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500699021370081
+12.92587064676617,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.86,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500699021370081
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,43,crashed,,,,
+13.337829685746353,of,,hybrid,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9486923537632262
+12.973465166018022,of_event,,hybrid,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.86,44,ok,1.15,6.0,2.0237990789266624,0.9489918147334797
+12.973465166018022,of_event_bce,,hybrid,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,0.86,44,ok,1.15,6.0,2.0237990789266624,0.9489918147334797
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,44,crashed,,,,
+13.274777987553318,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.9499800717417298
+12.925711488707083,of_event,,hybrid,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.86,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499800717417298
+12.925711488707083,of_event_bce,,hybrid,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,0.86,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499800717417298
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,45,crashed,,,,
+13.314916584887145,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.86,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491683300066533
+12.964993691293985,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.86,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491683300066533
+12.964993691293985,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.86,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491683300066533
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.86,46,crashed,,,,
+13.238092177154979,of,,linear,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9487132577143554
+12.898448292479198,of_event,,linear,0.0,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.94910964751799
+12.898448292479198,of_event_bce,,linear,0.0,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,0,5,1.0,0.94,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.94910964751799
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,42,crashed,,,,
+13.173629829290206,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500640204865557
+12.853260171993325,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500640204865557
+12.853260171993325,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,0.94,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500640204865557
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,43,crashed,,,,
+13.204320749871597,of,,linear,1.667361111111111,2.4,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,44,ok,1.0166666666666666,6.0,1.9527613362001492,0.9493508868166026
+12.88382768361582,of_event,,linear,1.667361111111111,2.133333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,44,ok,0.95,6.0,1.934740380253395,0.9493508868166026
+12.88382768361582,of_event_bce,,linear,1.667361111111111,2.133333333333333,0.0,2,5,5,4,16,12,15,0,1,5,1.0,0.94,44,ok,0.95,6.0,1.934740380253395,0.9493508868166026
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,44,crashed,,,,
+13.204858662906224,of,,linear,0.0,2.4,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,45,ok,0.95,6.0,1.934740380253395,0.94931240111963
+12.869060968186332,of_event,,linear,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,45,ok,0.95,6.0,1.9082781306006769,0.949647073141049
+12.869060968186332,of_event_bce,,linear,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,0.94,45,ok,0.95,6.0,1.9082781306006769,0.949647073141049
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,45,crashed,,,,
+13.209539705976761,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492382693479585
+12.88906721448289,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492382693479585
+12.88906721448289,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,0.94,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492382693479585
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,0.94,46,crashed,,,,
+13.17988819636317,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9490791559946334
+12.84904121029133,of_event,,parallel,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.949292596658129
+12.84904121029133,of_event_bce,,parallel,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,0.94,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.949292596658129
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,42,crashed,,,,
+13.132916185342062,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.94,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500640204865557
+12.81254652804518,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.94,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500640204865557
+12.81254652804518,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.94,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500640204865557
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,43,crashed,,,,
+13.189702575961972,of,,parallel,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9488023404644359
+12.856057541020455,of_event,,parallel,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,44,ok,1.15,6.0,2.0237990789266624,0.9490766136405193
+12.856057541020455,of_event_bce,,parallel,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,0.94,44,ok,1.15,6.0,2.0237990789266624,0.9490766136405193
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,44,crashed,,,,
+13.132372533948246,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.949981745162468
+12.812618498590828,of_event,,parallel,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,45,ok,1.1333333333333333,7.0,2.029165869093452,0.949981745162468
+12.812618498590828,of_event_bce,,parallel,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,0.94,45,ok,1.1333333333333333,7.0,2.029165869093452,0.949981745162468
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,45,crashed,,,,
+13.168812993516081,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.94,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492382693479585
+12.848340502022213,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.94,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492382693479585
+12.848340502022213,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.94,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492382693479585
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,0.94,46,crashed,,,,
+13.17988819636317,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9490791559946334
+12.84904121029133,of_event,,hybrid,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.949292596658129
+12.84904121029133,of_event_bce,,hybrid,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,0.94,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.949292596658129
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,42,crashed,,,,
+13.132916185342062,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.94,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500640204865557
+12.81254652804518,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.94,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500640204865557
+12.81254652804518,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.94,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500640204865557
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,43,crashed,,,,
+13.189702575961972,of,,hybrid,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9488023404644359
+12.856057541020455,of_event,,hybrid,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,0.94,44,ok,1.15,6.0,2.0237990789266624,0.9490766136405193
+12.856057541020455,of_event_bce,,hybrid,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,0.94,44,ok,1.15,6.0,2.0237990789266624,0.9490766136405193
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,44,crashed,,,,
+13.132372533948246,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.949981745162468
+12.812618498590828,of_event,,hybrid,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,0.94,45,ok,1.1333333333333333,7.0,2.029165869093452,0.949981745162468
+12.812618498590828,of_event_bce,,hybrid,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,0.94,45,ok,1.1333333333333333,7.0,2.029165869093452,0.949981745162468
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,45,crashed,,,,
+13.168812993516081,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.94,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492382693479585
+12.848340502022213,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,0.94,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492382693479585
+12.848340502022213,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,0.94,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492382693479585
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,0.94,46,crashed,,,,
+13.138111359651774,of,,linear,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9488326736648884
+12.818703731681524,of_event,,linear,0.0,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492055297424425
+12.818703731681524,of_event_bce,,linear,0.0,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,0,5,1.0,1.0,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492055297424425
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,42,crashed,,,,
+13.077628878425692,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9501032346868548
+12.776288784256911,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9501032346868548
+12.776288784256911,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,1.0,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9501032346868548
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,43,crashed,,,,
+13.106461352657005,of,,linear,1.667361111111111,2.4,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,44,ok,1.0166666666666666,6.0,1.9527613362001492,0.9494324045407637
+12.805012077294686,of_event,,linear,1.667361111111111,2.133333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,44,ok,0.95,6.0,1.934740380253395,0.9494324045407637
+12.805012077294686,of_event_bce,,linear,1.667361111111111,2.133333333333333,0.0,2,5,5,4,16,12,15,0,1,5,1.0,1.0,44,ok,0.95,6.0,1.934740380253395,0.9494324045407637
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,44,crashed,,,,
+13.107114862827856,of,,linear,0.0,2.4,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,45,ok,0.95,6.0,1.934740380253395,0.9493960730436773
+12.79126608601308,of_event,,linear,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,45,ok,0.95,6.0,1.9082781306006769,0.9497109164806228
+12.79126608601308,of_event_bce,,linear,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,1.0,45,ok,0.95,6.0,1.9082781306006769,0.9497109164806228
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,45,crashed,,,,
+13.111376124630155,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9493264545715104
+12.809945051627317,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9493264545715104
+12.809945051627317,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,1.0,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9493264545715104
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.0,46,crashed,,,,
+13.083404846800024,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491768485057076
+12.772248572550678,of_event,,parallel,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493776171628521
+12.772248572550678,of_event_bce,,parallel,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,1.0,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493776171628521
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,42,crashed,,,,
+13.039333574791742,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.0,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9501032346868548
+12.737993480622963,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.0,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9501032346868548
+12.737993480622963,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.0,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9501032346868548
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,43,crashed,,,,
+13.092659053833605,of,,parallel,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9489164086687306
+12.778871070037148,of_event,,parallel,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,44,ok,1.15,6.0,2.0237990789266624,0.9491744066047472
+12.778871070037148,of_event_bce,,parallel,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,1.0,44,ok,1.15,6.0,2.0237990789266624,0.9491744066047472
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,44,crashed,,,,
+13.038991323210412,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.9500257599175682
+12.738195950831527,of_event,,parallel,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9500257599175682
+12.738195950831527,of_event_bce,,parallel,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,1.0,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9500257599175682
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,45,crashed,,,,
+13.073069259102711,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.0,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493264545715104
+12.771638186099873,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.0,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493264545715104
+12.771638186099873,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.0,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493264545715104
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.0,46,crashed,,,,
+13.083404846800024,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491768485057076
+12.772248572550678,of_event,,hybrid,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493776171628521
+12.772248572550678,of_event_bce,,hybrid,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,1.0,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493776171628521
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,42,crashed,,,,
+13.039333574791742,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.0,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9501032346868548
+12.737993480622963,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.0,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9501032346868548
+12.737993480622963,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.0,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9501032346868548
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,43,crashed,,,,
+13.092659053833605,of,,hybrid,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9489164086687306
+12.778871070037148,of_event,,hybrid,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.0,44,ok,1.15,6.0,2.0237990789266624,0.9491744066047472
+12.778871070037148,of_event_bce,,hybrid,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,1.0,44,ok,1.15,6.0,2.0237990789266624,0.9491744066047472
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,44,crashed,,,,
+13.038991323210412,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.9500257599175682
+12.738195950831527,of_event,,hybrid,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.0,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9500257599175682
+12.738195950831527,of_event_bce,,hybrid,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,1.0,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9500257599175682
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,45,crashed,,,,
+13.073069259102711,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.0,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493264545715104
+12.771638186099873,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.0,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493264545715104
+12.771638186099873,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.0,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493264545715104
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.0,46,crashed,,,,
+13.066480479097086,of,,linear,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9488062066327925
+12.762267952223342,of_event,,linear,0.0,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9491613396710922
+12.762267952223342,of_event_bce,,linear,0.0,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,0,5,1.0,1.05,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9491613396710922
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,42,crashed,,,,
+13.008970156977748,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500163880694854
+12.72192513368984,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500163880694854
+12.72192513368984,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,1.05,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500163880694854
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,43,crashed,,,,
+13.036410698878344,of,,linear,1.667361111111111,2.4,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,44,ok,1.0166666666666666,6.0,1.9527613362001492,0.9493774574049804
+12.749266609145815,of_event,,linear,1.667361111111111,2.133333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,44,ok,0.95,6.0,1.934740380253395,0.9493774574049804
+12.749266609145815,of_event_bce,,linear,1.667361111111111,2.133333333333333,0.0,2,5,5,4,16,12,15,0,1,5,1.0,1.05,44,ok,0.95,6.0,1.934740380253395,0.9493774574049804
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,44,crashed,,,,
+13.037133831131534,of,,linear,0.0,2.4,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,45,ok,0.95,6.0,1.934740380253395,0.9493429303669775
+12.736269415176137,of_event,,linear,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,45,ok,0.95,6.0,1.9082781306006769,0.949642837668357
+12.736269415176137,of_event_bce,,linear,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,1.05,45,ok,0.95,6.0,1.9082781306006769,0.949642837668357
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,45,crashed,,,,
+13.041096284366732,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492765492765493
+12.75396871045669,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492765492765493
+12.75396871045669,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,1.05,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492765492765493
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.05,46,crashed,,,,
+13.014396730370711,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491340217450691
+12.71802825817962,of_event,,parallel,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493252472272306
+12.71802825817962,of_event_bce,,parallel,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,1.05,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493252472272306
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,42,crashed,,,,
+12.972491518601576,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.05,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500163880694854
+12.685446495313668,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.05,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500163880694854
+12.685446495313668,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.05,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500163880694854
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,43,crashed,,,,
+13.02322744014733,of,,parallel,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9488859764089121
+12.724352003682288,of_event,,parallel,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,44,ok,1.15,6.0,2.0237990789266624,0.9491317169069463
+12.724352003682288,of_event_bce,,parallel,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,1.05,44,ok,1.15,6.0,2.0237990789266624,0.9491317169069463
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,44,crashed,,,,
+12.9722805809081,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.9499427449697366
+12.685729866253373,of_event,,parallel,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499427449697366
+12.685729866253373,of_event_bce,,parallel,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,1.05,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499427449697366
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,45,crashed,,,,
+13.004607155182331,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.05,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492765492765493
+12.717479581272288,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.05,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492765492765493
+12.717479581272288,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.05,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492765492765493
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.05,46,crashed,,,,
+13.014396730370711,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9491340217450691
+12.71802825817962,of_event,,hybrid,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493252472272306
+12.71802825817962,of_event_bce,,hybrid,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,1.05,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493252472272306
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,42,crashed,,,,
+12.972491518601576,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.05,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500163880694854
+12.685446495313668,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.05,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500163880694854
+12.685446495313668,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.05,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500163880694854
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,43,crashed,,,,
+13.02322744014733,of,,hybrid,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9488859764089121
+12.724352003682288,of_event,,hybrid,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.05,44,ok,1.15,6.0,2.0237990789266624,0.9491317169069463
+12.724352003682288,of_event_bce,,hybrid,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,1.05,44,ok,1.15,6.0,2.0237990789266624,0.9491317169069463
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,44,crashed,,,,
+12.9722805809081,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.9499427449697366
+12.685729866253373,of_event,,hybrid,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.05,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499427449697366
+12.685729866253373,of_event_bce,,hybrid,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,1.05,45,ok,1.1333333333333333,7.0,2.029165869093452,0.9499427449697366
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,45,crashed,,,,
+13.004607155182331,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.05,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492765492765493
+12.717479581272288,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.05,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492765492765493
+12.717479581272288,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.05,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9492765492765493
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.05,46,crashed,,,,
+12.997855375309321,of,,linear,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9489146316009184
+12.707363329027293,of_event,,linear,0.0,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492538092256314
+12.707363329027293,of_event_bce,,linear,0.0,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,0,5,1.0,1.1,42,ok,0.9833333333333333,6.0,2.0126015432150033,0.9492538092256314
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,42,crashed,,,,
+12.94302580999451,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500704335576773
+12.668890719384953,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500704335576773
+12.668890719384953,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,1.1,43,ok,0.9833333333333333,6.0,2.0126015432150033,0.9500704335576773
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,43,crashed,,,,
+12.969210063722258,of,,linear,1.667361111111111,2.4,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,44,ok,1.0166666666666666,6.0,1.9527613362001492,0.9494601783758411
+12.694984618765107,of_event,,linear,1.667361111111111,2.133333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,44,ok,0.95,6.0,1.934740380253395,0.9494601783758411
+12.694984618765107,of_event_bce,,linear,1.667361111111111,2.133333333333333,0.0,2,5,5,4,16,12,15,0,1,5,1.0,1.1,44,ok,0.95,6.0,1.934740380253395,0.9494601783758411
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,44,crashed,,,,
+12.969992868506226,of,,linear,0.0,2.4,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,45,ok,0.95,6.0,1.934740380253395,0.9494270833333334
+12.682661986892978,of_event,,linear,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,45,ok,0.95,6.0,1.9082781306006769,0.9497135416666667
+12.682661986892978,of_event_bce,,linear,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,1.1,45,ok,0.95,6.0,1.9082781306006769,0.9497135416666667
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,45,crashed,,,,
+12.973688547102444,of,,linear,0.6673611111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9493637880684188
+12.699478165339192,of_event,,linear,0.6673611111111111,2.1999999999999997,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9493637880684188
+12.699478165339192,of_event_bce,,linear,0.6673611111111111,2.1999999999999997,0.0,2,6,5,3,16,12,15,0,1,5,1.0,1.1,46,ok,0.9833333333333333,6.0,2.0126015432150033,0.9493637880684188
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,linear,,,,,,,,,,,,,,,1.1,46,crashed,,,,
+12.948139189709197,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.949227718639115
+12.66512407595702,of_event,,parallel,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9494103527447297
+12.66512407595702,of_event_bce,,parallel,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,1.1,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9494103527447297
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,42,crashed,,,,
+12.90818780889621,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.1,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500704335576773
+12.634052718286656,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.1,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500704335576773
+12.634052718286656,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.1,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500704335576773
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,43,crashed,,,,
+12.956586974443528,of,,parallel,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9489907682678766
+12.67117777960933,of_event,,parallel,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,44,ok,1.15,6.0,2.0237990789266624,0.9492254733218589
+12.67117777960933,of_event_bce,,parallel,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,1.1,44,ok,1.15,6.0,2.0237990789266624,0.9492254733218589
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,44,crashed,,,,
+12.908092105263158,of,,parallel,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.95
+12.634407894736842,of_event,,parallel,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,45,ok,1.1333333333333333,7.0,2.029165869093452,0.95
+12.634407894736842,of_event_bce,,parallel,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,1.1,45,ok,1.1333333333333333,7.0,2.029165869093452,0.95
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,45,crashed,,,,
+12.938840977753365,of,,parallel,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.1,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493637880684188
+12.664630595990113,of_event,,parallel,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.1,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493637880684188
+12.664630595990113,of_event_bce,,parallel,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.1,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493637880684188
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,parallel,,,,,,,,,,,,,,,1.1,46,crashed,,,,
+12.948139189709197,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.949227718639115
+12.66512407595702,of_event,,hybrid,0.0,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9494103527447297
+12.66512407595702,of_event_bce,,hybrid,0.0,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,0,5,1.0,1.1,42,ok,1.1833333333333333,6.0,2.0951248226773673,0.9494103527447297
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,42,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,42,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,42,crashed,,,,
+12.90818780889621,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.1,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500704335576773
+12.634052718286656,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.1,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500704335576773
+12.634052718286656,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.1,43,ok,1.1833333333333333,6.0,2.0951248226773673,0.9500704335576773
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,43,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,43,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,43,crashed,,,,
+12.956586974443528,of,,hybrid,3.667361111111111,2.533333333333333,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,44,ok,1.1833333333333333,6.0,2.0460103108465497,0.9489907682678766
+12.67117777960933,of_event,,hybrid,3.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,1,5,1.0,1.1,44,ok,1.15,6.0,2.0237990789266624,0.9492254733218589
+12.67117777960933,of_event_bce,,hybrid,3.667361111111111,2.3333333333333335,0.0,2,5,5,4,16,12,15,0,1,5,1.0,1.1,44,ok,1.15,6.0,2.0237990789266624,0.9492254733218589
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,44,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,44,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,44,crashed,,,,
+12.908092105263158,of,,hybrid,0.0,2.466666666666667,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,45,ok,1.1666666666666667,7.0,2.0680512948648277,0.95
+12.634407894736842,of_event,,hybrid,0.0,2.2666666666666666,0.0,0,0,0,0,0,12,15,0,0,5,1.0,1.1,45,ok,1.1333333333333333,7.0,2.029165869093452,0.95
+12.634407894736842,of_event_bce,,hybrid,0.0,2.2666666666666666,0.0,2,5,6,3,16,12,15,0,0,5,1.0,1.1,45,ok,1.1333333333333333,7.0,2.029165869093452,0.95
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,45,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,45,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,45,crashed,,,,
+12.938840977753365,of,,hybrid,1.667361111111111,2.466666666666667,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.1,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493637880684188
+12.664630595990113,of_event,,hybrid,1.667361111111111,2.3333333333333335,0.0,0,0,0,0,0,12,15,0,2,5,1.0,1.1,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493637880684188
+12.664630595990113,of_event_bce,,hybrid,1.667361111111111,2.3333333333333335,0.0,2,6,5,3,16,12,15,0,2,5,1.0,1.1,46,ok,1.1833333333333333,6.0,2.0951248226773673,0.9493637880684188
+,flux,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,46,crashed,,,,
+,event,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,46,crashed,,,,
+,event_bce,Aucun candidate en zone négociable : la doctrine flux ne peut pas former de contrat (vérifier P2).,hybrid,,,,,,,,,,,,,,,1.1,46,crashed,,,,

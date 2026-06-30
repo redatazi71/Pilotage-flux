@@ -42,31 +42,31 @@ def test_all_pairs_25() -> None:
     assert len(diag) == 5
 
 
-def test_pair_scenario_has_12_hazards_by_default() -> None:
+def test_pair_scenario_has_8_hazards_by_default() -> None:
     s = pair_stress_scenario("qualite", "logistique", seed=42)
-    assert len(s.hazards) == 12
+    assert len(s.hazards) == 8
 
 
-def test_pair_scenario_mix_6_each() -> None:
-    """Pour 2 domaines différents : 6 hazards de chaque kind."""
+def test_pair_scenario_mix_4_each() -> None:
+    """Pour 2 domaines différents : 4 hazards de chaque kind."""
     s = pair_stress_scenario("qualite", "logistique", seed=42)
     counter = Counter(h.kind for h in s.hazards)
-    assert counter[HAZARD_QUALITY_NC] == 6
-    assert counter[HAZARD_LOGISTIC_DELAY] == 6
+    assert counter[HAZARD_QUALITY_NC] == 4
+    assert counter[HAZARD_LOGISTIC_DELAY] == 4
 
 
-def test_pair_scenario_same_domain_12_of_same() -> None:
-    """Diagonale (D, D) : 12 hazards du même kind."""
+def test_pair_scenario_same_domain_8_of_same() -> None:
+    """Diagonale (D, D) : 8 hazards du même kind."""
     s = pair_stress_scenario("production", "production", seed=42)
     counter = Counter(h.kind for h in s.hazards)
-    assert counter[HAZARD_BREAKDOWN] == 12
+    assert counter[HAZARD_BREAKDOWN] == 8
 
 
-def test_pair_scenario_horizon_60_days() -> None:
+def test_pair_scenario_horizon_15_days() -> None:
     s = pair_stress_scenario("qualite", "logistique", seed=42)
-    assert s.horizon_days == 60
+    assert s.horizon_days == 15
     for h in s.hazards:
-        assert 1 <= h.day < 60
+        assert 1 <= h.day < 15
 
 
 def test_pair_scenario_seeds_produce_variance() -> None:
@@ -110,4 +110,4 @@ def test_pair_scenario_days_spaced() -> None:
     """Au moins quelques hazards sont espacés (pas tous le même jour)."""
     s = pair_stress_scenario("qualite", "production", seed=42)
     days = [h.day for h in s.hazards]
-    assert len(set(days)) >= 8   # au moins 8 jours distincts sur 12
+    assert len(set(days)) >= 6   # au moins 6 jours distincts sur 8

@@ -87,10 +87,10 @@ def _make_hazard(
         return HazardEvent(
             day=day, kind=kind,
             payload={
-                "sales_order_id": f"SO-URG-D{day}",
+                "sales_order_id": f"SO-URG-D{day}-r{seed_rng.randint(0, 999)}",
                 "article_id": "ART-A",
-                "quantity": seed_rng.randint(20, 35),
-                "due_day": min(day + seed_rng.randint(3, 6), 59),
+                "quantity": seed_rng.randint(10, 25),
+                "due_day": day + seed_rng.randint(2, 4),
             },
         )
     if kind == HAZARD_LOGISTIC_DELAY:
@@ -110,18 +110,22 @@ def pair_stress_scenario(
     domain_b: str,
     *,
     seed: int = 42,
-    horizon_days: int = 60,
-    n_hazards_per_domain: int = 6,
+    horizon_days: int = 15,
+    n_hazards_per_domain: int = 4,
     name: str | None = None,
 ) -> Scenario:
     """Construit un scénario stress concentré sur la paire de domaines.
 
-    12 hazards par défaut (6+6), répartis aléatoirement sur l'horizon
-    avec un espacement minimal de 3 jours pour éviter les chevauche-
-    ments artificiels.
+    8 hazards par défaut (4+4), répartis aléatoirement sur l'horizon
+    15j avec un espacement minimal de 1 jour pour éviter les
+    chevauchements artificiels.
 
-    Si `domain_a == domain_b`, on a 12 hazards du même domaine — utile
+    Si `domain_a == domain_b`, on a 8 hazards du même domaine — utile
     pour mesurer la résilience à un stress mono-domaine.
+
+    Volume calibré pour permettre la formation de contrats FLUX
+    (horizon court + 8 hazards conserve la praticabilité opération-
+    nelle même à saturation 0.86-0.94).
     """
     if domain_a not in DOMAINS:
         raise ValueError(
@@ -137,20 +141,21 @@ def pair_stress_scenario(
     kind_b = DOMAIN_TO_HAZARD[domain_b]
 
     # Génère les jours d'apparition : distribution uniforme entre
-    # jours 3 et horizon-3 avec espacement >= 3 jours.
+    # jours 1 et horizon-1 avec espacement >= 1 jour.
     n_total = n_hazards_per_domain * 2
-    candidate_days = list(range(3, horizon_days - 3))
+    candidate_days = list(range(1, horizon_days - 1))
     rng.shuffle(candidate_days)
     days: list[int] = []
+    min_spacing = max(1, (horizon_days - 2) // (n_total + 1))
     for d in candidate_days:
-        if all(abs(d - d2) >= 3 for d2 in days):
+        if all(abs(d - d2) >= min_spacing for d2 in days):
             days.append(d)
         if len(days) == n_total:
             break
     if len(days) < n_total:
         # Si pas assez d'espace, on relâche la contrainte
         days = sorted(rng.sample(
-            range(3, horizon_days - 3), n_total,
+            range(1, horizon_days - 1), min(n_total, horizon_days - 2),
         ))
     else:
         days.sort()

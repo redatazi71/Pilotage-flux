@@ -1,0 +1,62 @@
+[
+  {
+    "doctrine_a": "of_event",
+    "doctrine_b": "of",
+    "kpi": "otif",
+    "n_pairs": 54,
+    "median_diff_a_minus_b": 0.0,
+    "ci_low_95pct": 0.0,
+    "ci_high_95pct": 0.0,
+    "wilcoxon_pvalue": null,
+    "cliffs_delta": 0.0,
+    "label": "apport EVENT sur OF"
+  },
+  {
+    "doctrine_a": "event",
+    "doctrine_b": "flux",
+    "kpi": "otif",
+    "n_pairs": 54,
+    "median_diff_a_minus_b": 0.0,
+    "ci_low_95pct": 0.0,
+    "ci_high_95pct": 0.0,
+    "wilcoxon_pvalue": null,
+    "cliffs_delta": 0.0,
+    "label": "apport EVENT sur FLUX"
+  },
+  {
+    "doctrine_a": "of_event_bce",
+    "doctrine_b": "of_event",
+    "kpi": "otif",
+    "n_pairs": 54,
+    "median_diff_a_minus_b": 0.0,
+    "ci_low_95pct": 0.0,
+    "ci_high_95pct": 0.0,
+    "wilcoxon_pvalue": null,
+    "cliffs_delta": 0.0,
+    "label": "apport BCE sur OF+EVENT"
+  },
+  {
+    "doctrine_a": "event_bce",
+    "doctrine_b": "event",
+    "kpi": "otif",
+    "n_pairs": 54,
+    "median_diff_a_minus_b": 0.0,
+    "ci_low_95pct": 0.0,
+    "ci_high_95pct": 0.0,
+    "wilcoxon_pvalue": null,
+    "cliffs_delta": 0.0,
+    "label": "apport BCE sur FLUX+EVENT"
+  },
+  {
+    "doctrine_a": "flux",
+    "doctrine_b": "of",
+    "kpi": "otif",
+    "n_pairs": 54,
+    "median_diff_a_minus_b": 0.0,
+    "ci_low_95pct": 0.0,
+    "ci_high_95pct": 0.0,
+    "wilcoxon_pvalue": null,
+    "cliffs_delta": 0.0,
+    "label": "apport FLUX (vs OF baseline)"
+  }
+]

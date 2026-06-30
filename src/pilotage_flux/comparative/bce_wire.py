@@ -93,12 +93,20 @@ def bce_apply_hazard_hook(
         actor="auto:bce_loop",
     )
     if res.skipped_reason is not None:
-        return {
+        # Même quand le mapping standard est manquant, on tente
+        # l'émission zone libre (forecast deviation) si applicable.
+        zone_libre_info = _emit_zone_libre_if_applicable(
+            conn, hazard, occ.isoformat(), decided,
+        )
+        trace = {
             "bce_skipped": res.skipped_reason,
             "kind": hazard.kind,
         }
+        if zone_libre_info is not None:
+            trace.update(zone_libre_info)
+        return trace
     cyber = res.cybernetic_decision
-    return {
+    trace = {
         "bce_deviation_id": res.deviation_id,
         "bce_racine_id": res.racine_id,
         "bce_categorie_code": res.categorie_code,
@@ -108,6 +116,123 @@ def bce_apply_hazard_hook(
         "bce_approval_queue_id": (
             cyber.approval_queue_id if cyber else None
         ),
+    }
+    # Émission complémentaire zone libre si le hazard a un mapping
+    # forecast (par ex. URGENT_ORDER, PO_DELAY).
+    zone_libre_info = _emit_zone_libre_if_applicable(
+        conn, hazard, occ.isoformat(), decided,
+    )
+    if zone_libre_info is not None:
+        trace.update(zone_libre_info)
+    return trace
+
+
+def _emit_zone_libre_if_applicable(
+    conn: sqlite3.Connection,
+    hazard,
+    occurred_at: str,
+    decided_at: str,
+) -> dict | None:
+    """Émet une déviation forecast dédiée zone libre si le hazard
+    a un mapping dans HAZARD_TO_FORECAST_RACINE.
+
+    Renvoie un dict de trace ou None si pas de mapping.
+    """
+    from pilotage_flux.cybernetic.macrs.forecast_emission import (
+        emit_forecast_deviation,
+    )
+    res = emit_forecast_deviation(
+        conn, hazard,
+        occurred_at=occurred_at, decided_at=decided_at,
+    )
+    if res.skipped_reason is not None:
+        return None
+    return {
+        "zone_libre_deviation_id": res.deviation_id,
+        "zone_libre_racine_id": res.racine_id,
+        "zone_libre_categorie_code": res.categorie_code,
+        "zone_libre_delta_decision_id": res.delta_decision_id,
+    }
+
+
+def bce_distribute_pcs_after_freeze(
+    conn: sqlite3.Connection,
+    batch_id: str,
+    doctrine: str,
+) -> dict | None:
+    """Matérialise les PC=(T,Ep,Er,C,O) au grain opération après P3.
+
+    Si la doctrine n'est pas BCE, ne fait rien (None).
+
+    Deux chemins selon le batch :
+      - **Batch avec contrats** (FLUX-based : `event_bce`) : utilise
+        `distribute_contracts_at_p3_exit` (Goldilocks #5). Le parcours
+        est freeze_batch → contracts → candidates → OFs → ops → PCs
+        avec origin_kind='flux_contract'.
+      - **Batch virtuel** (OF-based : `of_event_bce`) : itère sur les
+        manufacturing_orders et appelle `build_pcs_for_of` avec
+        origin_kind='candidate' ou 'sales_order'.
+
+    Renvoie {pcs_via, n_pcs, n_ofs} ou None si non-BCE.
+    """
+    if not is_bce_doctrine(doctrine):
+        return None
+    bce_bootstrap(conn)
+    # Batch a-t-il des contrats liés ?
+    has_contracts = conn.execute(
+        "SELECT 1 FROM freeze_batch_contracts WHERE batch_id = ? "
+        "LIMIT 1",
+        (batch_id,),
+    ).fetchone() is not None
+
+    if has_contracts:
+        # Chemin nominal Goldilocks #5
+        from pilotage_flux.cybernetic.p3_distribution import (
+            distribute_contracts_at_p3_exit,
+        )
+        try:
+            res = distribute_contracts_at_p3_exit(conn, batch_id)
+            return {
+                "pcs_via": "flux_contract",
+                "n_pcs": res.n_pcs,
+                "n_ofs": res.n_ofs,
+                "contracts_processed": list(res.contracts_processed),
+            }
+        except ValueError:
+            return {"pcs_via": "flux_contract", "n_pcs": 0,
+                    "n_ofs": 0, "error": "empty_batch"}
+
+    # Fallback : batch virtuel (OF+EVENT+BCE)
+    from pilotage_flux.cybernetic.production_contract import (
+        build_pcs_for_of,
+    )
+    ofs = conn.execute(
+        "SELECT of_id, candidate_id FROM manufacturing_orders "
+        "WHERE status NOT IN ('closed', 'cancelled')"
+    ).fetchall()
+    n_pcs = 0
+    n_ofs_processed = 0
+    for r in ofs:
+        if r["candidate_id"]:
+            origin_kind = "candidate"
+            origin_ref = r["candidate_id"]
+        else:
+            origin_kind = "sales_order"
+            origin_ref = r["of_id"]
+        try:
+            pc_ids = build_pcs_for_of(
+                conn, r["of_id"],
+                origin_kind=origin_kind,
+                origin_ref=origin_ref,
+            )
+            n_pcs += len(pc_ids)
+            n_ofs_processed += 1
+        except Exception:
+            continue
+    return {
+        "pcs_via": "direct_ofs",
+        "n_pcs": n_pcs,
+        "n_ofs": n_ofs_processed,
     }
 
 
@@ -132,6 +257,21 @@ def bce_kpis(conn: sqlite3.Connection) -> dict:
     pending = conn.execute(
         "SELECT COUNT(*) AS n FROM approval_queue WHERE status='pending'"
     ).fetchone()
+    # Zone libre : decisions liées aux racines forecast R002/R003/R017
+    from pilotage_flux.cybernetic.macrs.forecast_emission import (
+        count_zone_libre_decisions,
+    )
+    zl = count_zone_libre_decisions(conn)
+    # Compteurs PC (Goldilocks #4 + #5 wiring) — production_contracts
+    # matérialisés post-P3.
+    pc_total = conn.execute(
+        "SELECT COUNT(*) AS n FROM production_contracts"
+    ).fetchone()
+    pc_by_status_rows = conn.execute(
+        "SELECT status, COUNT(*) AS n FROM production_contracts "
+        "GROUP BY status"
+    ).fetchall()
+    pc_by_status = {r["status"]: int(r["n"]) for r in pc_by_status_rows}
     return {
         "delta_decisions_by_niveau": by_niveau,
         "delta_decisions_by_cadrage_level": by_cadrage,
@@ -143,6 +283,13 @@ def bce_kpis(conn: sqlite3.Connection) -> dict:
         "macrs_cells_active": int(macrs_active["n"]) if macrs_active else 0,
         "macrs_events_total": int(macrs_events["n"]) if macrs_events else 0,
         "approval_queue_pending": int(pending["n"]) if pending else 0,
+        # Zone libre
+        "zone_libre_n_decisions": zl["n_total"],
+        "zone_libre_by_racine": zl["by_racine"],
+        "zone_libre_by_niveau": zl["by_niveau"],
+        # PCs au grain opération (Goldilocks #4 + #5 wiring)
+        "pcs_total": int(pc_total["n"]) if pc_total else 0,
+        "pcs_by_status": pc_by_status,
     }
 
 

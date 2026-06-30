@@ -39,6 +39,7 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 
@@ -89,6 +90,23 @@ PLAN: list[tuple[str, str]] = [
 ]
 
 
+# Sous-ensemble « rapide » : ce qu'il faut MINIMUM pour boucler l'item 2
+# (réécrire §28.16/§28.17 avec les vrais €/unité). Omet les études XXL
+# (resilience ~800 runs, validity ~600). Activer avec --fast.
+FAST_SUBSET: set[str] = {
+    "build_qcds_matrix_5_doctrines.py",
+    "build_qcds_realistic_capacity.py",
+    "build_qcds_v13_1.py",
+    "build_v12_6_comparative.py",
+    "build_v12_7_comparative.py",
+    "build_v12_8_comparative.py",
+    "diagnose_flux_vs_of_event_full_cyber.py",
+    "diagnose_v13_0_matrix.py",
+    "build_cadrage_v4_docx.py",
+    "build_paper_hal_docx.py",
+}
+
+
 def _build_env() -> dict[str, str]:
     env = dict(os.environ)
     env["MPLBACKEND"] = "Agg"          # pas de display requis
@@ -122,6 +140,8 @@ def _preflight_dependencies() -> list[str]:
 
 def _select(args) -> list[tuple[str, str]]:
     plan = list(PLAN)
+    if args.fast:
+        plan = [(ph, s) for ph, s in plan if s in FAST_SUBSET]
     if args.skip_diagnostics:
         plan = [(ph, s) for ph, s in plan if ph != "diagnostics"]
     if args.only:
@@ -204,6 +224,15 @@ def main() -> int:
     parser.add_argument("--quiet", action="store_true",
                         help="ne pas streamer la sortie des études "
                              "(une ligne de résumé par script)")
+    parser.add_argument("--jobs", "-j", type=int, default=1,
+                        help="parallélise N scripts simultanément "
+                             "(défaut 1 = séquentiel). Force --quiet si > 1. "
+                             "Les phases restent séquentielles entre elles, "
+                             "seuls les scripts d'une même phase sont parallèles.")
+    parser.add_argument("--fast", action="store_true",
+                        help="sous-ensemble léger (10 scripts) suffisant pour "
+                             "régénérer les tables QCDS + DOCX. Omet les études "
+                             "XXL (resilience, validity).")
     args = parser.parse_args()
 
     plan = _select(args)
@@ -236,46 +265,85 @@ def main() -> int:
         print("   (ortools n'est requis que pour la doctrine OF_MILP.)")
         print("   On poursuit quand même — les scripts sans ces deps tourneront.\n")
 
-    stream = not args.quiet
+    jobs = max(1, args.jobs)
+    # Parallèle ⇒ on force quiet (le streaming entremêlé est illisible)
+    stream = (not args.quiet) and jobs == 1
     total_n = len(plan)
-    print(f"\nMode  : {'streaming live' if stream else 'quiet (résumé)'}  "
-          f"— {total_n} scripts à exécuter")
+    mode_lbl = "streaming live" if stream else (
+        f"parallèle x{jobs}" if jobs > 1 else "quiet (résumé)"
+    )
+    print(f"\nMode  : {mode_lbl}  — {total_n} scripts à exécuter")
+    if args.fast:
+        print("        --fast : sous-ensemble léger (item 2 du plan)")
+
+    # Regroupe par phase (préservant l'ordre) ; chaque phase est lancée
+    # avec son propre pool ; on attend la fin de la phase avant la suivante.
+    by_phase: list[tuple[str, list[str]]] = []
+    for ph, script in plan:
+        if by_phase and by_phase[-1][0] == ph:
+            by_phase[-1][1].append(script)
+        else:
+            by_phase.append((ph, [script]))
 
     results: list[tuple[str, str, str, float, str]] = []
     t_start = time.time()
-    cur_phase = None
-    for idx, (ph, script) in enumerate(plan, start=1):
-        if ph != cur_phase:
-            print(f"\n{'━' * 78}\n  PHASE : {ph}\n{'━' * 78}")
-            cur_phase = ph
-        # ETA = durée moyenne des scripts déjà finis × restants
-        done = [r[3] for r in results if r[2] == "OK"]
-        eta_txt = ""
-        if done:
-            avg = sum(done) / len(done)
-            eta_txt = f" | ETA ~{_fmt_eta(avg * (total_n - idx + 1))}"
-        elapsed_txt = _fmt_eta(time.time() - t_start)
-        header = (f"\n[{idx}/{total_n}] ▶ {script}  "
-                  f"(écoulé {elapsed_txt}{eta_txt})")
-        if stream:
-            print(header)
-            print(f"  {'·' * 40} sortie live {'·' * 21}")
-        else:
-            print(f"{header:70} ", end="", flush=True)
+    completed = 0
+    stop_flag = False
 
-        status, dur, msg = _run_one(script, env, stream=stream)
-
-        symbol = {"OK": "✓", "ÉCHEC": "✗", "ABSENT": "?",
-                  "ERREUR": "✗"}.get(status, "?")
-        if stream:
-            print(f"  └─ {symbol} {status} en {dur:.1f}s"
-                  + (f"  ⚠ {msg}" if status != "OK" else ""))
-        else:
-            print(f"{symbol} {status:7} {dur:7.1f}s  {msg}")
-        results.append((ph, script, status, dur, msg))
-        if status in ("ÉCHEC", "ERREUR") and args.stop_on_error:
-            print("\n⏹  Arrêt sur erreur (--stop-on-error).")
+    for ph, scripts in by_phase:
+        if stop_flag:
             break
+        print(f"\n{'━' * 78}\n  PHASE : {ph}  ({len(scripts)} scripts)\n"
+              f"{'━' * 78}")
+        if jobs > 1:
+            # Exécution parallèle au sein d'une phase
+            with ThreadPoolExecutor(max_workers=jobs) as pool:
+                futs = {pool.submit(_run_one, s, env, stream=False): s
+                        for s in scripts}
+                for fut in as_completed(futs):
+                    script = futs[fut]
+                    status, dur, msg = fut.result()
+                    completed += 1
+                    elapsed = _fmt_eta(time.time() - t_start)
+                    symbol = {"OK": "✓", "ÉCHEC": "✗", "ABSENT": "?",
+                              "ERREUR": "✗"}.get(status, "?")
+                    print(f"  [{completed}/{total_n}] {symbol} {status:7} "
+                          f"{dur:6.1f}s  {script:42} (écoulé {elapsed})")
+                    if status != "OK":
+                        print(f"      ⚠ {msg}")
+                    results.append((ph, script, status, dur, msg))
+                    if status in ("ÉCHEC", "ERREUR") and args.stop_on_error:
+                        stop_flag = True
+        else:
+            for script in scripts:
+                completed += 1
+                done = [r[3] for r in results if r[2] == "OK"]
+                eta_txt = ""
+                if done:
+                    avg = sum(done) / len(done)
+                    eta_txt = (f" | ETA ~"
+                               f"{_fmt_eta(avg * (total_n - completed + 1))}")
+                elapsed_txt = _fmt_eta(time.time() - t_start)
+                header = (f"\n[{completed}/{total_n}] ▶ {script}  "
+                          f"(écoulé {elapsed_txt}{eta_txt})")
+                if stream:
+                    print(header)
+                    print(f"  {'·' * 40} sortie live {'·' * 21}")
+                else:
+                    print(f"{header:70} ", end="", flush=True)
+                status, dur, msg = _run_one(script, env, stream=stream)
+                symbol = {"OK": "✓", "ÉCHEC": "✗", "ABSENT": "?",
+                          "ERREUR": "✗"}.get(status, "?")
+                if stream:
+                    print(f"  └─ {symbol} {status} en {dur:.1f}s"
+                          + (f"  ⚠ {msg}" if status != "OK" else ""))
+                else:
+                    print(f"{symbol} {status:7} {dur:7.1f}s  {msg}")
+                results.append((ph, script, status, dur, msg))
+                if status in ("ÉCHEC", "ERREUR") and args.stop_on_error:
+                    print("\n⏹  Arrêt sur erreur (--stop-on-error).")
+                    stop_flag = True
+                    break
 
     total = time.time() - t_start
 

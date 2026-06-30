@@ -49,7 +49,19 @@ python docs\run_full_corpus.py --stop-on-error
 
 # Mode compact (une ligne par script, sans sortie live)
 python docs\run_full_corpus.py --quiet
+
+# Parallélisation (4 scripts simultanés) - gain ~×3-4 sur multi-core
+python docs\run_full_corpus.py --jobs 4
+
+# Sous-ensemble léger (10 scripts) : suffit pour régénérer
+# les tables QCDS + DOCX. Omet les études XXL (resilience ~800 runs,
+# validity ~600). Combiné avec --jobs : très rapide.
+python docs\run_full_corpus.py --fast --jobs 4
 ```
+
+> **Combo recommandé pour boucler l'item 2** (réécriture §28.16/§28.17
+> avec les vrais €/unité) : `--fast --jobs 4`. ~5-10 min sur un PC
+> multi-core au lieu de 30-60 min pour le bloc complet.
 
 ## Visuel de progression
 

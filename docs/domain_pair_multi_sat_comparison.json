@@ -1,0 +1,395 @@
+{
+  "saturations": [
+    0.94,
+    0.96
+  ],
+  "n_seeds": 20,
+  "top_10_per_saturation": {
+    "0.94": [
+      {
+        "rank": 1,
+        "pair": "production|demande",
+        "domain_a": "production",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.3333333333333335,
+        "recovery_sd": 1.2014489303186144,
+        "yield_mean": 0.9496723941911313,
+        "wip_mean": 6.66,
+        "combined_impact_score": 0.07777777777777778
+      },
+      {
+        "rank": 2,
+        "pair": "demande|demande",
+        "domain_a": "demande",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.2891666666666666,
+        "recovery_sd": 1.185095981505345,
+        "yield_mean": 0.9495608738981,
+        "wip_mean": 13.716666666666667,
+        "combined_impact_score": 0.07630555555555556
+      },
+      {
+        "rank": 3,
+        "pair": "demande|qualite",
+        "domain_a": "demande",
+        "domain_b": "qualite",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.1841666666666666,
+        "recovery_sd": 0.9435294415213252,
+        "yield_mean": 0.9460166539634837,
+        "wip_mean": 7.453333333333333,
+        "combined_impact_score": 0.07280555555555555
+      },
+      {
+        "rank": 4,
+        "pair": "approvisionnement|demande",
+        "domain_a": "approvisionnement",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.1641666666666666,
+        "recovery_sd": 0.9928880875435886,
+        "yield_mean": 0.9496194855262365,
+        "wip_mean": 6.65,
+        "combined_impact_score": 0.07213888888888889
+      },
+      {
+        "rank": 5,
+        "pair": "qualite|demande",
+        "domain_a": "qualite",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.1458333333333335,
+        "recovery_sd": 1.0200601260801803,
+        "yield_mean": 0.9468967173745257,
+        "wip_mean": 6.66,
+        "combined_impact_score": 0.07152777777777779
+      },
+      {
+        "rank": 6,
+        "pair": "demande|approvisionnement",
+        "domain_a": "demande",
+        "domain_b": "approvisionnement",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.1066666666666665,
+        "recovery_sd": 0.8641393649783947,
+        "yield_mean": 0.949691230216383,
+        "wip_mean": 7.48,
+        "combined_impact_score": 0.07022222222222221
+      },
+      {
+        "rank": 7,
+        "pair": "demande|production",
+        "domain_a": "demande",
+        "domain_b": "production",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 1.9366666666666668,
+        "recovery_sd": 0.7532114479879584,
+        "yield_mean": 0.9495904090996194,
+        "wip_mean": 7.49,
+        "combined_impact_score": 0.06455555555555556
+      },
+      {
+        "rank": 8,
+        "pair": "logistique|demande",
+        "domain_a": "logistique",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 1.87,
+        "recovery_sd": 0.7024102198566478,
+        "yield_mean": 0.9496498082385921,
+        "wip_mean": 7.46,
+        "combined_impact_score": 0.06233333333333334
+      },
+      {
+        "rank": 9,
+        "pair": "demande|logistique",
+        "domain_a": "demande",
+        "domain_b": "logistique",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 1.8595238095238096,
+        "recovery_sd": 0.6239453447961253,
+        "yield_mean": 0.9496314740485514,
+        "wip_mean": 8.176666666666666,
+        "combined_impact_score": 0.06198412698412699
+      },
+      {
+        "rank": 10,
+        "pair": "logistique|qualite",
+        "domain_a": "logistique",
+        "domain_b": "qualite",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 1.2541666666666667,
+        "recovery_sd": 0.7654237636836838,
+        "yield_mean": 0.947439871132589,
+        "wip_mean": 0.5933333333333334,
+        "combined_impact_score": 0.041805555555555554
+      }
+    ],
+    "0.96": [
+      {
+        "rank": 1,
+        "pair": "production|demande",
+        "domain_a": "production",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.3333333333333335,
+        "recovery_sd": 1.2014489303186144,
+        "yield_mean": 0.9499954252438157,
+        "wip_mean": 6.66,
+        "combined_impact_score": 0.07777777777777778
+      },
+      {
+        "rank": 2,
+        "pair": "demande|demande",
+        "domain_a": "demande",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.2891666666666666,
+        "recovery_sd": 1.185095981505345,
+        "yield_mean": 0.9498836510012393,
+        "wip_mean": 13.716666666666667,
+        "combined_impact_score": 0.07630555555555556
+      },
+      {
+        "rank": 3,
+        "pair": "demande|qualite",
+        "domain_a": "demande",
+        "domain_b": "qualite",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.1841666666666666,
+        "recovery_sd": 0.9435294415213252,
+        "yield_mean": 0.9464121827550911,
+        "wip_mean": 7.453333333333333,
+        "combined_impact_score": 0.07280555555555555
+      },
+      {
+        "rank": 4,
+        "pair": "approvisionnement|demande",
+        "domain_a": "approvisionnement",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.1641666666666666,
+        "recovery_sd": 0.9928880875435886,
+        "yield_mean": 0.9499439310489477,
+        "wip_mean": 6.65,
+        "combined_impact_score": 0.07213888888888889
+      },
+      {
+        "rank": 5,
+        "pair": "qualite|demande",
+        "domain_a": "qualite",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.1458333333333335,
+        "recovery_sd": 1.0200601260801803,
+        "yield_mean": 0.9472770260360713,
+        "wip_mean": 6.66,
+        "combined_impact_score": 0.07152777777777779
+      },
+      {
+        "rank": 6,
+        "pair": "demande|approvisionnement",
+        "domain_a": "demande",
+        "domain_b": "approvisionnement",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 2.1066666666666665,
+        "recovery_sd": 0.8641393649783947,
+        "yield_mean": 0.9500123269253645,
+        "wip_mean": 7.48,
+        "combined_impact_score": 0.07022222222222221
+      },
+      {
+        "rank": 7,
+        "pair": "demande|production",
+        "domain_a": "demande",
+        "domain_b": "production",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 1.9366666666666668,
+        "recovery_sd": 0.7532114479879584,
+        "yield_mean": 0.9499136001900728,
+        "wip_mean": 7.49,
+        "combined_impact_score": 0.06455555555555556
+      },
+      {
+        "rank": 8,
+        "pair": "logistique|demande",
+        "domain_a": "logistique",
+        "domain_b": "demande",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 1.87,
+        "recovery_sd": 0.7024102198566478,
+        "yield_mean": 0.9498451471299678,
+        "wip_mean": 7.46,
+        "combined_impact_score": 0.06233333333333334
+      },
+      {
+        "rank": 9,
+        "pair": "demande|logistique",
+        "domain_a": "demande",
+        "domain_b": "logistique",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 1.8595238095238096,
+        "recovery_sd": 0.6239453447961253,
+        "yield_mean": 0.9499533322229754,
+        "wip_mean": 8.176666666666666,
+        "combined_impact_score": 0.06198412698412699
+      },
+      {
+        "rank": 10,
+        "pair": "logistique|qualite",
+        "domain_a": "logistique",
+        "domain_b": "qualite",
+        "n_seeds": 20,
+        "otif_mean": 1.0,
+        "otif_sd": 0.0,
+        "recovery_mean_days": 1.2541666666666667,
+        "recovery_sd": 0.7654237636836838,
+        "yield_mean": 0.9485969517278187,
+        "wip_mean": 0.5933333333333334,
+        "combined_impact_score": 0.041805555555555554
+      }
+    ]
+  },
+  "rank_stability": {
+    "demande|demande": {
+      "0.94": 2,
+      "0.96": 2
+    },
+    "demande|approvisionnement": {
+      "0.94": 6,
+      "0.96": 6
+    },
+    "demande|logistique": {
+      "0.94": 9,
+      "0.96": 9
+    },
+    "demande|production": {
+      "0.94": 7,
+      "0.96": 7
+    },
+    "demande|qualite": {
+      "0.94": 3,
+      "0.96": 3
+    },
+    "approvisionnement|demande": {
+      "0.94": 4,
+      "0.96": 4
+    },
+    "approvisionnement|approvisionnement": {
+      "0.94": 13,
+      "0.96": 13
+    },
+    "approvisionnement|logistique": {
+      "0.94": 24,
+      "0.96": 24
+    },
+    "approvisionnement|production": {
+      "0.94": 14,
+      "0.96": 14
+    },
+    "approvisionnement|qualite": {
+      "0.94": 15,
+      "0.96": 15
+    },
+    "logistique|demande": {
+      "0.94": 8,
+      "0.96": 8
+    },
+    "logistique|approvisionnement": {
+      "0.94": 23,
+      "0.96": 23
+    },
+    "logistique|logistique": {
+      "0.94": 25,
+      "0.96": 25
+    },
+    "logistique|production": {
+      "0.94": 22,
+      "0.96": 22
+    },
+    "logistique|qualite": {
+      "0.94": 10,
+      "0.96": 10
+    },
+    "production|demande": {
+      "0.94": 1,
+      "0.96": 1
+    },
+    "production|approvisionnement": {
+      "0.94": 19,
+      "0.96": 19
+    },
+    "production|logistique": {
+      "0.94": 12,
+      "0.96": 12
+    },
+    "production|production": {
+      "0.94": 20,
+      "0.96": 20
+    },
+    "production|qualite": {
+      "0.94": 21,
+      "0.96": 21
+    },
+    "qualite|demande": {
+      "0.94": 5,
+      "0.96": 5
+    },
+    "qualite|approvisionnement": {
+      "0.94": 16,
+      "0.96": 16
+    },
+    "qualite|logistique": {
+      "0.94": 11,
+      "0.96": 11
+    },
+    "qualite|production": {
+      "0.94": 17,
+      "0.96": 17
+    },
+    "qualite|qualite": {
+      "0.94": 18,
+      "0.96": 18
+    }
+  }
+}

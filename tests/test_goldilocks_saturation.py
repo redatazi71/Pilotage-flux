@@ -21,7 +21,9 @@ FIXTURES = Path("data/fixtures_extended")
 
 
 def test_saturation_targets_contains_expected_levels() -> None:
-    assert SATURATION_TARGETS == (0.78, 0.82, 0.86, 0.90, 0.94)
+    # 5 niveaux Goldilocks (78-94) + sur-saturation (100) pour test
+    # de cohérence interne de la doctrine (érosion attendue à 100%)
+    assert SATURATION_TARGETS == (0.78, 0.82, 0.86, 0.90, 0.94, 1.00)
 
 
 def test_identify_bottleneck_empty_db(tmp_db) -> None:

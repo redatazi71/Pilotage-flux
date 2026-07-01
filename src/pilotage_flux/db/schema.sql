@@ -1265,3 +1265,54 @@ CREATE INDEX IF NOT EXISTS idx_demand_contracts_deadline
     ON demand_contracts (delivery_deadline);
 CREATE INDEX IF NOT EXISTS idx_demand_contracts_feasible
     ON demand_contracts (feasible);
+
+-- ---------------------------------------------------------------------
+-- V13.I — Contrats de flux hebdomadaires (agrégation demand_contracts)
+-- ---------------------------------------------------------------------
+-- Un contrat de flux hebdomadaire agrège les demand_contracts dont la
+-- livraison tombe dans la semaine ISO (year-week). Il porte les cibles
+-- doctrinales AGRÉGÉES : takt hebdo = Σ_qty / capa_goulot_semaine,
+-- WIP cible = Little agrégée, goulot du mix hebdo (recalculé).
+--
+-- La granularité hebdomadaire est le standard industriel (ISA-95 Level 4
+-- planning tactique = jour ↔ semaine). Sur horizon 60j = ~9 semaines,
+-- horizon 120j = ~17 semaines.
+CREATE TABLE IF NOT EXISTS weekly_flux_contracts (
+    weekly_id           TEXT PRIMARY KEY,       -- WFC-YYYYWW-xxx
+    year_iso            INTEGER NOT NULL,
+    week_iso            INTEGER NOT NULL,
+    week_start_date     TEXT NOT NULL,          -- lundi ISO YYYY-MM-DD
+    -- Cibles doctrinales AGRÉGÉES du mix hebdo
+    total_quantity      REAL NOT NULL,           -- Σ demand_contracts.qty
+    n_contracts         INTEGER NOT NULL,        -- nb demand_contracts
+    bottleneck_ws       TEXT,                    -- goulot dyn du mix hebdo
+    takt_target_min     REAL,                    -- Σ_capa / Σ_qty
+    wip_target          REAL,                    -- Little agrégée
+    rho_bottleneck      REAL,                    -- charge / capa goulot
+    feasible            INTEGER NOT NULL DEFAULT 0,
+    -- Capacité disponible sur le goulot semaine (min)
+    capa_goulot_week    REAL,                    -- daily_min × 5j × capa
+    -- Charge cumulée sur le goulot (min) pour ce mix hebdo
+    charge_goulot_week  REAL,
+    -- Statut du contrat hebdo (jumeau numérique 5 flux aggregé)
+    status              TEXT NOT NULL DEFAULT 'draft',
+        -- 'draft' | 'signed' | 'active' | 'closed' | 'renegotiated'
+    -- Traçabilité
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    signed_at           TEXT,
+    closed_at           TEXT
+);
+
+-- Lien N-N entre weekly_flux_contracts et demand_contracts.
+CREATE TABLE IF NOT EXISTS weekly_flux_contract_lines (
+    weekly_id           TEXT NOT NULL
+        REFERENCES weekly_flux_contracts(weekly_id),
+    contract_id         TEXT NOT NULL
+        REFERENCES demand_contracts(contract_id),
+    PRIMARY KEY (weekly_id, contract_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_weekly_flux_year_week
+    ON weekly_flux_contracts (year_iso, week_iso);
+CREATE INDEX IF NOT EXISTS idx_weekly_flux_lines_contract
+    ON weekly_flux_contract_lines (contract_id);

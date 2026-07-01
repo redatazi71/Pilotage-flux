@@ -1,0 +1,86 @@
+{
+  "faible": {
+    "n_runs": 5,
+    "otif_mean": 0.9271199999999999,
+    "q_mean": 0.9271199999999999,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 100.97399999999999,
+    "wip_avg_mean": 2.818,
+    "wip_sd_mean": 4.561327530716991,
+    "nervousness_mean": 0.0398,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 7.8
+  },
+  "moyen": {
+    "n_runs": 5,
+    "otif_mean": 0.94798,
+    "q_mean": 0.94798,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 109.838,
+    "wip_avg_mean": 4.856,
+    "wip_sd_mean": 7.908878607730945,
+    "nervousness_mean": 0.039599999999999996,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 12.6
+  },
+  "fort": {
+    "n_runs": 5,
+    "otif_mean": 0.9366,
+    "q_mean": 0.9366,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 108.962,
+    "wip_avg_mean": 5.224,
+    "wip_sd_mean": 9.569042266134158,
+    "nervousness_mean": 0.0298,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 15.8
+  },
+  "extr\u00eame": {
+    "n_runs": 5,
+    "otif_mean": 0.94724,
+    "q_mean": 0.94724,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 116.13799999999999,
+    "wip_avg_mean": 7.358,
+    "wip_sd_mean": 15.565360100580955,
+    "nervousness_mean": 0.017,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 20
+  },
+  "extr\u00eame+": {
+    "n_runs": 5,
+    "otif_mean": 0.94732,
+    "q_mean": 0.94732,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 116.592,
+    "wip_avg_mean": 8.475999999999999,
+    "wip_sd_mean": 18.225135703846096,
+    "nervousness_mean": 0.013,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 20
+  },
+  "rupture": {
+    "n_runs": 5,
+    "otif_mean": 0.918213616,
+    "q_mean": 0.94048,
+    "d_mean": 0.9763,
+    "cost_per_u_mean": 123.086,
+    "wip_avg_mean": 9.608,
+    "wip_sd_mean": 21.352215087101232,
+    "nervousness_mean": 0.011,
+    "rupture_pct_mean": 0.02369514543427587,
+    "recovery_days_mean": 20
+  },
+  "rupture++": {
+    "n_runs": 5,
+    "otif_mean": 0.924155782,
+    "q_mean": 0.94484,
+    "d_mean": 0.9780800000000001,
+    "cost_per_u_mean": 124.13199999999999,
+    "wip_avg_mean": 12.274000000000001,
+    "wip_sd_mean": 27.639446144767724,
+    "nervousness_mean": 0.008,
+    "rupture_pct_mean": 0.02191536533641797,
+    "recovery_days_mean": 20
+  }
+}

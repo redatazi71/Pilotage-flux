@@ -1392,13 +1392,14 @@ def _advance_one_day(
     Scrap pending (NC en cascade) : consommé par le 1er OF advancé du jour.
     V3 qc_intervention_active divise le scrap pending par 2.
     """
-    active = conn.execute(
+    active_rows = conn.execute(
         """
         SELECT of_id FROM manufacturing_orders
         WHERE status IN ('launched', 'in_progress')
         ORDER BY of_id ASC
         """
     ).fetchall()
+    active = list(active_rows)
     # V13.A — bascule legacy (1 op/WS/jour) ⟷ réaliste (budget min/WS/jour)
     daily_capa_min = _get_realistic_capacity_minutes_per_day(conn)
     realistic = daily_capa_min > 0
@@ -1421,6 +1422,25 @@ def _advance_one_day(
     rope_queue_at_bottleneck = (
         _count_bottleneck_queue(conn, dbr_ws) if dbr_ws else 0
     )
+
+    # V15 — Reorder : OFs avec next op sur le goulot d'abord.
+    # Combiné au Rope check, cela matérialise la doctrine DBR :
+    # le goulot tourne à 100 % (traité en priorité) + les WS amont
+    # sont bloqués si la file goulot est pleine.
+    if dbr_ws:
+        def _priority_key(row):
+            of_id = row["of_id"]
+            next_op = conn.execute(
+                "SELECT workstation_id FROM order_operations "
+                "WHERE of_id = ? AND status = 'pending' "
+                "ORDER BY sequence_idx ASC LIMIT 1",
+                (of_id,),
+            ).fetchone()
+            # Priorité 0 = goulot (traité en 1er), 1 = autres
+            if next_op and next_op["workstation_id"] == dbr_ws:
+                return (0, of_id)
+            return (1, of_id)
+        active = sorted(active, key=_priority_key)
     busy_ws: set[str] = set()  # legacy
     ws_minutes_used: dict[str, float] = {}  # realistic
     # Scrap cumulé des NC du jour (et précédents) à appliquer au 1er OF avancé.
@@ -1459,22 +1479,16 @@ def _advance_one_day(
         ).fetchone()
         qty = float(qty_row["quantity"])
         ws = op["workstation_id"]
-        # V14 — Rope désactivé sur le simulateur MES actuel.
-        # Le vrai DBR (blocage amont selon file goulot) nécessite une
-        # refonte du modèle MES : files d'attente explicites par WS,
-        # priorisation par slot goulot (pas FIFO), buffer matérialisé.
-        # Sur le modèle actuel (FIFO simple, 1 op/WS/jour ou budget en
-        # min), le Rope crée un deadlock : les ops amont sont bloquées
-        # mais rien ne "vide" la file goulot suffisamment vite pour
-        # relâcher, et le simulateur MES n'a pas de mécanique de
-        # priorisation par slot goulot. Les helpers restent en place
-        # pour usage futur (refactor MES V15).
-        # if (dbr_ws is not None and ws != dbr_ws
-        #         and rope_queue_at_bottleneck >= rope_buffer_size
-        #         and _of_will_reach_bottleneck(
-        #             conn, of_id, int(op["sequence_idx"]), dbr_ws,
-        #         )):
-        #     continue
+        # V15 — Rope réactivé : combiné à la priorisation goulot-first
+        # (reorder ci-dessus), on matérialise DBR : le goulot tourne à
+        # 100 % (traité avant les autres, ne subit pas le Rope), et les
+        # WS amont sont bloqués si la file goulot est pleine.
+        if (dbr_ws is not None and ws != dbr_ws
+                and rope_queue_at_bottleneck >= rope_buffer_size
+                and _of_will_reach_bottleneck(
+                    conn, of_id, int(op["sequence_idx"]), dbr_ws,
+                )):
+            continue
         if realistic:
             # V13.A — réaliste : N ops/WS/jour tant que cap minutes pas dépassé
             op_dur = _compute_op_duration_min(

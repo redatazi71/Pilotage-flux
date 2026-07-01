@@ -44,6 +44,7 @@ from pilotage_flux.events_v3 import (
     list_deviations,
     match_actuals_to_expected,
 )
+from pilotage_flux.cybernetic.delta_engine import dispatch_decision
 from pilotage_flux.flux import (
     compute_coherence,
     compute_smoothing,
@@ -2205,6 +2206,19 @@ def run_event_doctrine(
                 if not d.is_absorbed:
                     attach_causes_to_deviation(conn, d.deviation_id)
             evaluate_all_open_deviations(conn, batch_id=batch_id)
+            # V12.3 — Moteur Delta : dispatch chaque décision vers son
+            # niveau d'autonomie (L1/L2 immédiat, L3/L4 approval queue).
+            new_decisions = conn.execute(
+                """SELECT t.decision_id AS decision_id
+                FROM tolerance_filter_decisions t
+                LEFT JOIN approval_queue a ON a.decision_id = t.decision_id
+                WHERE a.queue_id IS NULL"""
+            ).fetchall()
+            for d_row in new_decisions:
+                try:
+                    dispatch_decision(conn, int(d_row["decision_id"]))
+                except Exception:
+                    pass  # dispatch idempotent, ne doit pas bloquer le run
             # L5.2 + L8.1 : action corrective sur la réalité physique
             _apply_corrective_actions(conn, scenario, state, result, day)
 

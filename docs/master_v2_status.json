@@ -1,55 +1,39 @@
 {
-  "done": 120,
-  "total": 120,
+  "done": 144,
+  "total": 144,
   "crashed": 0,
   "progress_pct": 1.0,
-  "elapsed_seconds": 406.2701418399811,
+  "elapsed_seconds": 300.53560757637024,
   "eta_seconds": 0.0,
   "current": {
     "level": "rupture",
     "shock": "supply_heavy",
-    "seed": 10000
+    "seed": 10001
   },
   "stats_by_config": {
     "OF": {
-      "n": 24,
-      "otif_mean": 0.9419383675,
-      "cost_per_u_mean": 113.87416666666667,
-      "wip_sd_mean": 11.51159017567443,
+      "n": 48,
+      "otif_mean": 0.9414766422916667,
+      "cost_per_u_mean": 119.70333333333333,
+      "wip_sd_mean": 11.946553151602426,
       "nervousness_mean": 0.17099999999999999,
-      "rupture_pct_mean": 0.002065483476132191
+      "rupture_pct_mean": 0.002040414620738978
     },
     "OF+EVENT": {
-      "n": 24,
-      "otif_mean": 0.9447802591666666,
-      "cost_per_u_mean": 108.85291666666667,
-      "wip_sd_mean": 11.498197441767696,
-      "nervousness_mean": 0.020083333333333335,
-      "rupture_pct_mean": 0.002065483476132191
+      "n": 48,
+      "otif_mean": 0.9445039129166667,
+      "cost_per_u_mean": 113.61666666666666,
+      "wip_sd_mean": 11.93166403487637,
+      "nervousness_mean": 0.028104166666666666,
+      "rupture_pct_mean": 0.0015669297722541297
     },
     "FLUX+EVENT": {
-      "n": 24,
-      "otif_mean": 0.9425510729166666,
-      "cost_per_u_mean": 84.22625000000001,
-      "wip_sd_mean": 8.177705504621647,
-      "nervousness_mean": 0.020083333333333335,
-      "rupture_pct_mean": 0.004798458386526456
-    },
-    "OF+EVENT+BCE": {
-      "n": 24,
-      "otif_mean": 0.9447802591666666,
-      "cost_per_u_mean": 108.85291666666667,
-      "wip_sd_mean": 11.498197441767696,
-      "nervousness_mean": 0.020083333333333335,
-      "rupture_pct_mean": 0.002065483476132191
-    },
-    "FLUX+EVENT+BCE": {
-      "n": 24,
-      "otif_mean": 0.9425510729166666,
-      "cost_per_u_mean": 83.835,
-      "wip_sd_mean": 8.178569290369877,
-      "nervousness_mean": 0.020083333333333335,
-      "rupture_pct_mean": 0.004798458386526456
+      "n": 48,
+      "otif_mean": 0.941446350625,
+      "cost_per_u_mean": 92.96291666666667,
+      "wip_sd_mean": 8.771889643130473,
+      "nervousness_mean": 0.022,
+      "rupture_pct_mean": 0.00678731552213903
     }
   }
 }

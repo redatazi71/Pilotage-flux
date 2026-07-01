@@ -42,10 +42,8 @@ from pilotage_flux.comparative.resilience import compute_time_to_recover
 from pilotage_flux.comparative.runner import run_doctrine
 from pilotage_flux.comparative.scenario import (
     DOCTRINE_EVENT,
-    DOCTRINE_EVENT_BCE,
     DOCTRINE_OF,
     DOCTRINE_OF_EVENT,
-    DOCTRINE_OF_EVENT_BCE,
     HAZARD_BREAKDOWN,
     HAZARD_LOGISTIC_DELAY,
     HAZARD_PO_DELAY,
@@ -94,9 +92,9 @@ CONFIGS = [
     ("OF",              DOCTRINE_OF),
     ("OF+EVENT",        DOCTRINE_OF_EVENT),
     ("FLUX+EVENT",      DOCTRINE_EVENT),
-    ("OF+EVENT+BCE",    DOCTRINE_OF_EVENT_BCE),
-    ("FLUX+EVENT+BCE",  DOCTRINE_EVENT_BCE),
 ]
+# Note : BCE (DOCTRINE_OF_EVENT_BCE, DOCTRINE_EVENT_BCE) exclu du
+# protocole master v2 — sujet non prioritaire.
 
 SEED_BASE = 10000
 
@@ -212,6 +210,13 @@ def _run_one(scen, doctrine, work, fix_dir, level, shock, tag) -> dict:
             "of_closed_ratio": (
                 k.of_closed / k.of_total if k.of_total > 0 else 0.0
             ),
+            # V12.3 — nouveaux KPIs delta engine + compensation
+            "compensation_gap": k.compensation_gap,
+            "compensation_success_rate": k.compensation_success_rate,
+            "approvals_pending": k.approvals_pending,
+            "approvals_approved": k.approvals_approved,
+            "approvals_rejected": k.approvals_rejected,
+            "recovery_success_rate": k.recovery_success_rate,
         }
     except Exception as e:
         return {
@@ -351,7 +356,12 @@ CSV_FIELDS = [
     "otif", "q_compliance", "d_dispo", "cost_per_u",
     "wip_avg", "wip_sd", "nervousness",
     "so_total", "so_rejected", "rupture_pct", "recovery_days",
-    "of_total", "of_closed", "of_closed_ratio", "error",
+    "of_total", "of_closed", "of_closed_ratio",
+    # V12.3 KPIs post-fixes 8-10 : delta engine + compensation + résilience
+    "compensation_gap", "compensation_success_rate",
+    "approvals_pending", "approvals_approved", "approvals_rejected",
+    "recovery_success_rate",
+    "error",
 ]
 
 

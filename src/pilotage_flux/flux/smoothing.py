@@ -901,6 +901,24 @@ def compute_smoothing(
             conn, candidates, horizon_min, target_saturation,
             buffer_days, horizon_start=contract.horizon_start,
         )
+        # Persiste la feasibility pour V13.K (demand_contracts enrichis)
+        for cid, feas in toc_feasibility.items():
+            conn.execute(
+                """INSERT OR REPLACE INTO flux_candidate_feasibility (
+                    candidate_id, bottleneck_ws, goulot_load_min,
+                    goulot_slot_day, launch_day, buffer_days,
+                    charge_total_min, takt_min_per_unit_target,
+                    wip_predicted, rho_bottleneck_run, feasible
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (cid, feas.get("bottleneck_ws"),
+                 feas.get("goulot_load_min"),
+                 feas.get("goulot_slot_day"), feas.get("launch_day"),
+                 feas.get("buffer_days"), feas.get("charge_total_min"),
+                 feas.get("takt_min_per_unit_target"),
+                 feas.get("wip_predicted"),
+                 feas.get("rho_bottleneck_run"),
+                 int(feas.get("feasible", 1))),
+            )
     elif capacity_aware:
         # V13.D — placement earliest-first à saturation cible
         capacity_offsets = _compute_capacity_aware_offsets(

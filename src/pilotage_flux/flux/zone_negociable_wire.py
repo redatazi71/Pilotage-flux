@@ -20,7 +20,9 @@ from __future__ import annotations
 import sqlite3
 from datetime import date, datetime, timedelta
 
-from pilotage_flux.flux.demand_contract import create_demand_contract
+from pilotage_flux.flux.demand_contract import (
+    create_demand_contract, sign_contract,
+)
 from pilotage_flux.flux.twin_state import snapshot_twin_state
 from pilotage_flux.flux.weekly_contract import compute_weekly_flux_contract
 from pilotage_flux.parameters import get_num
@@ -35,16 +37,51 @@ def is_zone_negociable_enabled(conn: sqlite3.Connection) -> bool:
     return bool(val and float(val) > 0.5)
 
 
+def _fetch_feasibility_from_db(
+    conn: sqlite3.Connection, candidate_id: str,
+) -> dict | None:
+    """Lit le dossier de faisabilité V13.E persisté pour un candidate."""
+    row = conn.execute(
+        """SELECT bottleneck_ws, goulot_load_min, goulot_slot_day,
+                  launch_day, buffer_days, charge_total_min,
+                  takt_min_per_unit_target, wip_predicted,
+                  rho_bottleneck_run, feasible
+           FROM flux_candidate_feasibility
+           WHERE candidate_id = ?""",
+        (candidate_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "bottleneck_ws": row["bottleneck_ws"],
+        "goulot_load_min": row["goulot_load_min"],
+        "goulot_slot_day": row["goulot_slot_day"],
+        "launch_day": row["launch_day"],
+        "buffer_days": row["buffer_days"],
+        "charge_total_min": row["charge_total_min"],
+        "takt_min_per_unit_target": row["takt_min_per_unit_target"],
+        "wip_predicted": row["wip_predicted"],
+        "rho_bottleneck_run": row["rho_bottleneck_run"],
+        "feasible": row["feasible"],
+    }
+
+
 def create_demand_contracts_for_promoted(
     conn: sqlite3.Connection,
     *,
     feasibility_by_candidate: dict[str, dict] | None = None,
+    auto_sign: bool = True,
 ) -> list[str]:
     """Crée un demand_contract par SO qui a au moins un candidate
     promoted et n'a pas encore de contrat.
 
-    Chaque contrat est enrichi avec le dossier de faisabilité V13.E
-    du candidate correspondant si disponible.
+    Chaque contrat est enrichi avec le dossier de faisabilité V13.E :
+    1. Priorité au dict passé en argument
+    2. Sinon lecture depuis `flux_candidate_feasibility` (persistée par
+       compute_smoothing quand smoothing_toc_aware=1)
+
+    `auto_sign` (default True) : appelle immédiatement sign_contract
+    sur le contrat créé (candidate promoted = engagement pris).
 
     Retourne la liste des contract_ids créés.
     """
@@ -64,19 +101,26 @@ def create_demand_contracts_for_promoted(
     ).fetchall()
     created: list[str] = []
     for r in rows:
+        cid_source = r["candidate_id"]
+        # 1. Feasibility passée en argument
         feas = (
-            feasibility_by_candidate.get(r["candidate_id"])
+            feasibility_by_candidate.get(cid_source)
             if feasibility_by_candidate else None
         )
+        # 2. Sinon fallback DB (V13.E persistée)
+        if feas is None:
+            feas = _fetch_feasibility_from_db(conn, cid_source)
         cid = create_demand_contract(
             conn,
             sales_order_id=r["sales_order_id"],
             article_id=r["article_id"],
             quantity=float(r["quantity"]),
             delivery_deadline=r["due_date"],
-            candidate_id=r["candidate_id"],
+            candidate_id=cid_source,
             feasibility=feas,
         )
+        if auto_sign:
+            sign_contract(conn, cid)
         created.append(cid)
     return created
 

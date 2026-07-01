@@ -1369,3 +1369,25 @@ CREATE INDEX IF NOT EXISTS idx_flux_twin_weekly
     ON flux_twin_states (weekly_id);
 CREATE INDEX IF NOT EXISTS idx_flux_twin_day
     ON flux_twin_states (snapshot_day);
+
+-- ---------------------------------------------------------------------
+-- V13.E — Dossier de faisabilité TOC persisté par candidate
+-- ---------------------------------------------------------------------
+-- Table renseignée par compute_smoothing() quand smoothing_toc_aware=1.
+-- Lue par wire_zone_negociable_after_promotion() pour enrichir les
+-- demand_contracts avec les cibles doctrinales.
+CREATE TABLE IF NOT EXISTS flux_candidate_feasibility (
+    candidate_id            TEXT PRIMARY KEY
+        REFERENCES candidate_orders(candidate_id),
+    bottleneck_ws           TEXT,
+    goulot_load_min         REAL,
+    goulot_slot_day         INTEGER,
+    launch_day              INTEGER,
+    buffer_days             INTEGER,
+    charge_total_min        REAL,
+    takt_min_per_unit_target REAL,
+    wip_predicted           REAL,
+    rho_bottleneck_run      REAL,
+    feasible                INTEGER NOT NULL DEFAULT 1,
+    computed_at             TEXT NOT NULL DEFAULT (datetime('now'))
+);

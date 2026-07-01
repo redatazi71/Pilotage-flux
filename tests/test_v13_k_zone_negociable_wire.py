@@ -105,6 +105,58 @@ def test_create_demand_contracts_idempotent(tmp_db):
         assert len(second) == 0
 
 
+def test_auto_sign_by_default(tmp_db):
+    """Par défaut, contrat créé = doc_status 'signed' immédiatement."""
+    from pilotage_flux.flux.demand_contract import get_demand_contract
+    with db_session(tmp_db) as conn:
+        _seed_calendar(conn)
+        _seed_so_and_promoted_candidate(
+            conn, "SO-1", "ART-A", 100, "2026-07-15", "CAND-1",
+        )
+        [cid] = create_demand_contracts_for_promoted(conn)
+        contract = get_demand_contract(conn, cid)
+        assert contract.flux_doc_status == "signed"
+
+
+def test_auto_sign_can_be_disabled(tmp_db):
+    from pilotage_flux.flux.demand_contract import get_demand_contract
+    with db_session(tmp_db) as conn:
+        _seed_calendar(conn)
+        _seed_so_and_promoted_candidate(
+            conn, "SO-1", "ART-A", 100, "2026-07-15", "CAND-1",
+        )
+        [cid] = create_demand_contracts_for_promoted(conn, auto_sign=False)
+        contract = get_demand_contract(conn, cid)
+        assert contract.flux_doc_status == "draft"
+
+
+def test_feasibility_from_db_used_when_available(tmp_db):
+    """Si feasibility persistée dans flux_candidate_feasibility, elle
+    enrichit le contrat créé."""
+    from pilotage_flux.flux.demand_contract import get_demand_contract
+    with db_session(tmp_db) as conn:
+        _seed_calendar(conn)
+        _seed_so_and_promoted_candidate(
+            conn, "SO-1", "ART-A", 100, "2026-07-15", "CAND-1",
+        )
+        conn.execute(
+            """INSERT INTO flux_candidate_feasibility
+                (candidate_id, bottleneck_ws, goulot_load_min,
+                 goulot_slot_day, launch_day, buffer_days,
+                 charge_total_min, takt_min_per_unit_target,
+                 wip_predicted, rho_bottleneck_run, feasible)
+               VALUES ('CAND-1', 'WS-3', 400, 5, 3, 2, 1200, 12.0, 8.5,
+                        0.83, 1)"""
+        )
+        [cid] = create_demand_contracts_for_promoted(conn)
+        contract = get_demand_contract(conn, cid)
+        assert contract.bottleneck_ws == "WS-3"
+        assert contract.takt_target_min == 12.0
+        assert contract.wip_target == 8.5
+        assert contract.rho_bottleneck == 0.83
+        assert contract.feasible is True
+
+
 def test_ensure_weekly_contracts_for_horizon(tmp_db):
     """2 demand_contracts sur 2 semaines différentes → 2 weekly."""
     with db_session(tmp_db) as conn:

@@ -35,6 +35,7 @@ from pilotage_flux.aps import (
 )
 from pilotage_flux.db import db_session, init_schema
 from pilotage_flux.events_v3 import (
+    apply_cpm_absorption,
     attach_causes_to_deviation,
     capture_recipe,
     evaluate_all_open_deviations,
@@ -2182,8 +2183,9 @@ def run_event_doctrine(
             _measure_wip(conn, result, day)
             _v13k_snapshot_if_enabled(conn, scenario, day, result)
 
-            # Détection continue : match → causes → décision dual tolérance
+            # Détection continue : match → CPM absorption → causes → tolérance
             match_actuals_to_expected(conn, batch_id)
+            apply_cpm_absorption(conn, batch_id=batch_id)
             for d in list_deviations(conn):
                 if not d.is_absorbed:
                     attach_causes_to_deviation(conn, d.deviation_id)

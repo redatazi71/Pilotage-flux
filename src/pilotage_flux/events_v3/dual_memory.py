@@ -424,6 +424,139 @@ def try_memory_shortcut(
     return str(row["action_level"])
 
 
+def apply_learning_feedback(
+    conn: sqlite3.Connection,
+    *,
+    min_recurrence: int = 3,
+    max_drift_ratio: float = 0.15,
+) -> list[MemoryDecision]:
+    """Défaut 7 — Remonte l'apprentissage vers les paramètres actifs.
+
+    Boucle longue de la gestion événementielle : à partir des recettes
+    retenues (V13.C skip-latency), propose et applique des ajustements
+    des paramètres data-driven utilisés en zone négociable (lissage,
+    CPM, tolérances) et zone libre (ATP/CTP).
+
+    Règle :
+      - Pour chaque signature retenue >= min_recurrence fois :
+          - Si tous outcomes success : resserre le seuil correspondant
+            de 5 % (le système peut détecter plus tôt sans faux positifs).
+          - Si tous outcomes failure : assouplit le seuil de 5 %.
+      - Le drift cumulatif d'un paramètre est capé à max_drift_ratio
+        (défaut 15 %) pour éviter la dérive incontrôlée.
+
+    Mapping deviation_kind → paramètre cible :
+      - time_delta       → tolerance_threshold_correct_local
+      - qty_delta        → tolerance_threshold_replan_local
+      - missing_actual   → cpm_margin_minutes
+      - unexpected_actual → tolerance_threshold_watch
+    """
+    kind_to_param = {
+        "time_delta": "tolerance_threshold_correct_local",
+        "qty_delta": "tolerance_threshold_replan_local",
+        "missing_actual": "cpm_margin_minutes",
+        "unexpected_actual": "tolerance_threshold_watch",
+    }
+    decisions: list[MemoryDecision] = []
+    # Récupère les signatures avec >= min_recurrence recettes retenues
+    rows = conn.execute(
+        """
+        SELECT deviation_kind, action_level,
+               COUNT(*) AS n,
+               SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) AS n_success,
+               SUM(CASE WHEN outcome = 'failure' THEN 1 ELSE 0 END) AS n_failure
+        FROM memory_recipes
+        WHERE is_retained = 1
+          AND deviation_kind IS NOT NULL
+        GROUP BY deviation_kind, action_level
+        HAVING COUNT(*) >= ?
+        """,
+        (min_recurrence,),
+    ).fetchall()
+
+    for row in rows:
+        kind = row["deviation_kind"]
+        n = int(row["n"])
+        n_success = int(row["n_success"] or 0)
+        n_failure = int(row["n_failure"] or 0)
+        param = kind_to_param.get(kind)
+        if param is None:
+            continue
+
+        # Direction de l'ajustement
+        if n_success == n:
+            drift = -0.05  # resserre (seuil plus bas)
+        elif n_failure == n:
+            drift = 0.05   # assouplit (seuil plus haut)
+        else:
+            continue  # mix outcomes → pas d'ajustement
+
+        # Lit la valeur courante
+        cur = conn.execute(
+            "SELECT value_num FROM parameters "
+            "WHERE scope='global' AND scope_ref IS NULL AND name = ? "
+            "ORDER BY version DESC LIMIT 1",
+            (param,),
+        ).fetchone()
+        if cur is None or cur["value_num"] is None:
+            continue
+        old_value = float(cur["value_num"])
+
+        # Cap le drift cumulatif : compare la nouvelle valeur à la
+        # valeur "originale" (première version enregistrée du param)
+        orig_cur = conn.execute(
+            "SELECT value_num FROM parameters "
+            "WHERE scope='global' AND scope_ref IS NULL AND name = ? "
+            "ORDER BY version ASC LIMIT 1",
+            (param,),
+        ).fetchone()
+        orig_value = float(orig_cur["value_num"]) if orig_cur else old_value
+        new_value = old_value * (1.0 + drift)
+        max_drift = orig_value * (1.0 + max_drift_ratio)
+        min_drift = orig_value * (1.0 - max_drift_ratio)
+        if new_value > max_drift or new_value < min_drift:
+            continue  # hors budget
+
+        # Update param + trace décision via un des recipes de cette
+        # signature (pour cohérence FK)
+        recipe_row = conn.execute(
+            "SELECT recipe_id FROM memory_recipes "
+            "WHERE is_retained = 1 AND deviation_kind = ? "
+            "LIMIT 1",
+            (kind,),
+        ).fetchone()
+        if recipe_row is None:
+            continue
+        recipe_id = int(recipe_row["recipe_id"])
+
+        conn.execute(
+            "UPDATE parameters SET value_num = ? "
+            "WHERE scope='global' AND scope_ref IS NULL AND name = ?",
+            (new_value, param),
+        )
+        cur_dec = conn.execute(
+            """
+            INSERT INTO memory_filter_decisions
+                (recipe_id, decision, parameter_updated,
+                 old_value, new_value, explanation)
+            VALUES (?, 'update_rule', ?, ?, ?, ?)
+            """,
+            (recipe_id, param, old_value, new_value,
+             f"boucle longue: kind={kind}, n={n}, "
+             f"success={n_success}, failure={n_failure}"),
+        )
+        decisions.append(
+            _row_decision(
+                conn.execute(
+                    "SELECT * FROM memory_filter_decisions "
+                    "WHERE decision_id = ?",
+                    (cur_dec.lastrowid,),
+                ).fetchone()
+            )
+        )
+    return decisions
+
+
 def list_recipes(
     conn: sqlite3.Connection,
     *,

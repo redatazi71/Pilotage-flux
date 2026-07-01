@@ -426,6 +426,9 @@ class HazardState:
     breakdown_ws: dict[str, int] = field(default_factory=dict)
     # workstation_id -> nb jours restants de slowdown
     breakdown_factor: dict[str, float] = field(default_factory=dict)
+    logistic_ws: set[str] = field(default_factory=set)
+    # WS bloqués par HAZARD_LOGISTIC_DELAY : delay_days = breakdown_ws[ws]
+    # (jours restants du blocage), pas (factor-1)*2.
     pending_nc_scrap: float = 0.0
     # qty additionnelle de scrap à appliquer au prochain op (cumulée NC en cascade)
     nc_count: int = 0
@@ -559,6 +562,7 @@ def _apply_hazard(
         # détectable dans les KPIs sans diviser par zéro.
         state.breakdown_ws[ws] = block_days
         state.breakdown_factor[ws] = 99.0
+        state.logistic_ws.add(ws)
         result.hazards_observed.append(
             {"day": hazard.day, "kind": kind, "workstation_id": ws,
              "block_days": block_days}
@@ -933,6 +937,7 @@ def _apply_corrective_actions(
         for ws in list(state.breakdown_ws.keys()):
             state.breakdown_ws.pop(ws, None)
             state.breakdown_factor.pop(ws, None)
+            state.logistic_ws.discard(ws)
             result.corrective_actions_applied.append({
                 "day": day,
                 "decision_id": decision_ref,
@@ -1042,6 +1047,7 @@ def _decay_breakdowns(state: HazardState) -> None:
     for ws in expired:
         state.breakdown_ws.pop(ws, None)
         state.breakdown_factor.pop(ws, None)
+        state.logistic_ws.discard(ws)
     for ws in list(state.breakdown_ws):
         state.breakdown_ws[ws] -= 1
 
@@ -1333,7 +1339,12 @@ def _advance_one_day(
             # Effet panne : retard proportionnel au slowdown_factor.
             # factor=1.5 -> +1 jour ; factor=2.0 -> +2 jours ; factor=3.0 -> +3 jours.
             factor = state.breakdown_factor.get(ws, 1.5)
-            delay_days = max(1, int(round((factor - 1.0) * 2)))
+            if ws in state.logistic_ws:
+                # LOGISTIC_DELAY : delay = jours restants du blocage
+                # (block_days est stocké dans breakdown_ws pour le décompte).
+                delay_days = max(1, state.breakdown_ws[ws])
+            else:
+                delay_days = max(1, int(round((factor - 1.0) * 2)))
             end_day = day + delay_days
             qty_good, qty_scrap, pending_scrap = _compute_op_qty_good_scrap(
                 conn, of_id, op, qty, pending_scrap, compounding=compounding,
@@ -1375,7 +1386,10 @@ def _advance_one_day(
             close_day = day
             if ws in state.breakdown_ws:
                 factor = state.breakdown_factor.get(ws, 1.5)
-                close_day = day + max(1, int(round((factor - 1.0) * 2)))
+                if ws in state.logistic_ws:
+                    close_day = day + max(1, state.breakdown_ws[ws])
+                else:
+                    close_day = day + max(1, int(round((factor - 1.0) * 2)))
             _close_of_at_day(
                 conn, of_id, horizon_start=scenario.horizon_start,
                 day=close_day, actor=actor,

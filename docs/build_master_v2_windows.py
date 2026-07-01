@@ -42,10 +42,8 @@ from pilotage_flux.comparative.resilience import compute_time_to_recover
 from pilotage_flux.comparative.runner import run_doctrine
 from pilotage_flux.comparative.scenario import (
     DOCTRINE_EVENT,
-    DOCTRINE_EVENT_BCE,
     DOCTRINE_OF,
     DOCTRINE_OF_EVENT,
-    DOCTRINE_OF_EVENT_BCE,
     HAZARD_BREAKDOWN,
     HAZARD_LOGISTIC_DELAY,
     HAZARD_PO_DELAY,
@@ -94,9 +92,9 @@ CONFIGS = [
     ("OF",              DOCTRINE_OF),
     ("OF+EVENT",        DOCTRINE_OF_EVENT),
     ("FLUX+EVENT",      DOCTRINE_EVENT),
-    ("OF+EVENT+BCE",    DOCTRINE_OF_EVENT_BCE),
-    ("FLUX+EVENT+BCE",  DOCTRINE_EVENT_BCE),
 ]
+# Note : BCE (DOCTRINE_OF_EVENT_BCE, DOCTRINE_EVENT_BCE) exclu du
+# protocole master v2 — sujet non prioritaire.
 
 SEED_BASE = 10000
 
@@ -468,17 +466,7 @@ def main() -> int:
                         help="Nombre de processes parallèles "
                              "(défaut 1 = séquentiel). Recommandation : "
                              "os.cpu_count() - 1")
-    parser.add_argument("--no-bce", action="store_true",
-                        help="Exclut les configs BCE : 3 doctrines "
-                             "seulement (OF / OF+EVENT / FLUX+EVENT)")
     args = parser.parse_args()
-
-    # --no-bce : filtre CONFIGS globalement (pour --resume compat)
-    global CONFIGS
-    if args.no_bce:
-        CONFIGS = [c for c in CONFIGS if "BCE" not in c[0]]
-        print(f"[--no-bce] {len(CONFIGS)} configs actives : "
-              f"{[c[0] for c in CONFIGS]}", flush=True)
 
     if args.workers < 1:
         args.workers = 1

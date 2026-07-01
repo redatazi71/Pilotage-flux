@@ -2095,6 +2095,16 @@ def run_event_doctrine(
         "tolerance_threshold_replan_local": 1.00,
         "tolerance_threshold_escalate": 2.00,
         "tolerance_threshold_replan_global": 3.50,
+        # Activation des flags de lissage — FLUX+EVENT doctrine complète
+        # (DBR TOC-aware + capacity ≤ 85 % + due date + BOM topo + SLACK)
+        "smoothing_capacity_aware": 1.0,
+        "smoothing_toc_aware": 1.0,
+        "smoothing_due_date_aware": 1.0,
+        "smoothing_horizon_aware": 1.0,
+        "smoothing_cpm_aware": 1.0,
+        "smoothing_slack_ordering": 1.0,
+        "smoothing_bom_topo": 1.0,
+        "smoothing_target_saturation": 0.85,
     }
     # Pour les pilotages BCE : profil doctrinal CONSERVATIVE qui
     # favorise l'absorption (N1/N2) plutôt que la replanification

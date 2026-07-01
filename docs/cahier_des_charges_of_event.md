@@ -338,10 +338,39 @@ avec les champs :
 | `score` | Magnitude normalisée [0..1] |
 | `is_absorbed` | Absorbée par CPM (marge slack) |
 
-#### EF-16 — Analyse causes
+#### EF-16 — Matrice d'analyse des causes racines
 
-Pour chaque déviation non absorbée, le moteur attache les causes
-racines candidates (rule-based : R-RC-XX) avec score de vraisemblance.
+Le système entretient une **matrice de règles de causes racines**
+(rule-based) associant chaque `deviation_kind` à un ensemble de causes
+candidates, avec score de vraisemblance.
+
+**Modèle de données :**
+
+| Objet | Description |
+|---|---|
+| `cause_rules` | Table des règles R-RC-XX (id, kind cible, expression prédicat, score de base, active) |
+| `event_deviation_causes` | Liaison déviation ↔ cause avec score final calculé |
+| `top_causes_across_deviations` | Agrégat matriciel pour le RETEX (cf. §2.15) |
+
+**Comportement :**
+
+- Pour chaque déviation non absorbée, `attach_causes_to_deviation`
+  parcourt la matrice et attache toutes les causes actives dont le
+  prédicat s'évalue à vrai.
+- Le score final tient compte du contexte (heure, workstation,
+  historique) via le prédicat de la règle.
+- La matrice est **paramétrable** (ajout / désactivation de règles
+  R-RC-XX sans redéploiement).
+- Le RETEX (§2.15) exploite `top_causes_across_deviations` pour
+  identifier les patterns récurrents.
+
+**Note d'implémentation** : `apply_cpm_absorption` (module
+`events_v3/cpm.py`) est défini mais **n'est actuellement pas invoqué
+dans le runner** ; le champ `event_deviations.is_absorbed` reste
+donc systématiquement à `false`. Cette pré-filtre CPM (absorption
+des petits deltas dans la marge de slack) est à re-wire dans le
+runner pour être fonctionnellement actif ; c'est un point technique
+à corriger dans la phase déploiement.
 
 #### EF-17 — Filtre dual de tolérances
 
@@ -982,6 +1011,95 @@ avec 8 aléas et 5 seeds, il maintient :
 
 Chaque module doit passer ses tests unitaires + tests d'acceptation
 (voir user stories associées, `user_stories_of_event.md`).
+
+## 6bis. Roadmap incrémentale de déploiement (Étapes 0 à 5)
+
+L'implantation de la couche de gestion événementielle est **découpée
+en 6 étapes** (0 à 5) qui livrent chacune une valeur mesurable et
+constituent des points de sortie possibles selon le ROI observé.
+
+Cette progression est validée par l'étude expérimentale de
+composition additive : chaque étape ajoute une brique et le passage
+Étape 0 → Étape 1 capture à lui seul ~90 % du gain nervosité mesuré.
+
+**Note terminologique** : ces étapes de déploiement (0-5) ne doivent
+pas être confondues avec les gates doctrinales P1-P4 (promotion,
+lissage, freeze, clôture) qui constituent le cycle interne d'une
+demande.
+
+### Étape 0 — Baseline OF pur
+
+- **Livrable** : mesures QCDS de référence sur ligne existante.
+- **Valeur** : identifier écart avec objectifs cibles.
+- **Coût** : nul (état actuel).
+- **Durée** : 2-4 semaines de mesure.
+
+### Étape 1 — Event capture + boucle physique corrective
+
+- **Livrable** : capture continue expected/actual + boucle
+  `_apply_corrective_actions` (L5.2 + L8.1).
+- **Valeur** : ~ **90 % du gain final** en nervosité (−80 %) ;
+  base pour toutes les étapes suivantes.
+- **Coût** : enrichissement MES (start/finish OP, saisie NC),
+  formation opérateurs.
+- **Durée** : 8-12 semaines.
+
+### Étape 2 — Filtre dual tolérances (data-driven)
+
+- **Livrable** : filtre dual `evaluate_dual_tolerance` avec seuils
+  calibrés en table `parameters` ; actions correct_local /
+  replan_local wireées.
+- **Valeur** : **Δ€/u −4 %**, ΔOTIF +0.4 pp (mesuré ablation × 4
+  niveaux stress).
+- **Coût** : calibration seuils avec équipe planification ; UX
+  planificateur pour surcharger action.
+- **Durée** : 4-6 semaines.
+
+### Étape 3 — Matrice causes racines + apprentissage boucle longue
+
+- **Livrable** : base R-RC-XX (règles), UI consultation matrice,
+  `update_parameter_from_learning` gouverné.
+- **Valeur** : capitalisation RETEX ; suggestions d'ajustement
+  paramètres data-driven.
+- **Coût** : constitution base de règles ; gouvernance MDM sur les
+  paramètres actifs.
+- **Durée** : 6-8 semaines.
+
+### Étape 4 — Filtre dual mémoire + V13.C skip-latency
+
+- **Livrable** : capture P4 systématique, `try_memory_shortcut`
+  actif sous flag.
+- **Valeur** : préparation maturité data-driven long terme
+  (bénéfice marginal en volume court, mesurable après 6-12 mois
+  d'exploitation).
+- **Coût** : volumétrie historique ; gouvernance des recettes
+  retenues.
+- **Durée** : 4 semaines + montée en charge.
+
+### Étape 5 — Delta engine + matrice sélecteur d'algo
+
+- **Livrable** : `delta_engine` de V12.3 (deltas + queue
+  d'approbation) + matrice sélecteur V12.5 (fast / balanced /
+  quality).
+- **Valeur** : automatisation des approbations pour actions
+  répétitives ; adaptation profil algo au contexte.
+- **Coût** : workflow humain / audit log ; formation superviseurs.
+- **Durée** : 6-8 semaines.
+
+### Tableau récapitulatif ROI par étape
+
+| Étape | Valeur cumulée | Coût | Durée | Point d'arrêt possible |
+|:-:|---|:-:|:-:|:-:|
+| 0 | Mesure baseline | Nul | 2-4 sem | — |
+| **1** | **−80 % nervosité** | Fort | 8-12 sem | Non (fondation) |
+| 2 | −4 % €/u | Moyen | 4-6 sem | Oui si ROI atteint |
+| 3 | RETEX + amélioration continue | Moyen | 6-8 sem | Oui |
+| 4 | Maturité data-driven | Faible | 4 sem+ | Oui |
+| 5 | Automatisation avancée | Moyen | 6-8 sem | Oui |
+
+Étape 1 est **impérative** ; les étapes 2 à 5 sont **capitalisables
+indépendamment** et peuvent être livrées selon la maturité de
+l'organisation.
 
 ## 7. Hors périmètre et roadmap V2
 

@@ -35,6 +35,7 @@ from pilotage_flux.aps import (
 )
 from pilotage_flux.db import db_session, init_schema
 from pilotage_flux.events_v3 import (
+    apply_cpm_absorption,
     attach_causes_to_deviation,
     capture_recipe,
     evaluate_all_open_deviations,
@@ -2094,6 +2095,16 @@ def run_event_doctrine(
         "tolerance_threshold_replan_local": 1.00,
         "tolerance_threshold_escalate": 2.00,
         "tolerance_threshold_replan_global": 3.50,
+        # Activation des flags de lissage — FLUX+EVENT doctrine complète
+        # (DBR TOC-aware + capacity ≤ 85 % + due date + BOM topo + SLACK)
+        "smoothing_capacity_aware": 1.0,
+        "smoothing_toc_aware": 1.0,
+        "smoothing_due_date_aware": 1.0,
+        "smoothing_horizon_aware": 1.0,
+        "smoothing_cpm_aware": 1.0,
+        "smoothing_slack_ordering": 1.0,
+        "smoothing_bom_topo": 1.0,
+        "smoothing_target_saturation": 0.85,
     }
     # Pour les pilotages BCE : profil doctrinal CONSERVATIVE qui
     # favorise l'absorption (N1/N2) plutôt que la replanification
@@ -2182,8 +2193,9 @@ def run_event_doctrine(
             _measure_wip(conn, result, day)
             _v13k_snapshot_if_enabled(conn, scenario, day, result)
 
-            # Détection continue : match → causes → décision dual tolérance
+            # Détection continue : match → CPM absorption → causes → tolérance
             match_actuals_to_expected(conn, batch_id)
+            apply_cpm_absorption(conn, batch_id=batch_id)
             for d in list_deviations(conn):
                 if not d.is_absorbed:
                     attach_causes_to_deviation(conn, d.deviation_id)

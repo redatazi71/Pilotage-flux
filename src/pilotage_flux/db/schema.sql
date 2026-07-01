@@ -1316,3 +1316,56 @@ CREATE INDEX IF NOT EXISTS idx_weekly_flux_year_week
     ON weekly_flux_contracts (year_iso, week_iso);
 CREATE INDEX IF NOT EXISTS idx_weekly_flux_lines_contract
     ON weekly_flux_contract_lines (contract_id);
+
+-- ---------------------------------------------------------------------
+-- V13.J — Jumeau numérique 5 flux (snapshot par contrat hebdo × jour)
+-- ---------------------------------------------------------------------
+-- État capturé à un instant t (jour de simulation) pour un contrat de
+-- flux hebdomadaire. Persiste l'état des 5 flux au sens VSM :
+--   1. Physique      = WIP réel + OFs en cours + livrés cumulés
+--   2. Informationnel = event sourcing (deviations, actions, causes)
+--   3. Décisionnel   = décisions replan / escalades humaines
+--   4. Documentaire  = état contractuel (draft/signed/closed)
+--   5. Qualité       = scrap cumulé, NCs, yield moyen
+--
+-- Persistance : 1 ligne par (weekly_id, snapshot_day). Permet :
+--   - Audit post-mortem (comment le contrat s'est comporté jour par jour)
+--   - Détection de dérives précoces (écart vs cible)
+--   - Replay / analyse contre-factuelle
+CREATE TABLE IF NOT EXISTS flux_twin_states (
+    twin_state_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    weekly_id               TEXT NOT NULL
+        REFERENCES weekly_flux_contracts(weekly_id),
+    snapshot_day            INTEGER NOT NULL,       -- jour horizon (0..H)
+    snapshot_date           TEXT NOT NULL,          -- ISO YYYY-MM-DD
+    -- Flux 1 — Physique
+    physical_wip_actual         REAL DEFAULT 0,
+    physical_ofs_running        INTEGER DEFAULT 0,
+    physical_ofs_closed         INTEGER DEFAULT 0,
+    physical_units_delivered    REAL DEFAULT 0,
+    -- Flux 2 — Informationnel (event sourcing)
+    info_deviations_detected    INTEGER DEFAULT 0,
+    info_actions_triggered      INTEGER DEFAULT 0,
+    info_causes_attached        INTEGER DEFAULT 0,
+    -- Flux 3 — Décisionnel
+    decision_correct_local      INTEGER DEFAULT 0,
+    decision_replan_local       INTEGER DEFAULT 0,
+    decision_replan_global      INTEGER DEFAULT 0,
+    decision_escalate_human     INTEGER DEFAULT 0,
+    -- Flux 4 — Documentaire
+    doc_contracts_draft         INTEGER DEFAULT 0,
+    doc_contracts_signed        INTEGER DEFAULT 0,
+    doc_contracts_closed        INTEGER DEFAULT 0,
+    -- Flux 5 — Qualité
+    quality_scrap_cumul         REAL DEFAULT 0,
+    quality_nc_count            INTEGER DEFAULT 0,
+    quality_yield_rate          REAL,               -- ratio qty_good/total
+    -- Métadata
+    created_at                  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (weekly_id, snapshot_day)
+);
+
+CREATE INDEX IF NOT EXISTS idx_flux_twin_weekly
+    ON flux_twin_states (weekly_id);
+CREATE INDEX IF NOT EXISTS idx_flux_twin_day
+    ON flux_twin_states (snapshot_day);

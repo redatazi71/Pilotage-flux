@@ -1,55 +1,55 @@
 {
-  "done": 100,
+  "done": 120,
   "total": 120,
   "crashed": 0,
-  "progress_pct": 0.8333333333333334,
-  "elapsed_seconds": 663.5773696899414,
-  "eta_seconds": 132.7154739379883,
+  "progress_pct": 1.0,
+  "elapsed_seconds": 941.121098279953,
+  "eta_seconds": 0.0,
   "current": {
-    "level": "extreme+",
+    "level": "rupture",
     "shock": "supply_heavy",
     "seed": 10000
   },
   "stats_by_config": {
     "OF": {
-      "n": 20,
-      "otif_mean": 0.944885,
-      "cost_per_u_mean": 112.359,
-      "wip_sd_mean": 10.163678118302066,
-      "nervousness_mean": 0.1596,
-      "rupture_pct_mean": 0.0
+      "n": 24,
+      "otif_mean": 0.9419383675,
+      "cost_per_u_mean": 113.87416666666667,
+      "wip_sd_mean": 11.51159017567443,
+      "nervousness_mean": 0.17099999999999999,
+      "rupture_pct_mean": 0.002065483476132191
     },
     "OF+EVENT": {
-      "n": 20,
-      "otif_mean": 0.947055,
-      "cost_per_u_mean": 108.326,
-      "wip_sd_mean": 10.143637216165178,
-      "nervousness_mean": 0.02215,
-      "rupture_pct_mean": 0.0
+      "n": 24,
+      "otif_mean": 0.9447802591666666,
+      "cost_per_u_mean": 108.85291666666667,
+      "wip_sd_mean": 11.498197441767696,
+      "nervousness_mean": 0.020083333333333335,
+      "rupture_pct_mean": 0.002065483476132191
     },
     "FLUX+EVENT": {
-      "n": 20,
-      "otif_mean": 0.9440664335,
-      "cost_per_u_mean": 80.745,
-      "wip_sd_mean": 6.9015940592887,
-      "nervousness_mean": 0.02215,
-      "rupture_pct_mean": 0.0032795698924731184
+      "n": 24,
+      "otif_mean": 0.9425510729166666,
+      "cost_per_u_mean": 84.22625000000001,
+      "wip_sd_mean": 8.177705504621647,
+      "nervousness_mean": 0.020083333333333335,
+      "rupture_pct_mean": 0.004798458386526456
     },
     "OF+EVENT+BCE": {
-      "n": 20,
-      "otif_mean": 0.947055,
-      "cost_per_u_mean": 108.326,
-      "wip_sd_mean": 10.143637216165178,
-      "nervousness_mean": 0.02215,
-      "rupture_pct_mean": 0.0
+      "n": 24,
+      "otif_mean": 0.9447802591666666,
+      "cost_per_u_mean": 108.85291666666667,
+      "wip_sd_mean": 11.498197441767696,
+      "nervousness_mean": 0.020083333333333335,
+      "rupture_pct_mean": 0.002065483476132191
     },
     "FLUX+EVENT+BCE": {
-      "n": 20,
-      "otif_mean": 0.9440664335,
-      "cost_per_u_mean": 80.4755,
-      "wip_sd_mean": 6.9015940592887,
-      "nervousness_mean": 0.02215,
-      "rupture_pct_mean": 0.0032795698924731184
+      "n": 24,
+      "otif_mean": 0.9425510729166666,
+      "cost_per_u_mean": 83.835,
+      "wip_sd_mean": 8.178569290369877,
+      "nervousness_mean": 0.020083333333333335,
+      "rupture_pct_mean": 0.004798458386526456
     }
   }
 }

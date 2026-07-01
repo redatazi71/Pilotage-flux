@@ -1199,3 +1199,195 @@ CREATE INDEX IF NOT EXISTS idx_delta_decisions_status
     ON delta_decisions (status);
 CREATE INDEX IF NOT EXISTS idx_delta_decisions_racine
     ON delta_decisions (racine_id, categorie_code);
+
+-- ---------------------------------------------------------------------
+-- V13.H — Contrats de production (zone négociable enrichie)
+-- ---------------------------------------------------------------------
+-- Un contrat de production est le lien entre une demande client (SO)
+-- et sa promesse de fabrication. Il enrichit le simple candidate_order
+-- avec les cibles doctrinales (takt, WIP, buffers), le dossier de
+-- faisabilité (charges/capa par WS, goulot identifié, ρ), et l'état
+-- des 5 flux (physique, info, décisionnel, documentaire, qualité).
+--
+-- Le contrat est créé lors de la promotion candidate → OF (P3 freeze).
+-- Il persiste après cette étape pour tracer les cibles et permettre
+-- l'audit doctrinal (takt réellement tenu vs cible, WIP écart, etc.).
+-- Note : la table `production_contracts` existante porte les PCs
+-- atomiques doctrine Goldilocks (T, Ep, Er, C, O) par of_op_id. La
+-- table `demand_contracts` ci-dessous est un niveau au-dessus : un
+-- contrat par SO/demande enrichi avec les cibles zone négociable
+-- (takt, WIP, bottleneck, appro, 5 flux). Différents concepts,
+-- articulés via candidate_id / of_id.
+CREATE TABLE IF NOT EXISTS demand_contracts (
+    contract_id         TEXT PRIMARY KEY,
+    sales_order_id      TEXT NOT NULL
+        REFERENCES sales_orders(sales_order_id),
+    candidate_id        TEXT REFERENCES candidate_orders(candidate_id),
+    article_id          TEXT NOT NULL REFERENCES articles(article_id),
+    quantity            REAL NOT NULL,
+    delivery_deadline   TEXT NOT NULL,
+    -- Cibles doctrinales (issues de V13.E feasibility)
+    takt_target_min     REAL,       -- min/unité (débit goulot cible)
+    wip_target          REAL,       -- unités (Little : throughput × cycle)
+    bottleneck_ws       TEXT,
+    buffer_days         INTEGER DEFAULT 2,
+    -- Dossier de faisabilité
+    charge_total_min    REAL,       -- charge totale toutes ops
+    charge_bottleneck_min REAL,     -- charge sur le goulot
+    capa_needed_min     REAL,       -- capa min requise sur le goulot
+    wip_predicted       REAL,       -- WIP prévu (Little)
+    rho_bottleneck      REAL,       -- saturation goulot du run (∈ [0,1])
+    feasible            INTEGER NOT NULL DEFAULT 0,
+        -- 0 = infeasible (charge > capa), 1 = ok
+    -- Approvisionnement (à date de création du contrat)
+    appro_status        TEXT,       -- 'ok' | 'partial' | 'missing'
+    -- État des 5 flux (jumeau numérique)
+    flux_physical_status    TEXT,   -- 'planned' | 'active' | 'closed'
+    flux_info_ready         INTEGER DEFAULT 0,
+        -- 1 = event sourcing prêt (dual_tolerance seuils calibrés)
+    flux_decision_status    TEXT,   -- 'auto' | 'human_review'
+    flux_doc_status         TEXT,   -- 'draft' | 'signed' | 'archived'
+    flux_quality_status     TEXT,   -- 'planned' | 'in_control' | 'nc'
+    -- Planning
+    scheduled_start_day INTEGER,
+    scheduled_end_day   INTEGER,
+    -- Traçabilité
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    signed_at           TEXT,       -- moment où le contrat est freezé
+    closed_at           TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_demand_contracts_so
+    ON demand_contracts (sales_order_id);
+CREATE INDEX IF NOT EXISTS idx_demand_contracts_candidate
+    ON demand_contracts (candidate_id);
+CREATE INDEX IF NOT EXISTS idx_demand_contracts_deadline
+    ON demand_contracts (delivery_deadline);
+CREATE INDEX IF NOT EXISTS idx_demand_contracts_feasible
+    ON demand_contracts (feasible);
+
+-- ---------------------------------------------------------------------
+-- V13.I — Contrats de flux hebdomadaires (agrégation demand_contracts)
+-- ---------------------------------------------------------------------
+-- Un contrat de flux hebdomadaire agrège les demand_contracts dont la
+-- livraison tombe dans la semaine ISO (year-week). Il porte les cibles
+-- doctrinales AGRÉGÉES : takt hebdo = Σ_qty / capa_goulot_semaine,
+-- WIP cible = Little agrégée, goulot du mix hebdo (recalculé).
+--
+-- La granularité hebdomadaire est le standard industriel (ISA-95 Level 4
+-- planning tactique = jour ↔ semaine). Sur horizon 60j = ~9 semaines,
+-- horizon 120j = ~17 semaines.
+CREATE TABLE IF NOT EXISTS weekly_flux_contracts (
+    weekly_id           TEXT PRIMARY KEY,       -- WFC-YYYYWW-xxx
+    year_iso            INTEGER NOT NULL,
+    week_iso            INTEGER NOT NULL,
+    week_start_date     TEXT NOT NULL,          -- lundi ISO YYYY-MM-DD
+    -- Cibles doctrinales AGRÉGÉES du mix hebdo
+    total_quantity      REAL NOT NULL,           -- Σ demand_contracts.qty
+    n_contracts         INTEGER NOT NULL,        -- nb demand_contracts
+    bottleneck_ws       TEXT,                    -- goulot dyn du mix hebdo
+    takt_target_min     REAL,                    -- Σ_capa / Σ_qty
+    wip_target          REAL,                    -- Little agrégée
+    rho_bottleneck      REAL,                    -- charge / capa goulot
+    feasible            INTEGER NOT NULL DEFAULT 0,
+    -- Capacité disponible sur le goulot semaine (min)
+    capa_goulot_week    REAL,                    -- daily_min × 5j × capa
+    -- Charge cumulée sur le goulot (min) pour ce mix hebdo
+    charge_goulot_week  REAL,
+    -- Statut du contrat hebdo (jumeau numérique 5 flux aggregé)
+    status              TEXT NOT NULL DEFAULT 'draft',
+        -- 'draft' | 'signed' | 'active' | 'closed' | 'renegotiated'
+    -- Traçabilité
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    signed_at           TEXT,
+    closed_at           TEXT
+);
+
+-- Lien N-N entre weekly_flux_contracts et demand_contracts.
+CREATE TABLE IF NOT EXISTS weekly_flux_contract_lines (
+    weekly_id           TEXT NOT NULL
+        REFERENCES weekly_flux_contracts(weekly_id),
+    contract_id         TEXT NOT NULL
+        REFERENCES demand_contracts(contract_id),
+    PRIMARY KEY (weekly_id, contract_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_weekly_flux_year_week
+    ON weekly_flux_contracts (year_iso, week_iso);
+CREATE INDEX IF NOT EXISTS idx_weekly_flux_lines_contract
+    ON weekly_flux_contract_lines (contract_id);
+
+-- ---------------------------------------------------------------------
+-- V13.J — Jumeau numérique 5 flux (snapshot par contrat hebdo × jour)
+-- ---------------------------------------------------------------------
+-- État capturé à un instant t (jour de simulation) pour un contrat de
+-- flux hebdomadaire. Persiste l'état des 5 flux au sens VSM :
+--   1. Physique      = WIP réel + OFs en cours + livrés cumulés
+--   2. Informationnel = event sourcing (deviations, actions, causes)
+--   3. Décisionnel   = décisions replan / escalades humaines
+--   4. Documentaire  = état contractuel (draft/signed/closed)
+--   5. Qualité       = scrap cumulé, NCs, yield moyen
+--
+-- Persistance : 1 ligne par (weekly_id, snapshot_day). Permet :
+--   - Audit post-mortem (comment le contrat s'est comporté jour par jour)
+--   - Détection de dérives précoces (écart vs cible)
+--   - Replay / analyse contre-factuelle
+CREATE TABLE IF NOT EXISTS flux_twin_states (
+    twin_state_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    weekly_id               TEXT NOT NULL
+        REFERENCES weekly_flux_contracts(weekly_id),
+    snapshot_day            INTEGER NOT NULL,       -- jour horizon (0..H)
+    snapshot_date           TEXT NOT NULL,          -- ISO YYYY-MM-DD
+    -- Flux 1 — Physique
+    physical_wip_actual         REAL DEFAULT 0,
+    physical_ofs_running        INTEGER DEFAULT 0,
+    physical_ofs_closed         INTEGER DEFAULT 0,
+    physical_units_delivered    REAL DEFAULT 0,
+    -- Flux 2 — Informationnel (event sourcing)
+    info_deviations_detected    INTEGER DEFAULT 0,
+    info_actions_triggered      INTEGER DEFAULT 0,
+    info_causes_attached        INTEGER DEFAULT 0,
+    -- Flux 3 — Décisionnel
+    decision_correct_local      INTEGER DEFAULT 0,
+    decision_replan_local       INTEGER DEFAULT 0,
+    decision_replan_global      INTEGER DEFAULT 0,
+    decision_escalate_human     INTEGER DEFAULT 0,
+    -- Flux 4 — Documentaire
+    doc_contracts_draft         INTEGER DEFAULT 0,
+    doc_contracts_signed        INTEGER DEFAULT 0,
+    doc_contracts_closed        INTEGER DEFAULT 0,
+    -- Flux 5 — Qualité
+    quality_scrap_cumul         REAL DEFAULT 0,
+    quality_nc_count            INTEGER DEFAULT 0,
+    quality_yield_rate          REAL,               -- ratio qty_good/total
+    -- Métadata
+    created_at                  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (weekly_id, snapshot_day)
+);
+
+CREATE INDEX IF NOT EXISTS idx_flux_twin_weekly
+    ON flux_twin_states (weekly_id);
+CREATE INDEX IF NOT EXISTS idx_flux_twin_day
+    ON flux_twin_states (snapshot_day);
+
+-- ---------------------------------------------------------------------
+-- V13.E — Dossier de faisabilité TOC persisté par candidate
+-- ---------------------------------------------------------------------
+-- Table renseignée par compute_smoothing() quand smoothing_toc_aware=1.
+-- Lue par wire_zone_negociable_after_promotion() pour enrichir les
+-- demand_contracts avec les cibles doctrinales.
+CREATE TABLE IF NOT EXISTS flux_candidate_feasibility (
+    candidate_id            TEXT PRIMARY KEY
+        REFERENCES candidate_orders(candidate_id),
+    bottleneck_ws           TEXT,
+    goulot_load_min         REAL,
+    goulot_slot_day         INTEGER,
+    launch_day              INTEGER,
+    buffer_days             INTEGER,
+    charge_total_min        REAL,
+    takt_min_per_unit_target REAL,
+    wip_predicted           REAL,
+    rho_bottleneck_run      REAL,
+    feasible                INTEGER NOT NULL DEFAULT 1,
+    computed_at             TEXT NOT NULL DEFAULT (datetime('now'))
+);

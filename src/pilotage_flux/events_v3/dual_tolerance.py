@@ -65,6 +65,7 @@ class ToleranceDecision:
     latency_minutes: int
     triggered_at: str | None
     decided_at: str
+    source: str = "tolerance"
 
 
 def _get_thresholds(conn: sqlite3.Connection) -> dict[str, float]:
@@ -114,6 +115,10 @@ def _count_similar_in_window(
 
 
 def _row(row: sqlite3.Row) -> ToleranceDecision:
+    try:
+        source = row["source"] or "tolerance"
+    except (KeyError, IndexError):
+        source = "tolerance"
     return ToleranceDecision(
         decision_id=int(row["decision_id"]),
         deviation_id=int(row["deviation_id"]),
@@ -125,6 +130,7 @@ def _row(row: sqlite3.Row) -> ToleranceDecision:
         latency_minutes=int(row["latency_minutes"]),
         triggered_at=row["triggered_at"],
         decided_at=row["decided_at"],
+        source=source,
     )
 
 
@@ -134,6 +140,11 @@ def evaluate_dual_tolerance(
     """Évalue le filtre dual sur une déviation et persiste la décision.
 
     Idempotent : si une décision existe déjà pour cette déviation, la retourne.
+
+    V13.C — Si `enable_dual_memory_skip_latency` = 1 et qu'une recette
+    apprise (retenue ≥ min_recurrence fois) existe pour ce
+    deviation_kind, on court-circuite le filtre dual : décision
+    persistée avec `source='memory_shortcut'`, latency_minutes=0.
     """
     existing = conn.execute(
         "SELECT * FROM tolerance_filter_decisions WHERE deviation_id = ?",
@@ -151,6 +162,35 @@ def evaluate_dual_tolerance(
     ).fetchone()
     if dev is None:
         raise ValueError(f"Déviation inconnue : {deviation_id}")
+
+    # V13.C — raccourci mémoire (skip latency) si flag activé
+    skip_flag = get_num(
+        conn, scope="global", scope_ref=None,
+        name="enable_dual_memory_skip_latency", default=0.0,
+    )
+    if skip_flag and float(skip_flag) >= 1.0 and not dev["is_absorbed"]:
+        from pilotage_flux.events_v3.dual_memory import try_memory_shortcut
+        learned = try_memory_shortcut(conn, deviation_id)
+        if learned is not None:
+            score = float(dev["score"]) if dev["score"] is not None else 0.0
+            cur = conn.execute(
+                """
+                INSERT INTO tolerance_filter_decisions
+                    (deviation_id, candidate_id, score_magnitude,
+                     frequency_in_window, score_combined, action_level,
+                     latency_minutes, triggered_at, source)
+                VALUES (?, ?, ?, 0, ?, ?, 0, datetime('now'),
+                        'memory_shortcut')
+                """,
+                (deviation_id, dev["candidate_id"], score, score, learned),
+            )
+            row = conn.execute(
+                "SELECT * FROM tolerance_filter_decisions "
+                "WHERE decision_id = ?",
+                (cur.lastrowid,),
+            ).fetchone()
+            return _row(row)
+
     if dev["is_absorbed"]:
         # Écart absorbé CPM → action = inform seulement
         action = ACTION_INFORM

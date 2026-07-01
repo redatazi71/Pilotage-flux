@@ -497,7 +497,10 @@ CREATE TABLE IF NOT EXISTS tolerance_filter_decisions (
         -- inform | watch | correct_local | replan_local | escalate | replan_global
     latency_minutes     INTEGER NOT NULL DEFAULT 0,
     triggered_at        TEXT,                    -- NULL = en attente (latence)
-    decided_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    decided_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    source              TEXT NOT NULL DEFAULT 'tolerance'
+        -- 'tolerance' (chemin normal filtre dual) | 'memory_shortcut'
+        --   (V13.C : recette apprise court-circuite l'analyse)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tolerance_filter_dev

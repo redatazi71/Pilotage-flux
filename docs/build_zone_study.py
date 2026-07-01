@@ -79,6 +79,15 @@ class ZonePoint:
     cost_baseline: float  # coût sans hazard
     amplification: float
     recovery_mean: float
+    # KPIs QCDS complets (pass supplémentaire)
+    otif_mean: float = 0.0  # quantity_compliance × dispo_so
+    q_compliance_mean: float = 0.0
+    dispo_so_mean: float = 0.0
+    wip_mean: float = 0.0
+    wip_sd: float = 0.0
+    cost_per_unit_mean: float = 0.0
+    of_closed_ratio: float = 0.0  # of_closed / of_total
+    nervousness_mean: float = 0.0
 
 
 def _build_zone_scenario(
@@ -163,8 +172,10 @@ def run_zone_matrix(fixtures_dir: Path, work_dir: Path) -> list[ZonePoint]:
     for domain in DOMAINS:
         for zone in ZONES:
             for d in doctrines:
-                costs = []
-                recs = []
+                costs, recs = [], []
+                otifs, qcs, disps = [], [], []
+                wips, wip_sds, cpus = [], [], []
+                closed_ratios, nervs = [], []
                 for seed in SEEDS:
                     scen = _build_zone_scenario(
                         seed, domain, zone, fixtures_dir,
@@ -182,16 +193,41 @@ def run_zone_matrix(fixtures_dir: Path, work_dir: Path) -> list[ZonePoint]:
                             result, shock_day=ZONE_TO_DAY[zone],
                         )
                     )
+                    qcs.append(k.quantity_compliance)
+                    disps.append(k.disponibility_so_level)
+                    otifs.append(
+                        k.quantity_compliance * k.disponibility_so_level
+                    )
+                    wips.append(k.wip_avg)
+                    wip_vals = list(result.daily_wip.values())
+                    wip_sds.append(
+                        statistics.stdev(wip_vals)
+                        if len(wip_vals) >= 2 else 0.0
+                    )
+                    cpus.append(k.cost_per_unit_delivered)
+                    if k.of_total > 0:
+                        closed_ratios.append(k.of_closed / k.of_total)
+                    nervs.append(k.nervousness)
                     done += 1
                 cost_mean = statistics.mean(costs) if costs else 0
                 base = baseline_mean[d]
                 amp = cost_mean / base if base > 0 else 0
-                rec = statistics.mean(recs) if recs else 0
                 points.append(ZonePoint(
                     doctrine=d, domain=domain, zone=zone,
                     n_runs=len(costs),
                     cost_mean=cost_mean, cost_baseline=base,
-                    amplification=amp, recovery_mean=rec,
+                    amplification=amp,
+                    recovery_mean=statistics.mean(recs) if recs else 0,
+                    otif_mean=statistics.mean(otifs) if otifs else 0,
+                    q_compliance_mean=statistics.mean(qcs) if qcs else 0,
+                    dispo_so_mean=statistics.mean(disps) if disps else 0,
+                    wip_mean=statistics.mean(wips) if wips else 0,
+                    wip_sd=statistics.mean(wip_sds) if wip_sds else 0,
+                    cost_per_unit_mean=statistics.mean(cpus) if cpus else 0,
+                    of_closed_ratio=(
+                        statistics.mean(closed_ratios) if closed_ratios else 0
+                    ),
+                    nervousness_mean=statistics.mean(nervs) if nervs else 0,
                 ))
             print(f"  ... {done}/{total}")
     return points
@@ -246,50 +282,50 @@ def chart_zone_heatmaps(points: list[ZonePoint], attr: str,
     print(f"✓ {CHARTS_DIR / filename}")
 
 
+def _table_by_kpi(points: list[ZonePoint], attr: str, fmt: str) -> list[str]:
+    """Génère les 4 tables (une par doctrine) pour un KPI donné."""
+    lines = []
+    for d in ["of", "flux", "of_event", "event"]:
+        lines.append(f"### Doctrine {DOCTRINE_LABELS[d]}")
+        lines.append("")
+        header = "| Zone | " + " | ".join(
+            DOMAIN_LABELS[dom] for dom in DOMAINS) + " |"
+        sep = "|---" * (len(DOMAINS) + 1) + "|"
+        lines.append(header)
+        lines.append(sep)
+        for zone in ZONES:
+            row = [ZONE_LABELS[zone]]
+            for domain in DOMAINS:
+                p = next((p for p in points if p.doctrine == d
+                          and p.zone == zone and p.domain == domain), None)
+                row.append(f"{getattr(p, attr):{fmt}}" if p else "—")
+            lines.append("| " + " | ".join(row) + " |")
+        lines.append("")
+    return lines
+
+
 def write_data_md(points: list[ZonePoint]) -> None:
     lines = ["# §24.10.3 — Étude par zone décisionnelle (données brutes)",
              "",
-             f"Horizon {HORIZON_DAYS}j, {len(SEEDS)} seeds par cellule, "
-             f"total {len(points) * len(SEEDS) + len(DOCTRINES) * len(SEEDS)} runs.",
-             "",
-             "## Amplification de coût (coût avec hazard / baseline sans hazard)",
+             f"Horizon {HORIZON_DAYS}j, {len(SEEDS)} seeds par cellule.",
              ""]
-    for d in ["of", "flux", "of_event", "event"]:
-        lines.append(f"### Doctrine {DOCTRINE_LABELS[d]}")
+    sections = [
+        ("Amplification de coût (coût / baseline sans hazard)",
+         "amplification", ".2f"),
+        ("Time-to-recover (jours)", "recovery_mean", ".1f"),
+        ("OTIF (Q compliance × dispo SO)", "otif_mean", ".3f"),
+        ("Quantity compliance (Q)", "q_compliance_mean", ".3f"),
+        ("Disponibilité SO (D)", "dispo_so_mean", ".3f"),
+        ("WIP moyen", "wip_mean", ".2f"),
+        ("WIP σ (stabilité)", "wip_sd", ".2f"),
+        ("Coût / unité livrée (€/u)", "cost_per_unit_mean", ".2f"),
+        ("OFs clôturés / créés", "of_closed_ratio", ".3f"),
+        ("Nervousness (aps_recalc / horizon)", "nervousness_mean", ".3f"),
+    ]
+    for title, attr, fmt in sections:
+        lines.append(f"## {title}")
         lines.append("")
-        header = "| Zone | " + " | ".join(
-            DOMAIN_LABELS[dom] for dom in DOMAINS) + " |"
-        sep = "|---" * (len(DOMAINS) + 1) + "|"
-        lines.append(header)
-        lines.append(sep)
-        for zone in ZONES:
-            row = [ZONE_LABELS[zone]]
-            for domain in DOMAINS:
-                p = next((p for p in points if p.doctrine == d
-                          and p.zone == zone and p.domain == domain), None)
-                row.append(f"{p.amplification:.2f}" if p else "—")
-            lines.append("| " + " | ".join(row) + " |")
-        lines.append("")
-
-    lines.append("## Time-to-recover (jours)")
-    lines.append("")
-    for d in ["of", "flux", "of_event", "event"]:
-        lines.append(f"### Doctrine {DOCTRINE_LABELS[d]}")
-        lines.append("")
-        header = "| Zone | " + " | ".join(
-            DOMAIN_LABELS[dom] for dom in DOMAINS) + " |"
-        sep = "|---" * (len(DOMAINS) + 1) + "|"
-        lines.append(header)
-        lines.append(sep)
-        for zone in ZONES:
-            row = [ZONE_LABELS[zone]]
-            for domain in DOMAINS:
-                p = next((p for p in points if p.doctrine == d
-                          and p.zone == zone and p.domain == domain), None)
-                row.append(f"{p.recovery_mean:.1f}" if p else "—")
-            lines.append("| " + " | ".join(row) + " |")
-        lines.append("")
-
+        lines.extend(_table_by_kpi(points, attr, fmt))
     DATA_MD.write_text("\n".join(lines), encoding="utf-8")
     print(f"✓ {DATA_MD}")
 

@@ -55,6 +55,75 @@ def _get_due_date_aware_flag(conn: sqlite3.Connection) -> bool:
     return bool(val and float(val) > 0.5)
 
 
+def _get_capacity_aware_flag(conn: sqlite3.Connection) -> bool:
+    """V13.D — Lit `smoothing_capacity_aware` (default 0).
+
+    1 = active le smoothing capacity-aware : cumul des charges par
+        WS × jour, placement earliest-first des candidates au premier
+        jour où le cumul de leur charge maintient la saturation
+        ≤ `smoothing_target_saturation` (default 0.85). Résout la
+        sous-production de FLUX/EVENT identifiée par §28.19.
+    0 = version historique (V1.4 linéaire aveugle).
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_capacity_aware", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _get_target_saturation(conn: sqlite3.Connection) -> float:
+    """V13.D — Cible de saturation pour le smoothing capacity-aware.
+
+    Default 0.85 (règle industrielle standard : 80-90 % pour éviter
+    l'explosion queueing tout en gardant la capacité utile).
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_target_saturation", default=0.85,
+    )
+    f = float(val) if val is not None else 0.85
+    return min(0.99, max(0.30, f))
+
+
+def _get_toc_aware_flag(conn: sqlite3.Connection) -> bool:
+    """V13.E — Lit `smoothing_toc_aware` (default 0).
+
+    1 = active le smoothing TOC (Théorie des Contraintes) :
+        - identification dynamique du goulot par ratio charge/capacité
+        - cadencement DBR (Drum-Buffer-Rope) sur le débit goulot
+        - buffer temporel amont (`smoothing_toc_buffer_days`) pour
+          absorber les perturbations avant le goulot
+        - takt time cible = capacité_goulot × target_saturation / total_qty
+        - produit un dossier de faisabilité par candidate
+
+    Implique smoothing_capacity_aware sémantiquement (les 2 flags
+    peuvent coexister ; TOC prend le pas).
+    0 = version V1.4 ou V13.D selon l'autre flag.
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_toc_aware", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _get_toc_buffer_days(conn: sqlite3.Connection) -> int:
+    """V13.E — Buffer temporel amont du goulot (`smoothing_toc_buffer_days`).
+
+    Default 2 jours (règle industrielle : 2× takt time typique).
+    Clamped [0, 10]. Le lancement du candidate est décalé
+    `buffer_days` jours avant le slot goulot pour absorber les
+    perturbations amont sans impacter le débit goulot.
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_toc_buffer_days", default=2.0,
+    )
+    b = int(val) if val is not None else 2
+    return min(10, max(0, b))
+
+
 def _get_horizon_aware_flag(conn: sqlite3.Connection) -> bool:
     """V12.7 — Lit le paramètre `smoothing_horizon_aware` (default 0).
 
@@ -383,6 +452,331 @@ def _compute_latest_start_horizon_minutes(
     return max(0, horizon_total_min - effective_duration)
 
 
+def _candidate_ws_loads(
+    conn: sqlite3.Connection, article_id: str, qty: float,
+) -> list[tuple[str, float]]:
+    """Retourne [(ws, minutes_de_travail_machine), ...] pour ce candidate,
+    dans l'ordre du routing. Charge = qty × unit_time (temps machine
+    brut, sans division par capa). La capa est appliquée côté budget
+    (capacité disponible par jour), pas côté charge."""
+    rows = conn.execute(
+        """SELECT workstation_id, unit_time_min
+           FROM routing_operations
+           WHERE article_id = ?
+           ORDER BY sequence_idx ASC""",
+        (article_id,),
+    ).fetchall()
+    out: list[tuple[str, float]] = []
+    for r in rows:
+        ws = r["workstation_id"]
+        load = float(r["unit_time_min"]) * qty
+        out.append((ws, load))
+    return out
+
+
+def _daily_minutes(conn: sqlite3.Connection) -> int:
+    """Lit le calendrier par défaut ; fallback 480 (1×8h) si absent."""
+    row = conn.execute(
+        "SELECT daily_minutes FROM calendars LIMIT 1"
+    ).fetchone()
+    if row and row["daily_minutes"]:
+        return int(row["daily_minutes"])
+    return 480
+
+
+def _candidate_due_offset_min(
+    conn: sqlite3.Connection, candidate_id: str, horizon_start: str,
+    fallback_min: int,
+) -> int:
+    """Offset en minutes de la due_date du SO parent depuis horizon_start.
+    Sert à trier les candidates par urgence (EDD) avant placement."""
+    row = conn.execute(
+        """SELECT so.due_date FROM sales_orders so
+           JOIN candidate_orders c ON c.sales_order_id = so.sales_order_id
+           WHERE c.candidate_id = ?""",
+        (candidate_id,),
+    ).fetchone()
+    if not row or not row["due_date"]:
+        return fallback_min
+    try:
+        due_dt = datetime.fromisoformat(row["due_date"])
+        start_dt = datetime.fromisoformat(horizon_start)
+        return int((due_dt - start_dt).total_seconds() // 60)
+    except ValueError:
+        return fallback_min
+
+
+def _compute_capacity_aware_offsets(
+    conn: sqlite3.Connection,
+    candidates: list,
+    horizon_min: int,
+    target_saturation: float,
+    horizon_start: str | None = None,
+) -> dict[str, int]:
+    """V13.D — Cumul charges + capacités par WS×jour, earliest-first.
+
+    Algorithme :
+      1. Trie candidates par due_date ascendante (EDD) — les plus
+         urgents d'abord.
+      2. Capacité par WS × jour = daily_min × capa_factor
+      3. Budget par WS × jour   = capacité × target_saturation
+      4. Pour chaque candidate :
+           a. Extrait sa charge par WS (Σ des ops)
+           b. Trouve le jour le plus tôt où le cumul WS×jour +
+              charge ≤ budget pour tous les WS impactés
+           c. Enregistre offset = jour × 1440
+           d. Ajoute la charge au cumul du jour choisi
+      5. Si aucun jour ne convient : pose au dernier jour (best effort).
+    """
+    horizon_days = max(1, horizon_min // 1440)
+    daily_min = _daily_minutes(conn)
+
+    # EDD : trie par due_date ascendante (candidates urgents en premier).
+    # Sans horizon_start on ne peut pas trier, on garde l'ordre reçu.
+    if horizon_start:
+        candidates = sorted(
+            candidates,
+            key=lambda c: _candidate_due_offset_min(
+                conn, c["candidate_id"], horizon_start, horizon_min,
+            ),
+        )
+
+    ws_rows = conn.execute(
+        "SELECT workstation_id FROM workstations"
+    ).fetchall()
+    ws_capacity: dict[str, float] = {}
+    for wsr in ws_rows:
+        ws = wsr["workstation_id"]
+        capa = workstation_capacity_factor(conn, ws)
+        ws_capacity[ws] = daily_min * capa
+
+    # ws_daily_load[ws][day] = minutes de charge déjà cumulées
+    ws_daily_load: dict[str, list[float]] = {
+        ws: [0.0] * horizon_days for ws in ws_capacity
+    }
+
+    offsets: dict[str, int] = {}
+    for cand in candidates:
+        cid = cand["candidate_id"]
+        qty = float(cand["qty_in_contract"])
+        loads = _candidate_ws_loads(conn, cand["article_id"], qty)
+        if not loads:
+            offsets[cid] = 0
+            continue
+
+        # Trouve le jour le plus tôt où placer le candidate (toutes
+        # ses ops le même jour d'assignation) respecte le budget
+        # sur chaque WS impacté. Sépare les charges par WS (l'op1 et
+        # l'op2 sur des WS différents ne se cumulent pas).
+        loads_by_ws: dict[str, float] = {}
+        for ws, load in loads:
+            loads_by_ws[ws] = loads_by_ws.get(ws, 0.0) + load
+
+        earliest = -1
+        for day in range(horizon_days):
+            fits = True
+            for ws, total_load in loads_by_ws.items():
+                budget = ws_capacity.get(ws, daily_min) * target_saturation
+                if ws_daily_load[ws][day] + total_load > budget:
+                    fits = False
+                    break
+            if fits:
+                earliest = day
+                break
+
+        if earliest < 0:
+            # Aucun jour ne convient à saturation cible — dégradation
+            # gracieuse : choix du jour minimisant le surplus (au plus
+            # tôt en cas d'égalité). Évite le fallback abrupt vers la
+            # fin d'horizon qui provoque des rejets massifs de SO.
+            best_day = 0
+            best_excess = float("inf")
+            for day in range(horizon_days):
+                excess = 0.0
+                for ws, total_load in loads_by_ws.items():
+                    budget = (
+                        ws_capacity.get(ws, daily_min) * target_saturation
+                    )
+                    excess += max(
+                        0.0, ws_daily_load[ws][day] + total_load - budget
+                    )
+                if excess < best_excess:
+                    best_excess = excess
+                    best_day = day
+            earliest = best_day
+
+        offsets[cid] = earliest * 1440
+        for ws, total_load in loads_by_ws.items():
+            ws_daily_load[ws][earliest] += total_load
+
+    return offsets
+
+
+def _identify_bottleneck(
+    conn: sqlite3.Connection,
+    candidates: list,
+    horizon_days: int,
+    daily_min: int,
+) -> tuple[str | None, dict[str, float], dict[str, float]]:
+    """V13.E — Identifie le goulot dynamique par charge cumulée / capacité.
+
+    Renvoie (bottleneck_ws, ws_loads, ws_capa_total).
+    ws_loads[ws] = minutes de charge totale sur horizon
+    ws_capa_total[ws] = minutes de capacité totale disponible
+    bottleneck_ws = argmax(ws_loads[ws] / ws_capa_total[ws]) ; None si aucun.
+
+    C'est le principe TOC : le goulot n'est pas fixe (ex. WS le plus
+    lent), il émerge du mix demande × routings du run courant.
+    """
+    ws_loads: dict[str, float] = {}
+    for cand in candidates:
+        loads = _candidate_ws_loads(
+            conn, cand["article_id"],
+            float(cand["qty_in_contract"]),
+        )
+        for ws, load in loads:
+            ws_loads[ws] = ws_loads.get(ws, 0.0) + load
+
+    if not ws_loads:
+        return None, {}, {}
+
+    ws_capa_total: dict[str, float] = {}
+    for ws in ws_loads:
+        capa = workstation_capacity_factor(conn, ws)
+        ws_capa_total[ws] = daily_min * capa * horizon_days
+
+    bottleneck_ws = max(
+        ws_loads,
+        key=lambda w: ws_loads[w] / max(ws_capa_total[w], 1.0),
+    )
+    return bottleneck_ws, ws_loads, ws_capa_total
+
+
+def _compute_toc_aware_offsets(
+    conn: sqlite3.Connection,
+    candidates: list,
+    horizon_min: int,
+    target_saturation: float,
+    buffer_days: int,
+    horizon_start: str | None = None,
+) -> tuple[dict[str, int], dict[str, dict]]:
+    """V13.E — Smoothing TOC-aware avec DBR + goulot dynamique.
+
+    Étapes :
+      1. Charges par WS (data-driven, dynamique)
+      2. Identification du goulot = argmax(ρ_ws)
+      3. Débit goulot cible = capa_goulot/jour × target_saturation
+      4. Trie candidates par due_date ASC (EDD)
+      5. Pour chaque candidate :
+         a. Trouve slot goulot au plus tôt respectant débit cible
+         b. Décale le lancement à goulot_slot − buffer_days
+         c. Consomme goulot + charges autres WS aux jours du routing
+      6. Produit un dossier de faisabilité par candidate
+
+    Renvoie (offsets, feasibility) :
+      offsets[cid] = offset_minutes
+      feasibility[cid] = dict avec goulot_ws, goulot_slot_day,
+                          launch_day, charge_min, wip_predicted, etc.
+    """
+    horizon_days = max(1, horizon_min // 1440)
+    daily_min = _daily_minutes(conn)
+
+    # EDD
+    if horizon_start:
+        candidates = sorted(
+            candidates,
+            key=lambda c: _candidate_due_offset_min(
+                conn, c["candidate_id"], horizon_start, horizon_min,
+            ),
+        )
+
+    # Étape 1-2 — goulot dynamique
+    bottleneck_ws, ws_loads, ws_capa_total = _identify_bottleneck(
+        conn, candidates, horizon_days, daily_min,
+    )
+    if bottleneck_ws is None:
+        # Aucune charge → offsets tous à 0
+        return ({c["candidate_id"]: 0 for c in candidates}, {})
+
+    rho_bottleneck = (
+        ws_loads[bottleneck_ws] / max(ws_capa_total[bottleneck_ws], 1.0)
+    )
+    goulot_capa_factor = workstation_capacity_factor(conn, bottleneck_ws)
+    goulot_daily_budget = daily_min * goulot_capa_factor * target_saturation
+
+    # Étape 3 — takt time cible (min par unité livrée)
+    total_qty = sum(float(c["qty_in_contract"]) for c in candidates)
+    takt_min_per_unit = (
+        (daily_min * goulot_capa_factor * target_saturation * horizon_days)
+        / total_qty
+    ) if total_qty > 0 else 0
+
+    # Cumuls
+    goulot_daily_load = [0.0] * horizon_days
+    ws_daily_load: dict[str, list[float]] = {
+        ws: [0.0] * horizon_days for ws in ws_loads
+    }
+
+    offsets: dict[str, int] = {}
+    feasibility: dict[str, dict] = {}
+
+    for cand in candidates:
+        cid = cand["candidate_id"]
+        qty = float(cand["qty_in_contract"])
+        loads = _candidate_ws_loads(conn, cand["article_id"], qty)
+        loads_by_ws: dict[str, float] = {}
+        for ws, load in loads:
+            loads_by_ws[ws] = loads_by_ws.get(ws, 0.0) + load
+        goulot_load = loads_by_ws.get(bottleneck_ws, 0.0)
+
+        # 5a. Slot goulot au plus tôt
+        goulot_slot = -1
+        for day in range(horizon_days):
+            if goulot_daily_load[day] + goulot_load <= goulot_daily_budget:
+                goulot_slot = day
+                break
+        if goulot_slot < 0:
+            # Impossible dans budget : slot minimisant le surplus
+            goulot_slot = min(
+                range(horizon_days),
+                key=lambda d: (
+                    goulot_daily_load[d] + goulot_load - goulot_daily_budget
+                ),
+            )
+
+        # 5b. Lancement amont = goulot_slot - buffer
+        launch_day = max(0, goulot_slot - buffer_days)
+        offsets[cid] = launch_day * 1440
+
+        # 5c. Consomme goulot + autres WS
+        goulot_daily_load[goulot_slot] += goulot_load
+        for ws, load in loads_by_ws.items():
+            if ws == bottleneck_ws:
+                continue
+            ws_daily_load[ws][launch_day] += load
+
+        # 6. Dossier de faisabilité
+        charge_total = sum(loads_by_ws.values())
+        # Little : WIP prédit = charge / cycle_time
+        # (cycle_time ≈ makespan ≈ charge / daily_min × horizon_days)
+        cycle_time_days = max(1.0, charge_total / max(daily_min, 1.0))
+        wip_predicted = qty / max(cycle_time_days, 0.01)
+        feasibility[cid] = {
+            "bottleneck_ws": bottleneck_ws,
+            "rho_bottleneck_run": rho_bottleneck,
+            "goulot_load_min": goulot_load,
+            "goulot_slot_day": goulot_slot,
+            "launch_day": launch_day,
+            "buffer_days": buffer_days,
+            "charge_total_min": charge_total,
+            "takt_min_per_unit_target": takt_min_per_unit,
+            "wip_predicted": wip_predicted,
+            "feasible": 1 if goulot_slot < horizon_days else 0,
+        }
+
+    return offsets, feasibility
+
+
 def compute_smoothing(
     conn: sqlite3.Connection, contract_id: str, version: int | None = None
 ) -> list[SmoothedLaunch]:
@@ -438,6 +832,13 @@ def compute_smoothing(
     cpm_aware = _get_cpm_aware_flag(conn)
     slack_ordering = _get_slack_ordering_flag(conn)
     bom_topo = _get_bom_topo_flag(conn)
+    capacity_aware = _get_capacity_aware_flag(conn)
+    toc_aware = _get_toc_aware_flag(conn)
+    target_saturation = (
+        _get_target_saturation(conn)
+        if (capacity_aware or toc_aware) else 0.85
+    )
+    buffer_days = _get_toc_buffer_days(conn) if toc_aware else 0
     rho_cap = _get_queueing_rho_cap(conn)
     ws_factors: dict[str, float] = (
         _compute_workstation_queueing_factors(conn, horizon_min, rho_cap)
@@ -469,6 +870,23 @@ def compute_smoothing(
             ),
         )
 
+    # V13.E — Si smoothing_toc_aware, on utilise DBR + goulot dynamique
+    # + takt time + buffer. Prend le pas sur capacity_aware si les 2
+    # flags sont posés (TOC est le sur-ensemble sémantique).
+    capacity_offsets: dict[str, int] = {}
+    toc_feasibility: dict[str, dict] = {}
+    if toc_aware:
+        capacity_offsets, toc_feasibility = _compute_toc_aware_offsets(
+            conn, candidates, horizon_min, target_saturation,
+            buffer_days, horizon_start=contract.horizon_start,
+        )
+    elif capacity_aware:
+        # V13.D — placement earliest-first à saturation cible
+        capacity_offsets = _compute_capacity_aware_offsets(
+            conn, candidates, horizon_min, target_saturation,
+            horizon_start=contract.horizon_start,
+        )
+
     # Calcul cumulatif : le i-ème candidate démarre quand on a déjà engagé
     # somme(qty[0..i-1]) sur le total.
     conn.execute(
@@ -479,8 +897,10 @@ def compute_smoothing(
     running = 0.0
     for cand in candidates:
         qty = float(cand["qty_in_contract"])
-        linear_offset = int(round((running / total_qty) * horizon_min))
-        offset_min = linear_offset
+        if toc_aware or capacity_aware:
+            offset_min = capacity_offsets.get(cand["candidate_id"], 0)
+        else:
+            offset_min = int(round((running / total_qty) * horizon_min))
         if due_date_aware:
             latest_start_due = _compute_latest_start_minutes(
                 conn,

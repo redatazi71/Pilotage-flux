@@ -1,0 +1,203 @@
+{
+  "OF vs OF+EVENT": {
+    "otif": {
+      "n_pairs": 370,
+      "mean_a": 0.9461443243243243,
+      "mean_b": 0.9462083783783783,
+      "gain_pct": 0.006770008803870162,
+      "mean_delta": 6.40540540540542e-05,
+      "ci_lo": -0.0001413513513513511,
+      "ci_hi": 0.0002686486486486485,
+      "wilcoxon_stat": 49.0,
+      "wilcoxon_pvalue": 0.8259644412308653,
+      "cliff_delta": 0.008276113951789628,
+      "cliff_magnitude": "négligeable"
+    },
+    "cost_per_u": {
+      "n_pairs": 370,
+      "mean_a": 113.25532432432432,
+      "mean_b": 110.97908108108108,
+      "gain_pct": -2.0098333184980026,
+      "mean_delta": -2.2762432432432425,
+      "ci_lo": -2.705945945945945,
+      "ci_hi": -1.8769459459459463,
+      "wilcoxon_stat": 0.0,
+      "wilcoxon_pvalue": 5.0579493136053804e-27,
+      "cliff_delta": 0.06685902118334551,
+      "cliff_magnitude": "négligeable"
+    },
+    "wip_sd": {
+      "n_pairs": 370,
+      "mean_a": 6.182254137677571,
+      "mean_b": 6.182751991907258,
+      "gain_pct": 0.008052956390987222,
+      "mean_delta": 0.00049785422968737,
+      "ci_lo": -0.001961684984945491,
+      "ci_hi": 0.0027232171274691333,
+      "wilcoxon_stat": 1387.0,
+      "wilcoxon_pvalue": 0.14594197438160822,
+      "cliff_delta": -0.0008619430241051863,
+      "cliff_magnitude": "négligeable"
+    },
+    "nervousness": {
+      "n_pairs": 370,
+      "mean_a": 0.133,
+      "mean_b": 0.04654864864864865,
+      "gain_pct": -65.00101605364763,
+      "mean_delta": -0.08645135135135136,
+      "ci_lo": -0.0879189189189189,
+      "ci_hi": -0.0847783783783783,
+      "wilcoxon_stat": 0.0,
+      "wilcoxon_pvalue": 1.2759900762991325e-62,
+      "cliff_delta": 1.0,
+      "cliff_magnitude": "grand"
+    },
+    "recovery_success_rate": {
+      "n_pairs": 370,
+      "mean_a": 1.0,
+      "mean_b": 1.0,
+      "gain_pct": 0.0,
+      "mean_delta": 0.0,
+      "ci_lo": 0.0,
+      "ci_hi": 0.0,
+      "wilcoxon_stat": null,
+      "wilcoxon_pvalue": null,
+      "cliff_delta": 0.0,
+      "cliff_magnitude": "négligeable"
+    }
+  },
+  "OF+EVENT vs FLUX+EVENT": {
+    "otif": {
+      "n_pairs": 370,
+      "mean_a": 0.9462083783783783,
+      "mean_b": 0.9419862521621621,
+      "gain_pct": -0.4462152642795372,
+      "mean_delta": -0.004222126216216216,
+      "ci_lo": -0.006878545135135133,
+      "ci_hi": -0.0018524144594594598,
+      "wilcoxon_stat": 1065.5,
+      "wilcoxon_pvalue": 0.057632973749481016,
+      "cliff_delta": 0.03905770635500365,
+      "cliff_magnitude": "négligeable"
+    },
+    "cost_per_u": {
+      "n_pairs": 370,
+      "mean_a": 110.97908108108108,
+      "mean_b": 86.59408108108109,
+      "gain_pct": -21.972609398508503,
+      "mean_delta": -24.385,
+      "ci_lo": -26.096378378378372,
+      "ci_hi": -22.674999999999976,
+      "wilcoxon_stat": 2264.0,
+      "wilcoxon_pvalue": 9.607005607496803e-54,
+      "cliff_delta": 0.607472607742878,
+      "cliff_magnitude": "grand"
+    },
+    "wip_sd": {
+      "n_pairs": 370,
+      "mean_a": 6.182751991907258,
+      "mean_b": 4.646911133570739,
+      "gain_pct": -24.84073209384455,
+      "mean_delta": -1.53584085833652,
+      "ci_lo": -1.607217442070638,
+      "ci_hi": -1.4706042813322584,
+      "wilcoxon_stat": 0.0,
+      "wilcoxon_pvalue": 2.1775002941864933e-62,
+      "cliff_delta": 0.5529948867786706,
+      "cliff_magnitude": "grand"
+    },
+    "nervousness": {
+      "n_pairs": 370,
+      "mean_a": 0.04654864864864865,
+      "mean_b": 0.036605405405405404,
+      "gain_pct": -21.360970794867328,
+      "mean_delta": -0.009943243243243242,
+      "ci_lo": -0.011032432432432399,
+      "ci_hi": -0.008897297297297279,
+      "wilcoxon_stat": 1277.0,
+      "wilcoxon_pvalue": 9.73612310025131e-38,
+      "cliff_delta": 0.37110299488677867,
+      "cliff_magnitude": "moyen"
+    },
+    "recovery_success_rate": {
+      "n_pairs": 370,
+      "mean_a": 1.0,
+      "mean_b": 0.9981983783783783,
+      "gain_pct": -0.1801621621621674,
+      "mean_delta": -0.0018016216216216218,
+      "ci_lo": -0.0033781081081081087,
+      "ci_hi": -0.000562972972972973,
+      "wilcoxon_stat": 0.0,
+      "wilcoxon_pvalue": 0.023140931308743732,
+      "cliff_delta": 0.016216216216216217,
+      "cliff_magnitude": "négligeable"
+    }
+  },
+  "OF vs FLUX+EVENT (cumul)": {
+    "otif": {
+      "n_pairs": 370,
+      "mean_a": 0.9461443243243243,
+      "mean_b": 0.9419862521621621,
+      "gain_pct": -0.43947546428834294,
+      "mean_delta": -0.004158072162162162,
+      "ci_lo": -0.006823459594594591,
+      "ci_hi": -0.0018243200000000012,
+      "wilcoxon_stat": 1214.5,
+      "wilcoxon_pvalue": 0.0740453164425348,
+      "cliff_delta": 0.04718772826880935,
+      "cliff_magnitude": "négligeable"
+    },
+    "cost_per_u": {
+      "n_pairs": 370,
+      "mean_a": 113.25532432432432,
+      "mean_b": 86.59408108108109,
+      "gain_pct": -23.540829892371857,
+      "mean_delta": -26.66124324324324,
+      "ci_lo": -28.49308108108111,
+      "ci_hi": -24.902405405405375,
+      "wilcoxon_stat": 1045.5,
+      "wilcoxon_pvalue": 6.882719194100984e-58,
+      "cliff_delta": 0.6340248356464573,
+      "cliff_magnitude": "grand"
+    },
+    "wip_sd": {
+      "n_pairs": 370,
+      "mean_a": 6.182254137677571,
+      "mean_b": 4.646911133570739,
+      "gain_pct": -24.834679550776283,
+      "mean_delta": -1.5353430041068326,
+      "ci_lo": -1.6063376646521916,
+      "ci_hi": -1.4688874747271177,
+      "wilcoxon_stat": 0.0,
+      "wilcoxon_pvalue": 2.1779570460804962e-62,
+      "cliff_delta": 0.5527757487216947,
+      "cliff_magnitude": "grand"
+    },
+    "nervousness": {
+      "n_pairs": 370,
+      "mean_a": 0.133,
+      "mean_b": 0.036605405405405404,
+      "gain_pct": -72.47713879292826,
+      "mean_delta": -0.0963945945945946,
+      "ci_lo": -0.09764594594594626,
+      "ci_hi": -0.09510000000000024,
+      "wilcoxon_stat": 0.0,
+      "wilcoxon_pvalue": 6.694887797281929e-65,
+      "cliff_delta": 1.0,
+      "cliff_magnitude": "grand"
+    },
+    "recovery_success_rate": {
+      "n_pairs": 370,
+      "mean_a": 1.0,
+      "mean_b": 0.9981983783783783,
+      "gain_pct": -0.1801621621621674,
+      "mean_delta": -0.0018016216216216218,
+      "ci_lo": -0.0033781081081081087,
+      "ci_hi": -0.000562972972972973,
+      "wilcoxon_stat": 0.0,
+      "wilcoxon_pvalue": 0.023140931308743732,
+      "cliff_delta": 0.016216216216216217,
+      "cliff_magnitude": "négligeable"
+    }
+  }
+}

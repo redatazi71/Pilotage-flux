@@ -217,6 +217,12 @@ def _run_one(scen, doctrine, work, fix_dir, level, shock, tag) -> dict:
             "approvals_approved": k.approvals_approved,
             "approvals_rejected": k.approvals_rejected,
             "recovery_success_rate": k.recovery_success_rate,
+            "recovery_days_conditional": (
+                k.recovery_days_conditional
+                if k.recovery_days_conditional is not None else ""
+            ),
+            "n_hazards_observed": k.n_hazards_observed,
+            "n_recoveries_observed": k.n_recoveries_observed,
         }
     except Exception as e:
         return {
@@ -361,6 +367,9 @@ CSV_FIELDS = [
     "compensation_gap", "compensation_success_rate",
     "approvals_pending", "approvals_approved", "approvals_rejected",
     "recovery_success_rate",
+    # Ext-f — recovery_days_conditional distinct de recovery_success_rate
+    "recovery_days_conditional", "n_hazards_observed",
+    "n_recoveries_observed",
     "error",
 ]
 

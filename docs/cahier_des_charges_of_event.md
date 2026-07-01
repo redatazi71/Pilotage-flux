@@ -630,7 +630,119 @@ RETEX cross-SO périodique :
 
 **Livraison** : rapport mensuel + dashboard interactif.
 
-### 2.16 Générateur de variantes d'articles
+### 2.16 Plans de travail journaliers et dashboards superviseur
+
+Le système doit produire, pour chaque utilisateur en début de journée
+(ou sur demande), un plan de travail personnalisé et, pour chaque
+superviseur, deux dashboards temps réel.
+
+#### EF-46 — Plan de travail journalier opérateur
+
+Pour chaque opérateur (P4), le système génère un plan basé sur les
+`expected_events` de la journée sur les workstations qui lui sont
+assignées.
+
+**Contenu :**
+
+| Champ | Description |
+|---|---|
+| `expected_time` | Heure prévue de l'opération |
+| `of_id` + `article_id` | OF concerné + article produit |
+| `sequence_idx` | Étape sur l'OF |
+| `qty_expected` | Quantité prévue |
+| `unit_time_min` | Temps standard |
+| `status` | scheduled / started / finished / blocked |
+| `prerequisites_ok` | Composants + poste disponibles |
+
+**Comportement :**
+
+- Rafraîchissement automatique (WebSocket / polling ≤ 30 s).
+- Priorisation visuelle (couleurs par urgence, marqueur goulot).
+- Actions directes : start / finish depuis la ligne.
+- Export PDF / impression papier (mode off-line).
+
+#### EF-47 — Plan de travail journalier planificateur
+
+Pour chaque planificateur (P2), synthèse des actions attendues sur la
+journée :
+
+- SOs à confirmer (issues de la zone libre, CTP validées).
+- Contrats de production à signer (bascule zone négociable → gelée).
+- Alertes surcharge CRP à traiter.
+- Suggestions PO ou OFs à valider (issues du MRP).
+- Simulations what-if en cours à finaliser.
+- Suggestions RETEX à examiner.
+
+**Comportement :** liste triée par priorité (urgence, valeur SO), lien
+direct vers l'action.
+
+#### EF-48 — Dashboard superviseur — Avancement OFs et SOs
+
+Pour chaque superviseur / chef d'atelier (P3), une vue temps réel de
+l'avancement production :
+
+**Bloc OFs :**
+
+- Liste des OFs en cours et planifiés du jour.
+- Colonnes : of_id, article, quantité, WS courante, sequence courante /
+  total, statut, avancement %, ETA fin, SO liée.
+- Filtres : par workstation, par statut, par famille produit.
+- Alertes visuelles : retard, blocage prérequis, écart qualité.
+
+**Bloc SOs :**
+
+- Liste des SOs actives (signées non clôturées).
+- Colonnes : sales_order_id, article, quantité, quantité livrée %,
+  due_date, écart prévu (jours), nb OFs liés (en cours / total).
+- Regroupement possible par client, famille.
+
+**Bloc KPIs jour :**
+
+- OTIF instantané (ratio livraisons jour / prévues jour).
+- Rho goulot courant vs cible.
+- WIP en cours vs plan.
+- Nb déviations ouvertes.
+
+#### EF-49 — Dashboard superviseur — Événements réels vs attendus
+
+Vue détaillée temps réel des écarts observés dans la journée :
+
+**Bloc événements attendus vs réels :**
+
+Tableau avec 1 ligne par `expected_event` de la journée :
+
+| Colonne | Description |
+|---|---|
+| `expected_time` | Heure prévue |
+| `actual_time` | Heure réelle (vide si non produit) |
+| `of_id` + `operation` | OF + opération |
+| `qty_expected` | Quantité prévue |
+| `qty_actual` | Quantité observée |
+| `delta_time_min` | Écart temporel (min) |
+| `delta_qty` | Écart quantité |
+| `deviation_kind` | Nature écart (time / qty / missing / unexpected) |
+| `is_absorbed` | Absorbé CPM |
+| `action_level` | inform / watch / correct_local / ... |
+| `source_decision` | tolerance / memory_shortcut |
+
+**Filtres :** par workstation, par sévérité (action_level), par SO
+peggée, par plage horaire.
+
+**Regroupements agrégés :**
+
+- Nb déviations par kind sur la journée.
+- Top 5 workstations en dérive.
+- Distribution action_level.
+- Ratio `memory_shortcut` / `tolerance` (efficacité V13.C).
+
+**Actions directes :**
+
+- Ouvrir le détail d'une déviation → causes racines + décision
+  courante.
+- Surcharger une action recommandée (US-19).
+- Marquer une déviation comme « traitée » manuellement.
+
+### 2.17 Générateur de variantes d'articles
 
 #### EF-42 — Axes de variantes
 

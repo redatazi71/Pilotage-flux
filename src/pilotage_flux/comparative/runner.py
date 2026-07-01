@@ -1606,6 +1606,30 @@ def _advance_one_day(
                 result.of_qty_good[of_id] = float(of_row["qty_good"])
                 result.of_qty_scrap[of_id] = float(of_row["qty_scrap"])
 
+    # V13.K — Zone négociable enrichie : create demand_contracts +
+    # weekly_flux_contracts + snapshot des twin_states. Gated par
+    # flag `enable_zone_negociable` (default 0 = off).
+    from pilotage_flux.flux.zone_negociable_wire import (
+        is_zone_negociable_enabled,
+        snapshot_all_active_twins,
+        wire_zone_negociable_after_promotion,
+    )
+    if is_zone_negociable_enabled(conn):
+        # Sync demand + weekly (idempotent, ne recrée pas les existants)
+        wire_zone_negociable_after_promotion(
+            conn,
+            horizon_start=scenario.horizon_start,
+            horizon_days=scenario.horizon_days,
+        )
+        # Snapshot twin_states pour tous les weekly actifs
+        # daily_wip du jour courant (peut être None si _measure_wip
+        # pas encore appelé pour ce jour)
+        daily_wip = result.daily_wip.get(day)
+        snapshot_all_active_twins(
+            conn, day=day, horizon_start=scenario.horizon_start,
+            daily_wip=float(daily_wip) if daily_wip is not None else None,
+        )
+
 
 def _measure_wip(
     conn: sqlite3.Connection, result: RunResult, day: int

@@ -55,6 +55,37 @@ def _get_due_date_aware_flag(conn: sqlite3.Connection) -> bool:
     return bool(val and float(val) > 0.5)
 
 
+def _get_capacity_aware_flag(conn: sqlite3.Connection) -> bool:
+    """V13.D — Lit `smoothing_capacity_aware` (default 0).
+
+    1 = active le smoothing capacity-aware : cumul des charges par
+        WS × jour, placement earliest-first des candidates au premier
+        jour où le cumul de leur charge maintient la saturation
+        ≤ `smoothing_target_saturation` (default 0.85). Résout la
+        sous-production de FLUX/EVENT identifiée par §28.19.
+    0 = version historique (V1.4 linéaire aveugle).
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_capacity_aware", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _get_target_saturation(conn: sqlite3.Connection) -> float:
+    """V13.D — Cible de saturation pour le smoothing capacity-aware.
+
+    Default 0.85 (règle industrielle standard : 80-90 % pour éviter
+    l'explosion queueing tout en gardant la capacité utile).
+    """
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="smoothing_target_saturation", default=0.85,
+    )
+    f = float(val) if val is not None else 0.85
+    return min(0.99, max(0.30, f))
+
+
 def _get_horizon_aware_flag(conn: sqlite3.Connection) -> bool:
     """V12.7 — Lit le paramètre `smoothing_horizon_aware` (default 0).
 
@@ -383,6 +414,166 @@ def _compute_latest_start_horizon_minutes(
     return max(0, horizon_total_min - effective_duration)
 
 
+def _candidate_ws_loads(
+    conn: sqlite3.Connection, article_id: str, qty: float,
+) -> list[tuple[str, float]]:
+    """Retourne [(ws, minutes_de_travail_machine), ...] pour ce candidate,
+    dans l'ordre du routing. Charge = qty × unit_time (temps machine
+    brut, sans division par capa). La capa est appliquée côté budget
+    (capacité disponible par jour), pas côté charge."""
+    rows = conn.execute(
+        """SELECT workstation_id, unit_time_min
+           FROM routing_operations
+           WHERE article_id = ?
+           ORDER BY sequence_idx ASC""",
+        (article_id,),
+    ).fetchall()
+    out: list[tuple[str, float]] = []
+    for r in rows:
+        ws = r["workstation_id"]
+        load = float(r["unit_time_min"]) * qty
+        out.append((ws, load))
+    return out
+
+
+def _daily_minutes(conn: sqlite3.Connection) -> int:
+    """Lit le calendrier par défaut ; fallback 480 (1×8h) si absent."""
+    row = conn.execute(
+        "SELECT daily_minutes FROM calendars LIMIT 1"
+    ).fetchone()
+    if row and row["daily_minutes"]:
+        return int(row["daily_minutes"])
+    return 480
+
+
+def _candidate_due_offset_min(
+    conn: sqlite3.Connection, candidate_id: str, horizon_start: str,
+    fallback_min: int,
+) -> int:
+    """Offset en minutes de la due_date du SO parent depuis horizon_start.
+    Sert à trier les candidates par urgence (EDD) avant placement."""
+    row = conn.execute(
+        """SELECT so.due_date FROM sales_orders so
+           JOIN candidate_orders c ON c.sales_order_id = so.sales_order_id
+           WHERE c.candidate_id = ?""",
+        (candidate_id,),
+    ).fetchone()
+    if not row or not row["due_date"]:
+        return fallback_min
+    try:
+        due_dt = datetime.fromisoformat(row["due_date"])
+        start_dt = datetime.fromisoformat(horizon_start)
+        return int((due_dt - start_dt).total_seconds() // 60)
+    except ValueError:
+        return fallback_min
+
+
+def _compute_capacity_aware_offsets(
+    conn: sqlite3.Connection,
+    candidates: list,
+    horizon_min: int,
+    target_saturation: float,
+    horizon_start: str | None = None,
+) -> dict[str, int]:
+    """V13.D — Cumul charges + capacités par WS×jour, earliest-first.
+
+    Algorithme :
+      1. Trie candidates par due_date ascendante (EDD) — les plus
+         urgents d'abord.
+      2. Capacité par WS × jour = daily_min × capa_factor
+      3. Budget par WS × jour   = capacité × target_saturation
+      4. Pour chaque candidate :
+           a. Extrait sa charge par WS (Σ des ops)
+           b. Trouve le jour le plus tôt où le cumul WS×jour +
+              charge ≤ budget pour tous les WS impactés
+           c. Enregistre offset = jour × 1440
+           d. Ajoute la charge au cumul du jour choisi
+      5. Si aucun jour ne convient : pose au dernier jour (best effort).
+    """
+    horizon_days = max(1, horizon_min // 1440)
+    daily_min = _daily_minutes(conn)
+
+    # EDD : trie par due_date ascendante (candidates urgents en premier).
+    # Sans horizon_start on ne peut pas trier, on garde l'ordre reçu.
+    if horizon_start:
+        candidates = sorted(
+            candidates,
+            key=lambda c: _candidate_due_offset_min(
+                conn, c["candidate_id"], horizon_start, horizon_min,
+            ),
+        )
+
+    ws_rows = conn.execute(
+        "SELECT workstation_id FROM workstations"
+    ).fetchall()
+    ws_capacity: dict[str, float] = {}
+    for wsr in ws_rows:
+        ws = wsr["workstation_id"]
+        capa = workstation_capacity_factor(conn, ws)
+        ws_capacity[ws] = daily_min * capa
+
+    # ws_daily_load[ws][day] = minutes de charge déjà cumulées
+    ws_daily_load: dict[str, list[float]] = {
+        ws: [0.0] * horizon_days for ws in ws_capacity
+    }
+
+    offsets: dict[str, int] = {}
+    for cand in candidates:
+        cid = cand["candidate_id"]
+        qty = float(cand["qty_in_contract"])
+        loads = _candidate_ws_loads(conn, cand["article_id"], qty)
+        if not loads:
+            offsets[cid] = 0
+            continue
+
+        # Trouve le jour le plus tôt où placer le candidate (toutes
+        # ses ops le même jour d'assignation) respecte le budget
+        # sur chaque WS impacté. Sépare les charges par WS (l'op1 et
+        # l'op2 sur des WS différents ne se cumulent pas).
+        loads_by_ws: dict[str, float] = {}
+        for ws, load in loads:
+            loads_by_ws[ws] = loads_by_ws.get(ws, 0.0) + load
+
+        earliest = -1
+        for day in range(horizon_days):
+            fits = True
+            for ws, total_load in loads_by_ws.items():
+                budget = ws_capacity.get(ws, daily_min) * target_saturation
+                if ws_daily_load[ws][day] + total_load > budget:
+                    fits = False
+                    break
+            if fits:
+                earliest = day
+                break
+
+        if earliest < 0:
+            # Aucun jour ne convient à saturation cible — dégradation
+            # gracieuse : choix du jour minimisant le surplus (au plus
+            # tôt en cas d'égalité). Évite le fallback abrupt vers la
+            # fin d'horizon qui provoque des rejets massifs de SO.
+            best_day = 0
+            best_excess = float("inf")
+            for day in range(horizon_days):
+                excess = 0.0
+                for ws, total_load in loads_by_ws.items():
+                    budget = (
+                        ws_capacity.get(ws, daily_min) * target_saturation
+                    )
+                    excess += max(
+                        0.0, ws_daily_load[ws][day] + total_load - budget
+                    )
+                if excess < best_excess:
+                    best_excess = excess
+                    best_day = day
+            earliest = best_day
+
+        offsets[cid] = earliest * 1440
+        for ws, total_load in loads_by_ws.items():
+            ws_daily_load[ws][earliest] += total_load
+
+    return offsets
+
+
 def compute_smoothing(
     conn: sqlite3.Connection, contract_id: str, version: int | None = None
 ) -> list[SmoothedLaunch]:
@@ -438,6 +629,8 @@ def compute_smoothing(
     cpm_aware = _get_cpm_aware_flag(conn)
     slack_ordering = _get_slack_ordering_flag(conn)
     bom_topo = _get_bom_topo_flag(conn)
+    capacity_aware = _get_capacity_aware_flag(conn)
+    target_saturation = _get_target_saturation(conn) if capacity_aware else 0.85
     rho_cap = _get_queueing_rho_cap(conn)
     ws_factors: dict[str, float] = (
         _compute_workstation_queueing_factors(conn, horizon_min, rho_cap)
@@ -469,6 +662,15 @@ def compute_smoothing(
             ),
         )
 
+    # V13.D — Si smoothing_capacity_aware, on remplace le calcul
+    # linéaire par un placement earliest-first à saturation cible.
+    capacity_offsets: dict[str, int] = (
+        _compute_capacity_aware_offsets(
+            conn, candidates, horizon_min, target_saturation,
+            horizon_start=contract.horizon_start,
+        ) if capacity_aware else {}
+    )
+
     # Calcul cumulatif : le i-ème candidate démarre quand on a déjà engagé
     # somme(qty[0..i-1]) sur le total.
     conn.execute(
@@ -479,8 +681,10 @@ def compute_smoothing(
     running = 0.0
     for cand in candidates:
         qty = float(cand["qty_in_contract"])
-        linear_offset = int(round((running / total_qty) * horizon_min))
-        offset_min = linear_offset
+        if capacity_aware:
+            offset_min = capacity_offsets.get(cand["candidate_id"], 0)
+        else:
+            offset_min = int(round((running / total_qty) * horizon_min))
         if due_date_aware:
             latest_start_due = _compute_latest_start_minutes(
                 conn,

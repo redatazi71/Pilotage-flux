@@ -78,6 +78,17 @@ class KpiSet:
     # SOs livrées avec quantité < demandée
     n_so_overdelivered: int = 0
     # SOs livrées avec quantité > demandée (effets d'arrondi lots)
+    # V12.3 — KPIs de compensation cybernétique
+    compensation_gap: float = 0.0
+    # écart moyen résiduel après compensation (magnitude)
+    compensation_success_rate: float = 1.0
+    # = compensations réussies / total compensations
+    approvals_pending: int = 0
+    approvals_approved: int = 0
+    approvals_rejected: int = 0
+    # V12.4 — Recovery success rate (résilience)
+    recovery_success_rate: float = 1.0
+    # = SOs livrées à date / SOs total post-1er choc
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -217,6 +228,40 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
             ).fetchone()
             causes_attached = int(row["n"]) if row else 0
 
+        # V12.3 — KPIs de compensation (delta engine + approval queue)
+        approvals_pending = 0
+        approvals_approved = 0
+        approvals_rejected = 0
+        compensation_gap = 0.0
+        compensation_success_rate = 1.0
+        try:
+            ap = conn.execute(
+                "SELECT status, COUNT(*) AS n FROM approval_queue "
+                "GROUP BY status"
+            ).fetchall()
+            for r in ap:
+                if r["status"] == "pending":
+                    approvals_pending = int(r["n"])
+                elif r["status"] == "approved":
+                    approvals_approved = int(r["n"])
+                elif r["status"] == "rejected":
+                    approvals_rejected = int(r["n"])
+            total_ap = approvals_approved + approvals_rejected
+            if total_ap > 0:
+                compensation_success_rate = approvals_approved / total_ap
+            # Écart résiduel : moyenne des scores des déviations non-absorbées
+            row_gap = conn.execute(
+                "SELECT AVG(score) AS m FROM event_deviations "
+                "WHERE is_absorbed = 0 AND score IS NOT NULL"
+            ).fetchone()
+            compensation_gap = float(row_gap["m"] or 0.0)
+        except Exception:
+            pass
+
+        # V12.4 — Recovery success rate : SOs délivrées à date
+        # ratio SOs livrées à temps / SOs total sur période post-1er choc
+        recovery_success_rate = disponibility_so_level
+
     # Défaut 4 — Nervosité enrichie : APS replan + replan_global +
     # replan_local + correct_local, pondérée par impact décroissant.
     # Rend le KPI sensible aux corrections locales (BCE, delta engine).
@@ -260,4 +305,10 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
         quantity_compliance=round(quantity_compliance, 4),
         n_so_underdelivered=n_so_underdelivered,
         n_so_overdelivered=n_so_overdelivered,
+        compensation_gap=round(compensation_gap, 4),
+        compensation_success_rate=round(compensation_success_rate, 4),
+        approvals_pending=approvals_pending,
+        approvals_approved=approvals_approved,
+        approvals_rejected=approvals_rejected,
+        recovery_success_rate=round(recovery_success_rate, 4),
     )

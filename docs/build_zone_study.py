@@ -68,25 +68,48 @@ ZONES = list(ZONE_TO_DAY)
 HORIZON_DAYS = 120
 SEEDS = list(range(600, 605))
 
+# V13.D/E — modes smoothing à comparer par run.
+# "V1.4" = smoothing linéaire aveugle (baseline historique)
+# "V13.D" = capacity-aware earliest-first à saturation cible
+# "V13.E" = TOC-aware DBR + goulot dynamique + buffer
+SMOOTHING_MODES = ("v14", "v13d", "v13e")
+SMOOTHING_LABELS = {
+    "v14": "V1.4",
+    "v13d": "V13.D cap",
+    "v13e": "V13.E TOC",
+}
+SMOOTHING_OVERRIDES = {
+    "v14": {},
+    "v13d": {
+        ("global", None, "smoothing_capacity_aware"): 1.0,
+        ("global", None, "smoothing_target_saturation"): 0.85,
+    },
+    "v13e": {
+        ("global", None, "smoothing_toc_aware"): 1.0,
+        ("global", None, "smoothing_target_saturation"): 0.85,
+        ("global", None, "smoothing_toc_buffer_days"): 2.0,
+    },
+}
+
 
 @dataclass
 class ZonePoint:
     doctrine: str
     domain: str
     zone: str
+    smoothing_mode: str
     n_runs: int
     cost_mean: float
-    cost_baseline: float  # coût sans hazard
+    cost_baseline: float
     amplification: float
     recovery_mean: float
-    # KPIs QCDS complets (pass supplémentaire)
-    otif_mean: float = 0.0  # quantity_compliance × dispo_so
+    otif_mean: float = 0.0
     q_compliance_mean: float = 0.0
     dispo_so_mean: float = 0.0
     wip_mean: float = 0.0
     wip_sd: float = 0.0
     cost_per_unit_mean: float = 0.0
-    of_closed_ratio: float = 0.0  # of_closed / of_total
+    of_closed_ratio: float = 0.0
     nervousness_mean: float = 0.0
 
 
@@ -146,102 +169,142 @@ def run_zone_matrix(fixtures_dir: Path, work_dir: Path) -> list[ZonePoint]:
     work_dir.mkdir(parents=True, exist_ok=True)
     points: list[ZonePoint] = []
     doctrines = list(DOCTRINES)
+    # OF et OF+EVENT n'utilisent pas de smoothing → tester seulement V1.4
+    # pour ces doctrines évite des runs redondants.
+    doctrines_with_smoothing = ("flux", "event")
+    doctrines_no_smoothing = ("of", "of_event")
 
-    # Phase 1 : baselines (sans hazard) pour normalisation
-    baseline_cost: dict[str, list[float]] = {d: [] for d in doctrines}
-    print(f"\n=== Phase 1 : baselines (sans hazard) — "
-          f"{len(SEEDS)*len(doctrines)} runs ===")
+    # Phase 1 : baselines par mode smoothing pour FLUX/EVENT + baseline
+    # unique pour OF/OF+EVENT (identique quel que soit le mode).
+    print(f"\n=== Phase 1 : baselines par mode smoothing ===")
+    baseline_cost: dict[tuple[str, str], list[float]] = {}
     for seed in SEEDS:
         scen = _build_baseline_scenario(seed, fixtures_dir)
-        for d in doctrines:
-            db_path = work_dir / f"baseline_{seed}_{d}.db"
+        for d in doctrines_no_smoothing:
+            key = (d, "v14")
+            db_path = work_dir / f"baseline_{seed}_{d}_v14.db"
             result = run_doctrine(scen, d, db_path,
                                    fixtures_dir=fixtures_dir)
             k = compute_kpis(scen, result)
-            baseline_cost[d].append(k.total_cost_eur)
-    baseline_mean = {d: statistics.mean(baseline_cost[d]) for d in doctrines}
-    for d in doctrines:
-        print(f"  {d:<10} baseline coût moyen = "
-              f"{baseline_mean[d]:>10.0f} €")
+            baseline_cost.setdefault(key, []).append(k.total_cost_eur)
+        for d in doctrines_with_smoothing:
+            for mode in SMOOTHING_MODES:
+                key = (d, mode)
+                db_path = work_dir / f"baseline_{seed}_{d}_{mode}.db"
+                result = run_doctrine(
+                    scen, d, db_path, fixtures_dir=fixtures_dir,
+                    param_overrides=SMOOTHING_OVERRIDES[mode],
+                )
+                k = compute_kpis(scen, result)
+                baseline_cost.setdefault(key, []).append(k.total_cost_eur)
+    baseline_mean = {
+        k: statistics.mean(v) for k, v in baseline_cost.items()
+    }
+    for key, val in sorted(baseline_mean.items()):
+        d, mode = key
+        print(f"  {d:<10} {SMOOTHING_LABELS.get(mode, mode):<12} "
+              f"= {val:>10.0f} €")
 
-    # Phase 2 : hazards par zone × domaine × doctrine
-    total = len(DOMAINS) * len(ZONES) * len(doctrines) * len(SEEDS)
-    print(f"\n=== Phase 2 : matrice zone×domaine×doctrine — "
+    # Phase 2 : hazards par zone × domaine × doctrine × mode
+    n_smooth_cells = (
+        len(DOMAINS) * len(ZONES)
+        * (len(doctrines_no_smoothing)  # 1 mode chacun
+            + len(doctrines_with_smoothing) * len(SMOOTHING_MODES))
+    )
+    total = n_smooth_cells * len(SEEDS)
+    print(f"\n=== Phase 2 : matrice zone×domaine×(doctrine×mode) — "
           f"{total} runs ===")
     done = 0
     for domain in DOMAINS:
         for zone in ZONES:
             for d in doctrines:
-                costs, recs = [], []
-                otifs, qcs, disps = [], [], []
-                wips, wip_sds, cpus = [], [], []
-                closed_ratios, nervs = [], []
-                for seed in SEEDS:
-                    scen = _build_zone_scenario(
-                        seed, domain, zone, fixtures_dir,
-                    )
-                    db_path = work_dir / (
-                        f"zone_{domain}_{zone}_{seed}_{d}.db"
-                    )
-                    result = run_doctrine(
-                        scen, d, db_path, fixtures_dir=fixtures_dir,
-                    )
-                    k = compute_kpis(scen, result)
-                    costs.append(k.total_cost_eur)
-                    recs.append(
-                        compute_time_to_recover(
-                            result, shock_day=ZONE_TO_DAY[zone],
+                modes = (SMOOTHING_MODES if d in doctrines_with_smoothing
+                         else ("v14",))
+                for mode in modes:
+                    costs, recs = [], []
+                    otifs, qcs, disps = [], [], []
+                    wips, wip_sds, cpus = [], [], []
+                    closed_ratios, nervs = [], []
+                    for seed in SEEDS:
+                        scen = _build_zone_scenario(
+                            seed, domain, zone, fixtures_dir,
                         )
-                    )
-                    qcs.append(k.quantity_compliance)
-                    disps.append(k.disponibility_so_level)
-                    otifs.append(
-                        k.quantity_compliance * k.disponibility_so_level
-                    )
-                    wips.append(k.wip_avg)
-                    wip_vals = list(result.daily_wip.values())
-                    wip_sds.append(
-                        statistics.stdev(wip_vals)
-                        if len(wip_vals) >= 2 else 0.0
-                    )
-                    cpus.append(k.cost_per_unit_delivered)
-                    if k.of_total > 0:
-                        closed_ratios.append(k.of_closed / k.of_total)
-                    nervs.append(k.nervousness)
-                    done += 1
-                cost_mean = statistics.mean(costs) if costs else 0
-                base = baseline_mean[d]
-                amp = cost_mean / base if base > 0 else 0
-                points.append(ZonePoint(
-                    doctrine=d, domain=domain, zone=zone,
-                    n_runs=len(costs),
-                    cost_mean=cost_mean, cost_baseline=base,
-                    amplification=amp,
-                    recovery_mean=statistics.mean(recs) if recs else 0,
-                    otif_mean=statistics.mean(otifs) if otifs else 0,
-                    q_compliance_mean=statistics.mean(qcs) if qcs else 0,
-                    dispo_so_mean=statistics.mean(disps) if disps else 0,
-                    wip_mean=statistics.mean(wips) if wips else 0,
-                    wip_sd=statistics.mean(wip_sds) if wip_sds else 0,
-                    cost_per_unit_mean=statistics.mean(cpus) if cpus else 0,
-                    of_closed_ratio=(
-                        statistics.mean(closed_ratios) if closed_ratios else 0
-                    ),
-                    nervousness_mean=statistics.mean(nervs) if nervs else 0,
-                ))
+                        db_path = work_dir / (
+                            f"zone_{domain}_{zone}_{seed}_{d}_{mode}.db"
+                        )
+                        result = run_doctrine(
+                            scen, d, db_path, fixtures_dir=fixtures_dir,
+                            param_overrides=SMOOTHING_OVERRIDES[mode],
+                        )
+                        k = compute_kpis(scen, result)
+                        costs.append(k.total_cost_eur)
+                        recs.append(
+                            compute_time_to_recover(
+                                result, shock_day=ZONE_TO_DAY[zone],
+                            )
+                        )
+                        qcs.append(k.quantity_compliance)
+                        disps.append(k.disponibility_so_level)
+                        otifs.append(
+                            k.quantity_compliance * k.disponibility_so_level
+                        )
+                        wips.append(k.wip_avg)
+                        wip_vals = list(result.daily_wip.values())
+                        wip_sds.append(
+                            statistics.stdev(wip_vals)
+                            if len(wip_vals) >= 2 else 0.0
+                        )
+                        cpus.append(k.cost_per_unit_delivered)
+                        if k.of_total > 0:
+                            closed_ratios.append(k.of_closed / k.of_total)
+                        nervs.append(k.nervousness)
+                        done += 1
+                    cost_mean = statistics.mean(costs) if costs else 0
+                    base = baseline_mean.get((d, mode), 1)
+                    amp = cost_mean / base if base > 0 else 0
+                    points.append(ZonePoint(
+                        doctrine=d, domain=domain, zone=zone,
+                        smoothing_mode=mode,
+                        n_runs=len(costs),
+                        cost_mean=cost_mean, cost_baseline=base,
+                        amplification=amp,
+                        recovery_mean=(
+                            statistics.mean(recs) if recs else 0
+                        ),
+                        otif_mean=statistics.mean(otifs) if otifs else 0,
+                        q_compliance_mean=(
+                            statistics.mean(qcs) if qcs else 0
+                        ),
+                        dispo_so_mean=(
+                            statistics.mean(disps) if disps else 0
+                        ),
+                        wip_mean=statistics.mean(wips) if wips else 0,
+                        wip_sd=statistics.mean(wip_sds) if wip_sds else 0,
+                        cost_per_unit_mean=(
+                            statistics.mean(cpus) if cpus else 0
+                        ),
+                        of_closed_ratio=(
+                            statistics.mean(closed_ratios)
+                            if closed_ratios else 0
+                        ),
+                        nervousness_mean=(
+                            statistics.mean(nervs) if nervs else 0
+                        ),
+                    ))
             print(f"  ... {done}/{total}")
     return points
 
 
-def _matrix(points: list[ZonePoint], doctrine: str, attr: str
-            ) -> list[list[float]]:
-    """Zones (row) × Domains (col) → attr value."""
+def _matrix(points: list[ZonePoint], doctrine: str, attr: str,
+             mode: str = "v14") -> list[list[float]]:
+    """Zones (row) × Domains (col) → attr value pour (doctrine, mode)."""
     m = []
     for zone in ZONES:
         row = []
         for domain in DOMAINS:
             p = next((p for p in points if p.doctrine == doctrine
-                       and p.zone == zone and p.domain == domain), None)
+                       and p.zone == zone and p.domain == domain
+                       and p.smoothing_mode == mode), None)
             row.append(getattr(p, attr) if p else 0.0)
         m.append(row)
     return m
@@ -283,24 +346,31 @@ def chart_zone_heatmaps(points: list[ZonePoint], attr: str,
 
 
 def _table_by_kpi(points: list[ZonePoint], attr: str, fmt: str) -> list[str]:
-    """Génère les 4 tables (une par doctrine) pour un KPI donné."""
+    """Génère tables par (doctrine, mode smoothing) pour un KPI donné.
+    OF/OF+EVENT : 1 table (mode v14). FLUX/EVENT : 3 tables (v14, v13d, v13e)."""
     lines = []
     for d in ["of", "flux", "of_event", "event"]:
-        lines.append(f"### Doctrine {DOCTRINE_LABELS[d]}")
-        lines.append("")
-        header = "| Zone | " + " | ".join(
-            DOMAIN_LABELS[dom] for dom in DOMAINS) + " |"
-        sep = "|---" * (len(DOMAINS) + 1) + "|"
-        lines.append(header)
-        lines.append(sep)
-        for zone in ZONES:
-            row = [ZONE_LABELS[zone]]
-            for domain in DOMAINS:
-                p = next((p for p in points if p.doctrine == d
-                          and p.zone == zone and p.domain == domain), None)
-                row.append(f"{getattr(p, attr):{fmt}}" if p else "—")
-            lines.append("| " + " | ".join(row) + " |")
-        lines.append("")
+        modes = (SMOOTHING_MODES if d in ("flux", "event") else ("v14",))
+        for mode in modes:
+            title = f"{DOCTRINE_LABELS[d]}"
+            if d in ("flux", "event"):
+                title += f" — {SMOOTHING_LABELS[mode]}"
+            lines.append(f"### {title}")
+            lines.append("")
+            header = "| Zone | " + " | ".join(
+                DOMAIN_LABELS[dom] for dom in DOMAINS) + " |"
+            sep = "|---" * (len(DOMAINS) + 1) + "|"
+            lines.append(header)
+            lines.append(sep)
+            for zone in ZONES:
+                row = [ZONE_LABELS[zone]]
+                for domain in DOMAINS:
+                    p = next((p for p in points if p.doctrine == d
+                              and p.zone == zone and p.domain == domain
+                              and p.smoothing_mode == mode), None)
+                    row.append(f"{getattr(p, attr):{fmt}}" if p else "—")
+                lines.append("| " + " | ".join(row) + " |")
+            lines.append("")
     return lines
 
 

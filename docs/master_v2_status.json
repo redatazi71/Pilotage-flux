@@ -3,7 +3,7 @@
   "total": 120,
   "crashed": 0,
   "progress_pct": 1.0,
-  "elapsed_seconds": 406.2701418399811,
+  "elapsed_seconds": 285.25039196014404,
   "eta_seconds": 0.0,
   "current": {
     "level": "rupture",
@@ -24,7 +24,7 @@
       "otif_mean": 0.9447802591666666,
       "cost_per_u_mean": 108.85291666666667,
       "wip_sd_mean": 11.498197441767696,
-      "nervousness_mean": 0.020083333333333335,
+      "nervousness_mean": 0.03395833333333333,
       "rupture_pct_mean": 0.002065483476132191
     },
     "FLUX+EVENT": {

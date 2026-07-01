@@ -904,7 +904,113 @@ continue.
 
 ---
 
-## Résumé — 58 stories couvrant 15 epics × 3 zones
+---
+
+## Epic 16 [G/T] — Plans de travail journaliers et dashboards superviseur
+
+### US-51 [G] (P4) — Voir mon plan de travail du jour (opérateur)
+
+**En tant qu'** opérateur,
+**je veux** consulter en début de poste mon plan de travail personnel
+du jour, basé sur les événements attendus sur ma workstation,
+**afin de** savoir quoi faire, dans quel ordre, sans intervention
+supervisée.
+
+**Critères d'acceptation :**
+
+- Liste des expected_events du jour sur ma WS, triée par heure prévue.
+- Colonnes : heure prévue, OF, article, séquence, quantité prévue,
+  temps standard, statut, prérequis OK.
+- Codes couleur par urgence (rouge = retard, orange = urgent, vert =
+  normal).
+- Marqueur visuel des opérations goulot.
+- Actions in-line : Démarrer / Terminer.
+- Rafraîchissement automatique (WebSocket ou polling 30 s).
+- Impression PDF pour mode papier (secours ou traçabilité).
+
+### US-52 [L/N] (P2) — Voir mon plan de travail du jour (planificateur)
+
+**En tant que** planificateur,
+**je veux** consulter chaque matin une synthèse des actions attendues
+sur ma journée,
+**afin de** ne rater aucune SO à confirmer, aucun contrat à signer,
+aucune alerte à traiter.
+
+**Critères d'acceptation :**
+
+- Liste triée par priorité de :
+  - SOs à confirmer (issues zone libre).
+  - Contrats de production à signer (bascule zone gelée).
+  - Alertes surcharge CRP à traiter.
+  - Suggestions PO / OFs MRP à valider.
+  - Simulations what-if en attente de conclusion.
+  - Suggestions RETEX à examiner.
+- Chaque item : lien direct vers l'action.
+- Statut d'avancement de la journée (X / N actions traitées).
+- Filtrage par famille produit, par urgence.
+
+### US-53 [G] (P3) — Dashboard superviseur : avancement OFs et SOs
+
+**En tant que** chef d'atelier / superviseur,
+**je veux** un dashboard temps réel affichant l'avancement de tous les
+OFs et SOs du jour,
+**afin de** piloter la journée et anticiper les retards.
+
+**Critères d'acceptation :**
+
+- Bloc OFs : liste des OFs en cours et planifiés du jour avec
+  colonnes (of_id, article, quantité, WS courante, séquence
+  courante/total, statut, avancement %, ETA fin, SO liée).
+- Bloc SOs : liste des SOs actives avec (sales_order_id, article,
+  quantité, livré %, due_date, écart prévu jours, nb OFs
+  en cours/total).
+- Bloc KPIs jour : OTIF instantané, rho goulot courant, WIP,
+  nb déviations ouvertes.
+- Filtres : par WS, par statut, par famille.
+- Alertes visuelles : retard, blocage prérequis, écart qualité.
+- Rafraîchissement temps réel (WebSocket).
+
+### US-54 [G] (P3) — Dashboard superviseur : événements réel vs attendu du jour
+
+**En tant que** chef d'atelier,
+**je veux** un dashboard détaillé montrant chaque événement attendu du
+jour et son événement réel correspondant (ou absence),
+**afin de** repérer immédiatement toute dérive et d'agir.
+
+**Critères d'acceptation :**
+
+- Tableau : 1 ligne par expected_event du jour.
+- Colonnes : heure prévue, heure réelle, of_id + opération,
+  qty_expected, qty_actual, delta_time_min, delta_qty,
+  deviation_kind, is_absorbed, action_level, source_decision
+  (`tolerance` / `memory_shortcut`).
+- Filtres : par WS, par action_level, par SO peggée, par plage
+  horaire.
+- Agrégats : nb déviations par kind sur la journée, top 5 WS en
+  dérive, distribution action_level, ratio memory_shortcut /
+  tolerance (efficacité V13.C).
+- Actions in-line : ouvrir détail déviation, surcharger action
+  recommandée (lien US-19), marquer traitée manuellement.
+- Rafraîchissement temps réel.
+
+### US-55 [T] (P7) — Configurer l'assignation opérateur → workstation(s)
+
+**En tant qu'** administrateur,
+**je veux** configurer l'assignation des opérateurs à leurs
+workstations,
+**afin que** chaque opérateur voie le bon plan de travail.
+
+**Critères d'acceptation :**
+
+- Table `operator_workstation_assignment` (opérateur, WS,
+  shift, valid_from, valid_to).
+- Un opérateur peut être assigné à plusieurs WS.
+- Une WS peut avoir plusieurs opérateurs (équipe).
+- Impact immédiat sur US-51.
+
+---
+
+## Résumé — 63 stories couvrant 16 epics × 3 zones
 
 | Epic | Zone | Nb US | Personas concernés |
 |---|:-:|:-:|:-:|
@@ -923,7 +1029,8 @@ continue.
 | 13 — Simulation what-if | T | 3 | P2, P3 |
 | 14 — Configuration horizon | T | 1 | P7 |
 | 15 — RETEX | T | 2 | P1, P2 |
-| **Total** | | **58** | |
+| 16 — Plans travail journaliers + dashboards | G/T | 5 | P2, P3, P4, P7 |
+| **Total** | | **63** | |
 
 ## Répartition par zone
 

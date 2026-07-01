@@ -1,0 +1,62 @@
+{
+  "1_OF_pur": {
+    "n_runs": 5,
+    "otif_mean": 0.94198,
+    "q_mean": 0.94198,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 120.012,
+    "wip_avg_mean": 5.602,
+    "wip_sd_mean": 9.775601152140998,
+    "nervousness_mean": 0.15,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 16.6
+  },
+  "2_+capture_only": {
+    "n_runs": 5,
+    "otif_mean": 0.94198,
+    "q_mean": 0.94198,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 120.012,
+    "wip_avg_mean": 5.602,
+    "wip_sd_mean": 9.775601152140998,
+    "nervousness_mean": 0.0298,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 16.6
+  },
+  "3_+CPM_absorption": {
+    "n_runs": 5,
+    "otif_mean": 0.94198,
+    "q_mean": 0.94198,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 120.012,
+    "wip_avg_mean": 5.602,
+    "wip_sd_mean": 9.775601152140998,
+    "nervousness_mean": 0.0298,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 16.6
+  },
+  "4_+tolerance_filter": {
+    "n_runs": 5,
+    "otif_mean": 0.94638,
+    "q_mean": 0.94638,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 115.038,
+    "wip_avg_mean": 5.538,
+    "wip_sd_mean": 9.762580663774061,
+    "nervousness_mean": 0.0298,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 16.4
+  },
+  "5_+skip_latency_V13C": {
+    "n_runs": 5,
+    "otif_mean": 0.94638,
+    "q_mean": 0.94638,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 115.038,
+    "wip_avg_mean": 5.538,
+    "wip_sd_mean": 9.762580663774061,
+    "nervousness_mean": 0.0298,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 16.4
+  }
+}

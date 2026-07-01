@@ -162,6 +162,9 @@ Confirmation SO           (signature)                  Clôture OF+SO
 | Clôture OF + capture recette P4 | Existant |
 | Chaînage clôture OFs → clôture SO | À finaliser |
 | Apprentissage boucle longue | Existant |
+| **Plan de travail journalier opérateur** | À développer |
+| **Dashboard superviseur — avancement OFs+SOs** | À développer |
+| **Dashboard superviseur — événements réel vs attendu jour** | À développer |
 
 **Transverse — Moteurs et gouvernance**
 
@@ -182,6 +185,7 @@ Confirmation SO           (signature)                  Clôture OF+SO
 | **RETEX cross-SO (pattern matching)** | À développer |
 | **Interopérabilité ISA-95 + OPC-UA** | À développer |
 | **Mode dégradé MES sans APS** | À développer |
+| **Plan de travail journalier planificateur** | À développer |
 
 ### 4.2 Périmètre exclu (avec justification)
 

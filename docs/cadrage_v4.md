@@ -657,6 +657,14 @@ chaque type au jour 3** et on mesure :
 Protocole : 5 baselines (1 aléa par domaine) + 15 paires uniques
 (diagonale incluse) × 4 doctrines × 5 seeds = **400 runs**.
 
+> **Errata post-fix `5510219`** — la version initiale de cette matrice
+> était biaisée par un artefact de stampage sur `HAZARD_LOGISTIC_DELAY`
+> (delay_days = 196 j au lieu de block_days, gonflant la MOD de ~100 k€
+> par op prise dans le blocage). Les 9 cellules impliquant `Logi` (ligne
+> + colonne) sur-évaluaient l'amplification jusqu'à ×2.20 sur FLUX
+> Logi × Dem. Les valeurs ci-dessous sont **post-fix** — l'analyse
+> historique de §24.10.1 a été partiellement invalidée (cf. §24.10.2).
+
 **Amplification de coût (>1 = sur-coût)** — matrices 5×5 par doctrine
 (diagonale = 2 aléas du même domaine) :
 
@@ -664,41 +672,41 @@ Protocole : 5 baselines (1 aléa par domaine) + 15 paires uniques
 
 | | Appro | Logi | Qual | Prod | Dem |
 |---|---|---|---|---|---|
-| **Appro** | 1.00 | **1.49** | 1.00 | 1.05 | 1.03 |
-| **Logi**  | **1.49** | 1.20 | **1.49** | 0.74 | **1.49** |
-| **Qual**  | 1.00 | **1.49** | 1.00 | 1.05 | 1.02 |
-| **Prod**  | 1.05 | 0.74 | 1.05 | 1.05 | 1.07 |
-| **Dem**   | 1.03 | **1.49** | 1.02 | 1.07 | 1.05 |
+| **Appro** | 1.00 | 1.03 | 1.00 | 1.05 | 1.03 |
+| **Logi**  | 1.03 | 1.03 | 1.03 | 1.03 | 1.05 |
+| **Qual**  | 1.00 | 1.03 | 1.00 | 1.05 | 1.02 |
+| **Prod**  | 1.05 | 1.03 | 1.05 | 1.05 | **1.07** |
+| **Dem**   | 1.03 | 1.05 | 1.02 | **1.07** | 1.05 |
 
 #### Doctrine FLUX (V1+V2)
 
 | | Appro | Logi | Qual | Prod | Dem |
 |---|---|---|---|---|---|
-| **Appro** | 1.00 | 1.36 | 1.00 | 1.03 | 1.20 |
-| **Logi**  | 1.36 | 1.70 | 1.36 | 1.08 | **2.20** |
-| **Qual**  | 1.00 | 1.36 | 1.00 | 1.01 | 1.19 |
-| **Prod**  | 1.03 | 1.08 | 1.01 | 1.03 | 1.23 |
-| **Dem**   | 1.20 | **2.20** | 1.19 | 1.23 | 1.05 |
+| **Appro** | 1.00 | 1.02 | 1.00 | 1.03 | 1.20 |
+| **Logi**  | 1.02 | 1.02 | 1.02 | 1.02 | 1.22 |
+| **Qual**  | 1.00 | 1.02 | 1.00 | 1.01 | 1.19 |
+| **Prod**  | 1.03 | 1.02 | 1.01 | 1.03 | **1.23** |
+| **Dem**   | 1.20 | 1.22 | 1.19 | **1.23** | 1.05 |
 
 #### Doctrine OF+EVENT (V8)
 
 | | Appro | Logi | Qual | Prod | Dem |
 |---|---|---|---|---|---|
-| **Appro** | 1.00 | 1.13 | 1.00 | 1.01 | 1.03 |
-| **Logi**  | 1.13 | 1.23 | 1.13 | 0.87 | 1.15 |
-| **Qual**  | 1.00 | 1.13 | 1.00 | 1.01 | 1.02 |
-| **Prod**  | 1.01 | 0.87 | 1.01 | 1.01 | 1.04 |
-| **Dem**   | 1.03 | 1.15 | 1.02 | 1.04 | 1.05 |
+| **Appro** | 1.00 | 1.01 | 1.00 | 1.01 | 1.03 |
+| **Logi**  | 1.01 | 1.01 | 1.01 | 1.01 | 1.04 |
+| **Qual**  | 1.00 | 1.01 | 1.00 | 1.01 | 1.02 |
+| **Prod**  | 1.01 | 1.01 | 1.01 | 1.01 | 1.04 |
+| **Dem**   | 1.03 | 1.04 | 1.02 | 1.04 | **1.05** |
 
 #### Doctrine EVENT (V3+)
 
 | | Appro | Logi | Qual | Prod | Dem |
 |---|---|---|---|---|---|
-| **Appro** | 1.00 | 0.99 | 1.00 | 1.01 | 1.20 |
-| **Logi**  | 0.99 | 1.52 | 0.99 | 1.01 | 1.16 |
-| **Qual**  | 1.00 | 0.99 | 1.00 | 1.01 | 1.19 |
-| **Prod**  | 1.01 | 1.01 | 1.01 | 1.01 | 1.21 |
-| **Dem**   | 1.20 | 1.16 | 1.19 | 1.21 | 1.05 |
+| **Appro** | 1.00 | 1.01 | 1.00 | 1.01 | 1.20 |
+| **Logi**  | 1.01 | 1.01 | 1.01 | 1.01 | **1.21** |
+| **Qual**  | 1.00 | 1.01 | 1.00 | 1.01 | 1.19 |
+| **Prod**  | 1.01 | 1.01 | 1.01 | 1.01 | **1.21** |
+| **Dem**   | 1.20 | **1.21** | 1.19 | **1.21** | 1.05 |
 
 ![Matrice 5×5 d'amplification de coût par doctrine](charts/paired_hazards_heatmap.png)
 
@@ -708,41 +716,41 @@ Protocole : 5 baselines (1 aléa par domaine) + 15 paires uniques
 
 | | Appro | Logi | Qual | Prod | Dem |
 |---|---|---|---|---|---|
-| **Appro** | 5.8 | 5.6 | 5.8 | 6.6 | 5.4 |
-| **Logi**  | 5.6 | 4.8 | 5.6 | 5.8 | 5.8 |
-| **Qual**  | 5.8 | 5.6 | 5.8 | 6.4 | 5.6 |
-| **Prod**  | 6.6 | 5.8 | 6.4 | 6.6 | 5.6 |
+| **Appro** | 5.8 | 6.2 | 5.8 | 6.6 | 5.4 |
+| **Logi**  | 6.2 | 6.2 | 6.2 | 6.2 | 5.8 |
+| **Qual**  | 5.8 | 6.2 | 5.8 | 6.4 | 5.6 |
+| **Prod**  | 6.6 | 6.2 | 6.4 | 6.6 | 5.6 |
 | **Dem**   | 5.4 | 5.8 | 5.6 | 5.6 | 5.2 |
 
 #### Doctrine FLUX (V1+V2)
 
 | | Appro | Logi | Qual | Prod | Dem |
 |---|---|---|---|---|---|
-| **Appro** | 2.4 | 2.8 | 2.4 | 4.0 | **6.8** |
-| **Logi**  | 2.8 | 3.0 | 2.8 | 5.0 | 5.0 |
-| **Qual**  | 2.4 | 2.8 | 2.4 | 4.0 | 5.0 |
-| **Prod**  | 4.0 | 5.0 | 4.0 | 5.0 | 5.8 |
-| **Dem**   | **6.8** | 5.0 | 5.0 | 5.8 | 6.4 |
+| **Appro** | 2.4 | 2.4 | 2.4 | 4.0 | **6.8** |
+| **Logi**  | 2.4 | 2.4 | 2.4 | 3.4 | 5.6 |
+| **Qual**  | 2.4 | 2.4 | 2.4 | 4.0 | 5.0 |
+| **Prod**  | 4.0 | 3.4 | 4.0 | 5.0 | 5.8 |
+| **Dem**   | **6.8** | 5.6 | 5.0 | 5.8 | 6.4 |
 
 #### Doctrine OF+EVENT (V8)
 
 | | Appro | Logi | Qual | Prod | Dem |
 |---|---|---|---|---|---|
 | **Appro** | 5.8 | 6.0 | 5.8 | 6.0 | 5.4 |
-| **Logi**  | 6.0 | 5.8 | 6.0 | 6.0 | 6.2 |
+| **Logi**  | 6.0 | 6.0 | 6.0 | 6.0 | 5.8 |
 | **Qual**  | 5.8 | 6.0 | 5.8 | 5.8 | 5.6 |
 | **Prod**  | 6.0 | 6.0 | 5.8 | 6.0 | 5.8 |
-| **Dem**   | 5.4 | 6.2 | 5.6 | 5.8 | 5.2 |
+| **Dem**   | 5.4 | 5.8 | 5.6 | 5.8 | 5.2 |
 
 #### Doctrine EVENT (V3+)
 
 | | Appro | Logi | Qual | Prod | Dem |
 |---|---|---|---|---|---|
-| **Appro** | 2.4 | 2.8 | 2.4 | 2.4 | **6.8** |
-| **Logi**  | 2.8 | 2.8 | 2.8 | 3.0 | 5.2 |
-| **Qual**  | 2.4 | 2.8 | 2.4 | 2.4 | 5.0 |
-| **Prod**  | 2.4 | 3.0 | 2.4 | 2.4 | 5.6 |
-| **Dem**   | **6.8** | 5.2 | 5.0 | 5.6 | 6.4 |
+| **Appro** | 2.4 | 2.4 | 2.4 | 2.4 | **6.8** |
+| **Logi**  | 2.4 | 2.4 | 2.4 | 2.4 | 5.6 |
+| **Qual**  | 2.4 | 2.4 | 2.4 | 2.4 | 5.0 |
+| **Prod**  | 2.4 | 2.4 | 2.4 | 2.4 | 5.6 |
+| **Dem**   | **6.8** | 5.6 | 5.0 | 5.6 | 6.4 |
 
 ![Time-to-recover par paire de domaines](charts/paired_hazards_recovery.png)
 
@@ -1578,16 +1586,20 @@ Le mode legacy (flag off) est **byte-identique** à l'historique
 reproductibles. Le mode composé est opt-in pour les nouvelles
 analyses qualité. Tests : 8 nouveaux (V13.B), 496 au total.
 
-### §24.10.1 Lectures clés des matrices
+### §24.10.1 Lectures clés des matrices (post-fix `5510219`)
 
 **1. Quelle paire est la plus coûteuse ?**
-- **Logi × Dem** sur la doctrine FLUX = amplification **×2.20** : un
-  blocage logistique combiné à une commande urgente fait plus du
-  double de la moyenne des deux pris seuls. C'est la paire la plus
-  dommageable de toute l'étude.
-- Sur EVENT, la même paire Logi × Dem n'est qu'à ×1.16 : l'event
-  sourcing détecte le blocage et déclenche la régulation avant
-  l'amplification.
+- Sur **FLUX** et **EVENT**, les paires les plus amplifiantes
+  impliquent toutes le domaine **Dem** (commande urgente) — au niveau
+  ×1.19 à ×1.23 :
+  - FLUX : **Prod × Dem = ×1.23**, Logi × Dem = ×1.22, Appro × Dem = ×1.20, Qual × Dem = ×1.19
+  - EVENT : Logi × Dem = Prod × Dem = ×1.21, Appro × Dem = ×1.20, Qual × Dem = ×1.19
+- Sur **OF+EVENT**, l'amplification maximale n'est que **×1.05** — la
+  combinaison lancement immédiat + boucle événementielle absorbe
+  l'essentiel de l'interaction Dem×autre.
+- Sur **OF**, l'amplification maximale est **×1.07** (Prod × Dem) —
+  proche du niveau OF+EVENT, l'apport event sur les paires est marginal
+  sans smoothing.
 
 **2. Quelle paire est la plus longue à récupérer ?**
 - **Appro × Dem** = **6.8 jours** sur FLUX **et sur EVENT**. C'est
@@ -1599,7 +1611,7 @@ analyses qualité. Tests : 8 nouveaux (V13.B), 496 au total.
   matière** ; elle peut seulement optimiser son utilisation. C'est
   une **limite intrinsèque du pilotage de flux**, pas une faiblesse
   d'implémentation.
-- OF/OF+EVENT ont des recoveries plus uniformes (5.5-6.6j sur
+- OF/OF+EVENT ont des recoveries plus uniformes (5.4–6.6j sur
   toutes paires) parce qu'ils ne se relèvent jamais vite — ils n'ont
   pas de mécanique d'absorption (smoothing) qui crée la variance.
 
@@ -1607,9 +1619,9 @@ analyses qualité. Tests : 8 nouveaux (V13.B), 496 au total.
 
 | Doctrine | Min | Médiane | Max | Paire max |
 |---|---|---|---|---|
-| OF | 4.8 | 5.7 | 6.6 | Appro × Prod |
+| OF | 5.4 | 5.9 | 6.6 | Appro × Prod / Prod × Prod |
 | **FLUX** | **2.4** | 4.0 | 6.8 | Appro × Dem |
-| OF+EVENT | 5.2 | 5.8 | 6.2 | Logi × Dem |
+| OF+EVENT | 5.4 | 5.8 | 6.2 | Logi × Dem |
 | **EVENT** | **2.4** | 2.8 | 6.8 | Appro × Dem |
 
 - FLUX et EVENT récupèrent en 2.4 jours sur les paires « bénignes »
@@ -1621,19 +1633,21 @@ analyses qualité. Tests : 8 nouveaux (V13.B), 496 au total.
 
 **4. Que peut-on dire sur le pilotage des flux industriels en lean ?**
 
-L'étude confirme expérimentalement quatre principes lean classiques :
+L'étude confirme expérimentalement trois principes lean classiques :
 
 a) **Le flux contractualisé absorbe l'amplitude.** Sur les paires
-   sans Demande, FLUX et EVENT amplifient le coût ≤ 1.20 vs OF/OF+EVENT
-   qui montent à 1.49. Le smoothing étale la charge — un choc
+   sans Demande, FLUX et EVENT amplifient le coût ≤ ×1.03 vs OF qui
+   monte jusqu'à ×1.07. Le smoothing étale la charge — un choc
    ponctuel se distribue sur l'horizon au lieu de saturer le goulot.
 
-b) **L'event sourcing absorbe l'interaction.** L'écart FLUX → EVENT
-   sur la paire pivot Logi × Dem est saisissant : **×2.20 → ×1.16**.
-   La couche événementielle détecte la perturbation logistique et
-   déclenche les actions correctives **avant** que la commande
-   urgente amplifie l'effet. C'est ce que les communautés Toyota et
-   Goldratt nomment respectivement « jidoka » (autonomation de la
+b) **L'event sourcing absorbe l'interaction avec la demande.**
+   L'écart FLUX → EVENT sur les paires impliquant Dem n'est pas
+   spectaculaire (×1.23 → ×1.21), mais **OF+EVENT ramène systéma-
+   tiquement ces amplifications à ≤×1.05** — la boucle événementielle
+   sur socle OF (sans smoothing) absorbe la commande urgente sans
+   déplacer les autres lancements. C'est ce que les communautés
+   Toyota et Goldratt nomment respectivement « jidoka » (autonomation
+   de la
    détection) et « buffer management » (signal goulot).
 
 c) **Approvisionnement × Demande est le mur du flux.** Aucune
@@ -1646,24 +1660,54 @@ c) **Approvisionnement × Demande est le mur du flux.** Aucune
    fournisseur SLA. Lean dit la même chose : *« no flow if no
    matter »*.
 
-d) **Logistique-Logistique est curieusement le pire pour EVENT.**
-   La cellule diagonale Logi-Logi = ×1.52 alors que ses autres
-   cellules tournent à 1.00-1.21. Interprétation : la doctrine
-   EVENT compte sur les **autres postes** pour basculer le flux
-   quand un poste est bloqué ; quand 2 postes différents sont
-   bloqués en même temps, ce mécanisme de contournement s'effondre.
-   C'est cohérent avec la théorie : le DBR Goldratt repose sur
-   l'identification d'**un** goulot ; deux goulots simultanés
-   bloquent la régulation.
-
 En résumé, les flux industriels en lean **ne sont pas un mantra
-magique** : ils gagnent face à OF sur les KPI moyens et la majorité
-des paires, mais ils ont leurs limites — particulièrement sur les
-chocs combinés appro × demande et sur les défaillances multiples du
-même domaine. Le diagnostic différencié de la matrice 5×5 permet de
-prioriser les investissements (double sourcing pour appro, capacités
-redondantes pour logistique, frozen window pour demande) en fonction
-du domaine le plus critique pour l'atelier visé.
+magique** : ils gagnent face à OF sur les KPI moyens (coût,
+récupération), mais tous plafonnent au même mur physique — la paire
+Appro × Dem (6.8 j de recovery quelle que soit la doctrine). Le
+diagnostic différencié de la matrice 5×5 permet de prioriser les
+investissements (double sourcing pour appro, contrats fournisseur
+SLA, frozen window pour demande) plutôt que d'espérer un gain
+doctrinal supplémentaire.
+
+### §24.10.2 Errata post-fix `5510219` (invalidation partielle §24.10.1)
+
+La version initiale de §24.10.1 s'appuyait sur des matrices biaisées
+par un artefact de stampage sur `HAZARD_LOGISTIC_DELAY` :
+`delay_days = (factor-1)*2 = 196 jours` au lieu de `block_days`,
+gonflant la durée MOD de chaque op prise dans un blocage logistique
+de ~100 k€ par op phantom.
+
+**Affirmations invalidées** :
+
+1. « **Logi × Dem sur FLUX = ×2.20**, la paire la plus dommageable » →
+   valeur post-fix = **×1.22**. La paire la plus amplifiée est
+   maintenant Prod × Dem (×1.23) sur FLUX. Différentiel doctrinal
+   FLUX → EVENT sur cellules Logi-impliquées : réduit de « ×2.20 →
+   ×1.16 » à « ×1.22 → ×1.21 » (marginal).
+
+2. « **Logi × Logi sur EVENT = ×1.52** cellule pathologique » →
+   valeur post-fix = **×1.01**. L'interprétation « 2 goulots
+   simultanés bloquent DBR Goldratt » n'est **plus étayée** par les
+   données — c'était un artefact du stampage 196 j.
+
+3. Amplifications ligne+colonne Logi surestimées de 20 à 50 % sur
+   OF (×1.49 → ×1.03), sensiblement moins sur OF+EVENT (×1.13 →
+   ×1.01) et EVENT (×0.99 → ×1.01).
+
+**Affirmations préservées** :
+
+- Le mur **Appro × Dem = 6.8 j** de recovery reste vrai (indépendant
+  du bug logistic_delay).
+- La hiérarchie doctrinale globale (OF+EVENT optimal QCDS §30, EVENT
+  cost-first §28.16) reste valide : elle ne s'appuie pas sur la
+  matrice §24.10 mais sur les études QCDS et OTIF-first indépendantes.
+- Le principe lean « flux contractualisé absorbe l'amplitude » reste
+  observable : FLUX/EVENT amplifient ≤ ×1.03 sur les paires sans Dem,
+  OF monte à ×1.07.
+
+**Impact sur le paper HAL** : les mentions "Logi × Dem = ×2.20" et
+"Logi × Logi = ×1.52" (§5.3 de `paper_hal_v1.md`) doivent être
+mises à jour.
 
 ---
 

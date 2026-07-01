@@ -475,25 +475,49 @@ Pour chaque paire (domaine A, domaine B), nous injectons un aléa de
 chaque type au jour 3 et mesurons l'**amplification de coût** =
 coût observé / moyenne(coût A seul, coût B seul).
 
-**Observations majeures** :
+**Observations majeures** (post-fix `5510219` — cf. §5.4bis errata) :
 
-- **Paire la plus coûteuse** : Logi × Dem sur FLUX, amplification
-  **×2.20**. Sur EVENT, la même paire ne dépasse pas ×1.16.
-  L'event sourcing détecte le blocage logistique et déclenche la
-  régulation avant que la commande urgente amplifie l'effet.
+- **Paires les plus coûteuses** : celles impliquant le domaine Dem
+  (commande urgente). Sur FLUX : Prod × Dem = **×1.23**, Logi × Dem =
+  ×1.22, Appro × Dem = ×1.20, Qual × Dem = ×1.19. Sur EVENT : Prod
+  × Dem = Logi × Dem = ×1.21.
 - **Paire la plus longue à récupérer** : Appro × Dem, MTTR
   **6.8 jours**, identique sur FLUX et EVENT. C'est le **mur
   intrinsèque** du pilotage de flux : aucune doctrine ne crée la
   matière manquante.
-- **Cellule problématique pour EVENT** : Logi × Logi, amplification
-  ×1.52. Deux postes bloqués simultanément cassent le mécanisme
-  DBR qui suppose un unique goulot identifié.
-- **Doctrine la plus résiliente** : EVENT, amplifications ≤ 1.21
-  sur 24/25 cellules (la seule exception est Logi × Logi).
+- **Doctrine la plus résiliente** : **OF+EVENT** — amplifications
+  ≤ ×1.05 sur les 25 cellules (max = diagonale Dem × Dem = ×1.05).
+  La boucle événementielle sur socle OF (sans smoothing) absorbe la
+  commande urgente sans déplacer les autres lancements.
+- **Sur les paires sans Demande** : FLUX/EVENT ≤ ×1.03 vs OF ≤ ×1.07
+  — le smoothing amortit les chocs multi-domaines qui ne touchent
+  pas la demande.
 
 ![Figure 11 — Matrice 5×5 d'amplification de coût par doctrine](charts/paired_hazards_heatmap.png)
 
 ![Figure 12 — Time-to-recover par paire de domaines, par doctrine](charts/paired_hazards_recovery.png)
+
+### 5.4bis Errata post-fix `5510219`
+
+La version initiale de §5.4 s'appuyait sur des matrices biaisées par
+un artefact de stampage sur `HAZARD_LOGISTIC_DELAY` (`delay_days = 196 j`
+au lieu de `block_days`, gonflant la MOD phantom de ~100 k€ par op
+prise dans un blocage logistique). Le fix `5510219` corrige la chaîne
+et invalide trois affirmations :
+
+1. « **Logi × Dem sur FLUX = ×2.20** » → post-fix **×1.22**. La paire
+   la plus amplifiée est maintenant Prod × Dem (×1.23).
+2. « **Logi × Logi sur EVENT = ×1.52** cellule pathologique » →
+   post-fix **×1.01**. L'interprétation « 2 goulots simultanés
+   cassent DBR » n'est plus étayée par les données.
+3. « Différentiel FLUX → EVENT sur Logi × Dem = ×2.20 → ×1.16 » →
+   post-fix ×1.22 → ×1.21 (l'apport event sur cette paire est
+   marginal, non spectaculaire).
+
+Le mur **Appro × Dem = 6.8 j** de recovery reste vrai (indépendant
+du bug). La hiérarchie doctrinale globale (OF+EVENT optimal QCDS
+§5.5, EVENT cost-first §5.6) reste valide : elle ne s'appuie pas sur
+la matrice §5.4 mais sur les études QCDS indépendantes.
 
 ### 5.5 Synthèse QCDS — 4 objectifs industriels
 
@@ -550,18 +574,19 @@ Sur les 5 dimensions de comparaison historiques, EVENT domine les
 
 **Lecture 1 — Le flux contractualisé absorbe l'amplitude.** Sur les
 paires sans dimension Demande, FLUX et EVENT amplifient le coût
-≤ 1.20 vs OF/OF+EVENT qui montent à 1.49. Le smoothing étale la
-charge sur l'horizon — un choc ponctuel se distribue au lieu de
-saturer le goulot. Ceci confirme la mécanique heijunka [Ohno1988].
+≤ ×1.03 vs OF qui monte à ×1.07. Le smoothing étale la charge sur
+l'horizon — un choc ponctuel se distribue au lieu de saturer le
+goulot. Ceci confirme la mécanique heijunka [Ohno1988].
 
-**Lecture 2 — L'event sourcing absorbe l'interaction.** L'écart
-FLUX → EVENT sur la paire pivot Logi × Dem (×2.20 → ×1.16) montre que
-la couche événementielle détecte la perturbation logistique et
-déclenche les actions correctives **avant** que la commande urgente
-amplifie l'effet. C'est ce que les communautés Toyota nomment
-*jidoka* (autonomation de la détection) et Goldratt *buffer
-management* (signal goulot) — les deux convergent vers la
-même prescription.
+**Lecture 2 — L'event sourcing sur socle OF absorbe l'interaction
+avec la Demande.** Sur les paires impliquant Dem, FLUX et EVENT
+amplifient jusqu'à ×1.23 (Prod × Dem), mais **OF+EVENT ramène
+systématiquement ces amplifications à ≤ ×1.05** — la boucle
+événementielle sur socle OF (lancement immédiat, pas de smoothing)
+absorbe la commande urgente sans déplacer les autres lancements.
+C'est ce que les communautés Toyota nomment *jidoka* (autonomation
+de la détection) et Goldratt *buffer management* (signal goulot) —
+les deux convergent vers la même prescription.
 
 **Lecture 3 — Approvisionnement × Demande est le mur du flux.** Aucune
 doctrine, fût-elle la plus instrumentée, ne descend sous 6.8 j de
@@ -570,15 +595,6 @@ atteint sa limite intrinsèque : la matière manquante bloque
 physiquement la production, indépendamment de la qualité du
 pilotage. Les leviers d'amélioration sortent du périmètre doctrinal :
 double-sourcing, stock tampon stratégique, contrats fournisseur SLA.
-
-**Lecture 4 — Logistique × Logistique est le pire scénario pour
-EVENT.** La cellule diagonale Logi × Logi = ×1.52 alors que les
-autres cellules tournent à 1.00-1.21. Interprétation : la doctrine
-EVENT compte sur les autres postes pour basculer le flux quand un
-poste est bloqué ; quand 2 postes différents sont bloqués en même
-temps, ce mécanisme de contournement s'effondre. C'est cohérent
-avec la théorie : le DBR Goldratt repose sur l'identification d'un
-unique goulot ; deux goulots simultanés bloquent la régulation.
 
 ### 6.2 Le point de rupture des 4 doctrines
 

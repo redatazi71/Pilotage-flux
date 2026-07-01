@@ -45,11 +45,13 @@ from pilotage_flux.events_v3.dual_tolerance import (
 )
 from pilotage_flux.events_v3.dual_memory import (
     DEFAULT_LEARN_THRESHOLD,
+    DEFAULT_MIN_RECURRENCE_SHORTCUT,
     MemoryDecision,
     MemoryRecipe,
     capture_recipe,
     list_memory_decisions,
     list_recipes,
+    try_memory_shortcut,
     update_parameter_from_learning,
 )
 
@@ -88,10 +90,12 @@ __all__ = [
     "list_decisions",
     "trigger_pending_decisions",
     "DEFAULT_LEARN_THRESHOLD",
+    "DEFAULT_MIN_RECURRENCE_SHORTCUT",
     "MemoryDecision",
     "MemoryRecipe",
     "capture_recipe",
     "list_memory_decisions",
+    "try_memory_shortcut",
     "list_recipes",
     "update_parameter_from_learning",
 ]

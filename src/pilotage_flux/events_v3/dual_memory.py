@@ -31,6 +31,10 @@ from pilotage_flux.parameters import get_num
 
 DEFAULT_LEARN_THRESHOLD = 0.5
 
+# V13.C — Dual Memory actif : nb minimal de recettes retenues (même
+# deviation_kind, même action_level) pour autoriser le raccourci.
+DEFAULT_MIN_RECURRENCE_SHORTCUT = 2
+
 
 @dataclass(frozen=True)
 class MemoryRecipe:
@@ -368,6 +372,56 @@ def update_parameter_from_learning(
             (cur.lastrowid,),
         ).fetchone()
     )
+
+
+def try_memory_shortcut(
+    conn: sqlite3.Connection,
+    deviation_id: int,
+    *,
+    min_recurrence: int | None = None,
+) -> str | None:
+    """V13.C — Cherche une action apprise pour cette déviation.
+
+    Regarde `memory_recipes` retenues avec le même `deviation_kind`.
+    Si un `action_level` a été retenu au moins `min_recurrence` fois avec
+    outcome != 'failure', on le renvoie. Sinon None.
+
+    C'est le raccourci « skip latency » : évite d'attendre la
+    ré-évaluation tolérance quand la recette est connue.
+    """
+    if min_recurrence is None:
+        min_recurrence = int(
+            get_num(
+                conn, scope="global", scope_ref=None,
+                name="memory_shortcut_min_recurrence",
+                default=DEFAULT_MIN_RECURRENCE_SHORTCUT,
+            ) or DEFAULT_MIN_RECURRENCE_SHORTCUT
+        )
+    dev = conn.execute(
+        "SELECT deviation_kind FROM event_deviations WHERE deviation_id = ?",
+        (deviation_id,),
+    ).fetchone()
+    if dev is None or dev["deviation_kind"] is None:
+        return None
+
+    # action_level majoritaire retenue pour ce kind (outcome success/partial)
+    row = conn.execute(
+        """
+        SELECT action_level, COUNT(*) AS n
+        FROM memory_recipes
+        WHERE is_retained = 1
+          AND deviation_kind = ?
+          AND action_level IS NOT NULL
+          AND (outcome IS NULL OR outcome != 'failure')
+        GROUP BY action_level
+        ORDER BY n DESC, action_level ASC
+        LIMIT 1
+        """,
+        (dev["deviation_kind"],),
+    ).fetchone()
+    if row is None or int(row["n"]) < min_recurrence:
+        return None
+    return str(row["action_level"])
 
 
 def list_recipes(

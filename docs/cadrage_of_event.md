@@ -155,7 +155,7 @@ Confirmation SO           (signature)                  Clôture OF+SO
 | Cycle opération (start/finish/scrap) | Existant |
 | Event sourcing V3 (expected/actual) | Existant |
 | Matching + deviations | Existant |
-| Analyse causes racines | Existant |
+| **Matrice d'analyse des causes racines** (règles R-RC-XX + `top_causes_across_deviations`) | Existant |
 | Filtre dual tolérances | Existant |
 | Filtre dual mémoire actif (V13.C) | Existant |
 | Actions correctives physiques (L5.2 + L8.1) | Existant |
@@ -365,6 +365,30 @@ référence pour garantir crédibilité et intégration au SI :
 Le respect de ces normes n'est pas un objectif V1 en tant que tel
 mais oriente les choix d'architecture (API, event schemas, hiérarchie
 des rôles).
+
+## 11bis. Roadmap incrémentale de déploiement (V1)
+
+L'implantation de la couche gestion événementielle est structurée
+en 6 étapes (0-5) validées par l'étude expérimentale de composition
+additive. Chaque étape livre une valeur mesurable et peut constituer
+un point de sortie ROI.
+
+| Étape | Contenu | Valeur cumulée | Coût | Durée |
+|:-:|---|:-:|:-:|:-:|
+| 0 | Baseline OF pur mesuré | Référence | Nul | 2-4 sem |
+| **1** | **Event capture + boucle physique corrective L5.2+L8.1** | **−80 % nervosité** | Fort | 8-12 sem |
+| 2 | Filtre dual tolérances (seuils data-driven) | −4 % €/u | Moyen | 4-6 sem |
+| 3 | Matrice causes racines + apprentissage boucle longue | RETEX + suggestions params | Moyen | 6-8 sem |
+| 4 | Filtre dual mémoire + V13.C skip-latency | Maturité data-driven | Faible | 4 sem+ |
+| 5 | Delta engine + matrice sélecteur d'algo (V12.3+V12.5) | Automatisation avancée | Moyen | 6-8 sem |
+
+Étape 1 est **impérative** (fondation) ; les étapes 2 à 5 sont
+capitalisables indépendamment.
+
+Terminologie : « Étapes 0-5 » désignent les phases de déploiement,
+à ne pas confondre avec les gates doctrinales P1-P4 (promotion,
+lissage, freeze, clôture) qui structurent le cycle interne d'une
+demande.
 
 ## 12. Roadmap V2 (au-delà du présent cadrage)
 

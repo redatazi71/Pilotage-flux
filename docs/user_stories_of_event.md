@@ -1010,7 +1010,89 @@ workstations,
 
 ---
 
-## Résumé — 63 stories couvrant 16 epics × 3 zones
+---
+
+## Epic 17 [T] — Matrice causes racines et gouvernance R-RC-XX
+
+### US-56 [T] (P2) — Consulter la matrice causes racines
+
+**En tant que** planificateur,
+**je veux** consulter la matrice courante des règles R-RC-XX
+(déviation_kind → causes candidates avec scores),
+**afin de** comprendre le diagnostic proposé par le système et
+identifier les règles à affiner.
+
+**Critères d'acceptation :**
+
+- Table filtrable par `deviation_kind`, WS, active/inactive.
+- Colonnes : rule_id, kind cible, expression prédicat, score de base,
+  n° d'occurrences historiques, taux de succès (RETEX).
+- Export CSV.
+
+### US-57 [T] (P2) — Ajouter/désactiver une règle R-RC-XX
+
+**En tant que** planificateur senior (ou MDM),
+**je veux** ajouter une nouvelle règle de cause racine ou en
+désactiver une existante,
+**afin d'** adapter le diagnostic aux réalités observées atelier.
+
+**Critères d'acceptation :**
+
+- Formulaire : rule_id, kind cible, prédicat (expression), score.
+- Test dry-run : appliquer sur historique récent → nb attach.
+- Publication versionnée + notification équipes.
+- Audit log complet.
+
+### US-58 [T] (P1) — Voir la matrice top-causes agrégée (RETEX)
+
+**En tant que** directeur industriel,
+**je veux** voir la matrice `top_causes_across_deviations` sur
+une période donnée,
+**afin d'** identifier les patterns racines dominants et prioriser
+les actions d'amélioration.
+
+**Critères d'acceptation :**
+
+- Vue heatmap : causes × workstations (fréquence + impact).
+- Filtres : période, famille produit, sévérité.
+- Drill-down cellule → détail déviations concernées.
+
+---
+
+## Epic 18 [T] — Roadmap incrémentale de déploiement (Étapes 0-5)
+
+### US-59 [T] (P1) — Suivre l'avancement de la roadmap
+
+**En tant que** directeur industriel,
+**je veux** un dashboard suivant l'avancement des étapes 0 à 5 de la
+roadmap de déploiement,
+**afin de** piloter le programme et valider les jalons ROI.
+
+**Critères d'acceptation :**
+
+- Vue Kanban : Étape 0 / 1 / 2 / 3 / 4 / 5 (en attente / en cours /
+  livré).
+- Chaque étape : livrable attendu, valeur cible mesurée, coût
+  engagé, point d'arrêt possible (oui/non).
+- Alerte si un jalon est en retard (dérive > 20 % vs plan).
+
+### US-60 [T] (P1) — Décider un point d'arrêt ROI
+
+**En tant que** directeur industriel,
+**je veux** pouvoir décider un point d'arrêt à l'issue d'une étape
+(Étape 2, 3, 4 ou 5) si le ROI mesuré atteint la cible,
+**afin d'** allouer les ressources sur d'autres priorités.
+
+**Critères d'acceptation :**
+
+- Vue synthèse : valeur mesurée vs cible, coût cumulé, projection
+  ROI étape suivante.
+- Bouton « acter point d'arrêt Étape N » avec justification.
+- Audit log + jalon documenté dans la doc de gouvernance.
+
+---
+
+## Résumé — 68 stories couvrant 18 epics × 3 zones
 
 | Epic | Zone | Nb US | Personas concernés |
 |---|:-:|:-:|:-:|
@@ -1030,7 +1112,9 @@ workstations,
 | 14 — Configuration horizon | T | 1 | P7 |
 | 15 — RETEX | T | 2 | P1, P2 |
 | 16 — Plans travail journaliers + dashboards | G/T | 5 | P2, P3, P4, P7 |
-| **Total** | | **63** | |
+| 17 — Matrice causes racines R-RC-XX | T | 3 | P1, P2 |
+| 18 — Roadmap incrémentale déploiement | T | 2 | P1 |
+| **Total** | | **68** | |
 
 ## Répartition par zone
 

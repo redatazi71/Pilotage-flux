@@ -27,16 +27,16 @@
   },
   "FLUX+EVENT": {
     "n_runs": 5,
-    "otif_mean": 0.897943066,
-    "q_mean": 0.9396599999999999,
-    "d_mean": 0.95578,
-    "cost_per_u_mean": 110.852,
-    "wip_avg_mean": 3.654,
-    "wip_sd_mean": 2.959710329829912,
+    "otif_mean": 0.94186,
+    "q_mean": 0.94186,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 106.662,
+    "wip_avg_mean": 5.298,
+    "wip_sd_mean": 10.469358612773647,
     "nervousness_mean": 0.015200000000000002,
-    "rupture_pct_mean": 0.044243386243386244,
-    "recovery_days_mean": 18.4,
-    "of_closed_ratio_mean": 0.9939170506912443
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 20,
+    "of_closed_ratio_mean": 0.9967741935483871
   },
   "OF+EVENT+BCE": {
     "n_runs": 5,
@@ -53,15 +53,15 @@
   },
   "FLUX+EVENT+BCE": {
     "n_runs": 5,
-    "otif_mean": 0.897943066,
-    "q_mean": 0.9396599999999999,
-    "d_mean": 0.95578,
-    "cost_per_u_mean": 110.642,
-    "wip_avg_mean": 3.654,
-    "wip_sd_mean": 2.959710329829912,
+    "otif_mean": 0.94186,
+    "q_mean": 0.94186,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 106.51,
+    "wip_avg_mean": 5.298,
+    "wip_sd_mean": 10.469358612773647,
     "nervousness_mean": 0.015200000000000002,
-    "rupture_pct_mean": 0.044243386243386244,
-    "recovery_days_mean": 18.4,
-    "of_closed_ratio_mean": 0.9939170506912443
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 20,
+    "of_closed_ratio_mean": 0.9967741935483871
   }
 }

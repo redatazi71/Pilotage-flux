@@ -106,10 +106,8 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
     max_lt = max(lead_times) if lead_times else 0
     wips = [float(v) for v in result.daily_wip.values()]
     avg_wip = _avg(wips)
-    nervousness = (
-        result.aps_recalculations / float(scenario.horizon_days)
-        if scenario.horizon_days > 0 else 0.0
-    )
+    # Nervosité pré-enrichissement : calculée en fin de fonction pour
+    # utiliser les compteurs replan_local + replan_global.
 
     avg_time_dev: float | None = None
     deviations_detected = 0
@@ -218,6 +216,15 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
                 "SELECT COUNT(*) AS n FROM event_deviation_causes"
             ).fetchone()
             causes_attached = int(row["n"]) if row else 0
+
+    # Défaut 4 — Nervosité enrichie : APS replan + replan_global +
+    # replan_local + correct_local, pondérée par impact décroissant.
+    # Rend le KPI sensible aux corrections locales (BCE, delta engine).
+    nervousness = (
+        result.aps_recalculations * 1.0
+        + replan_global_actions * 0.7
+        + replan_local_actions * 0.3
+    ) / float(scenario.horizon_days) if scenario.horizon_days > 0 else 0.0
 
     return KpiSet(
         doctrine=result.doctrine,

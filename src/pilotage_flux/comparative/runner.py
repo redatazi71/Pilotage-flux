@@ -36,6 +36,7 @@ from pilotage_flux.aps import (
 from pilotage_flux.db import db_session, init_schema
 from pilotage_flux.events_v3 import (
     apply_cpm_absorption,
+    apply_learning_feedback,
     attach_causes_to_deviation,
     capture_recipe,
     evaluate_all_open_deviations,
@@ -2214,6 +2215,9 @@ def run_event_doctrine(
         ).fetchall()
         for row in closed:
             capture_recipe(conn, of_id=row["of_id"], outcome="success")
+        # Défaut 7 — Boucle longue : l'apprentissage remonte vers les
+        # paramètres data-driven de la zone négociable + zone libre.
+        apply_learning_feedback(conn)
     return result
 
 
@@ -2498,6 +2502,9 @@ def run_of_event_doctrine(
         ).fetchall()
         for row in closed:
             capture_recipe(conn, of_id=row["of_id"], outcome="success")
+        # Défaut 7 — Boucle longue : l'apprentissage remonte vers les
+        # paramètres data-driven de la zone négociable + zone libre.
+        apply_learning_feedback(conn)
     return result
 
 

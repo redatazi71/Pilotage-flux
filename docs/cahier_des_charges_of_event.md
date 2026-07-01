@@ -432,6 +432,268 @@ un rapport de bilan est généré :
 - recettes mémoire capturées durant le cycle,
 - suggestions d'ajustement paramètres.
 
+---
+
+## TRANSVERSE — Moteurs, données de référence, exploitation
+
+### 2.9 Moteurs algorithmiques
+
+Le système intègre plusieurs moteurs sélectionnés dynamiquement selon
+le contexte (SO à forte valeur, urgence, taille horizon, temps budget).
+
+#### EF-24 — Moteur de prévision statistique (zone libre)
+
+Alimente l'ATP/CTP par des prévisions sur la demande latente et les
+délais fournisseurs.
+
+- **Linéaires** : régression linéaire, tendance (moyenne mobile,
+  régression polynomiale ordre 2).
+- **Non-linéaires / séries temporelles** : ARIMA, Holt-Winters.
+- **Ensemble** : combinaison pondérée par erreur historique
+  (bias correction, hazard-aware).
+- **Sortie** : prévision + intervalle de confiance + erreur MAPE.
+
+#### EF-25 — Moteur CPM
+
+Calcule ES/LS/slack/marge sur les OFs planifiés (existant, à
+conserver).
+
+#### EF-26 — Moteur heuristique (zone négociable)
+
+Règles rapides pour re-planification locale ou fallback CP-SAT
+timeout :
+
+- SLACK, EDD (Earliest Due Date), SPT (Shortest Processing Time),
+  ATC (Apparent Tardiness Cost).
+- Configurables via table `heuristic_rules`.
+
+#### EF-27 — Moteur de lissage (zone négociable)
+
+Étale la charge sur horizon glissant avec 3 variantes complémentaires :
+
+- **Capacity-aware** : earliest-first à `rho ≤ 0.85`.
+- **Due-date aware** : prend en compte les échéances SO.
+- **TOC-aware** : DBR (Drum-Buffer-Rope), goulot dynamique.
+- **CPM-based** : utilise SLACK pour arbitrer priorité.
+
+#### EF-28 — Moteur CP-SAT (OR-Tools)
+
+Optimisation ordonnancement zone négociable pour SOs à forte valeur.
+
+- Contraintes : capacité goulot, dépendances CPM, tolérance échéances.
+- Time budget paramétrable (défaut 60s).
+- Fallback heuristique si timeout.
+
+#### EF-29 — Sélecteur de profil algorithmique
+
+Sélectionne dynamiquement le moteur d'ordonnancement selon 3 profils :
+
+| Profil | Cas d'usage | Moteur principal |
+|---|---|---|
+| `fast` | Re-planification temps réel, ateliers < 20 OFs | Heuristique EDD |
+| `balanced` | Planification quotidienne standard | Lissage TOC + CPM |
+| `quality` | Planification hebdomadaire, SOs stratégiques | CP-SAT + fallback |
+
+Configuration via table `algorithm_profiles`, matrice de sélection
+`algorithm_matrix` par (taille, valeur, urgence).
+
+### 2.10 Données de référence (MDM)
+
+#### EF-30 — Import référentiels ERP
+
+Le système doit importer depuis l'ERP :
+
+- Articles (`article_id`, `label`, `is_purchased`, `lot_min`).
+- BOM multi-niveau (`article_parent`, `article_child`, `qty_per`).
+- Routings (`article_id`, `sequence_idx`, `workstation_id`,
+  `unit_time_min`).
+- Workstations et capacités.
+- Coûts standards (matière, main d'œuvre, machine).
+
+**Import** : batch nightly + delta CDC (Change Data Capture) sur
+événements ERP.
+
+#### EF-31 — Versioning BOM et routings
+
+Chaque modification BOM ou routing crée une nouvelle version.
+
+- `bom_version` + `valid_from` / `valid_to`.
+- OFs en cours restent sur la version au moment de leur création.
+- Nouveaux OFs prennent la version active.
+- Historique consultable et rollback autorisé (planificateur senior).
+
+#### EF-32 — Publication contrôlée
+
+Les modifications MDM ne prennent effet qu'après :
+
+- Validation par référent MDM.
+- Test simulation impact plan actuel.
+- Publication versionnée + notification équipes.
+
+#### EF-33 — Coûts standards
+
+- Coût matière par article (mise à jour trimestrielle).
+- Coût main d'œuvre par workstation (mise à jour semestrielle).
+- Coût machine (amortissement + énergie) par workstation.
+- Utilisé par KPI €/unité livrée.
+
+### 2.11 Calendriers et exploitation atelier
+
+#### EF-34 — Calendriers atelier
+
+Le système gère plusieurs calendriers :
+
+- `daily_minutes` par jour ouvré et workstation.
+- Jours fériés, ponts, fermetures collectives.
+- Équipes multiples (2×8, 3×8, week-end) avec `shift_id`,
+  `start_time`, `end_time`.
+
+Impacte directement CRP (§2.3.1) et CPM (§2.3.2).
+
+#### EF-35 — Maintenance préventive (GMAO)
+
+- Créneaux de maintenance planifiée par workstation.
+- Réduction automatique de la capacité disponible.
+- Alerte planificateur si maintenance imminente sur goulot.
+- Intégration GMAO (import ou webhook).
+
+#### EF-36 — Changements d'équipe
+
+- Configuration cycle équipes (2×8, 3×8, jour seul).
+- Prise en compte automatique dans CRP.
+- Ajustement heures ouvertes du dashboard opérateur (US-11).
+
+### 2.12 Flexibilité capacité
+
+#### EF-37 — Sous-traitance
+
+Le système doit permettre de déclarer des opérations sous-traitées :
+
+- Article + opération → prestataire externe.
+- Attributs : `subcontractor_id`, `lead_time_days`, `unit_cost_eur`,
+  `capacity_max_per_day`.
+- Peggée comme une workstation virtuelle dans CRP.
+- Déclenche PO service + suivi livraison via boucle événementielle.
+
+#### EF-38 — Heures supplémentaires
+
+- Créneaux heures sup activables jour par jour, workstation par
+  workstation.
+- Marge de dépassement `daily_minutes_max` configurable
+  (défaut +20%).
+- Coût majoré appliqué au KPI €/unité.
+- Autorisation requise (chef d'atelier).
+
+### 2.13 Simulation what-if (sandbox planificateur)
+
+#### EF-39 — Sandbox de simulation
+
+Le planificateur doit pouvoir simuler l'impact d'une modification
+avant de l'engager :
+
+- Ajout SO fictive → prévision impact OTIF + charge.
+- Injection aléa (panne, retard PO) → prévision recovery.
+- Changement paramètre (`toc_target_saturation`, `cpm_margin_minutes`)
+  → comparaison KPIs.
+- Sandbox isolée (base éphémère, pas d'impact production).
+- Diff clair : plan actuel vs plan simulé, KPIs, alertes.
+
+### 2.14 Horizon modifiable
+
+#### EF-40 — Configuration granularité horizon
+
+Le système doit supporter plusieurs granularités d'horizon selon
+métier :
+
+| Granularité | Cas d'usage | Horizon typique |
+|---|---|:-:|
+| Horaire | Agroalimentaire, pharma cycle court | 24-48h |
+| Journalière | Manufacturing standard (défaut) | 30-90j |
+| Hebdomadaire | Assemblage lourd, projets long cycle | 6-12 mois |
+
+Configuration via paramètre `planning_granularity`. Tous les calculs
+(MRP, CRP, CPM, lissage) s'adaptent automatiquement.
+
+### 2.15 Retour d'expérience (RETEX) cross-SO
+
+#### EF-41 — Rapport RETEX pattern matching
+
+Au-delà du bilan SO individuel (EF-23), le système produit un rapport
+RETEX cross-SO périodique :
+
+- Identification des patterns récurrents d'échec (top signatures
+  déviations non retenues comme succès).
+- Identification des patterns récurrents de succès (recettes fréquentes
+  retenues avec outcome success).
+- Corrélation aléa → dérive KPI.
+- Suggestion de mise à jour paramètres data-driven (feed vers §2.7).
+
+**Livraison** : rapport mensuel + dashboard interactif.
+
+### 2.16 Générateur de variantes d'articles
+
+#### EF-42 — Axes de variantes
+
+Le système doit permettre de définir un **article configurable** avec
+plusieurs axes d'attributs (ex : taille × couleur × finition).
+
+**Modèle :**
+
+| Objet | Description |
+|---|---|
+| `article_template` | Article générique (ex : « pull ») |
+| `variant_axis` | Axe de variation (ex : taille, couleur) |
+| `variant_value` | Valeur possible sur un axe (ex : M, L / rouge, noir) |
+
+#### EF-43 — Génération de SKUs par produit cartésien
+
+À partir d'un `article_template` et de ses axes, le système génère les
+`article_id` concrets par produit cartésien des valeurs :
+
+```
+Template "pull"
+  axe taille : {M, L}
+  axe couleur : {rouge, noir}
+→ 4 SKUs générés : PULL-M-ROUGE, PULL-M-NOIR,
+                    PULL-L-ROUGE, PULL-L-NOIR
+```
+
+**Règles :**
+
+- Un SKU peut être désactivé sans supprimer le template.
+- Convention de nommage `article_id` paramétrable (template
+  `{TEMPLATE}-{AXE1}-{AXE2}`).
+- Idempotence : re-génération n'écrase pas les SKUs existants.
+
+#### EF-44 — BOM et routing variantes
+
+Chaque axe peut moduler la BOM et le routing du SKU :
+
+- **BOM variant** : override d'un composant selon axe
+  (ex : couleur rouge → dye_id = D-RED).
+- **Routing variant** : override d'une opération selon axe
+  (ex : taille L → temps machine +10%).
+- **Coefficient variant** : override d'un `qty_per` ou
+  `unit_time_min`.
+
+**Modèle :**
+
+- `bom_variant_override` : (template, axe, valeur, composant_id
+  substitué, qty_per).
+- `routing_variant_override` : (template, axe, valeur, sequence_idx,
+  ws_id, unit_time_min_override).
+
+La nomenclature aplatie (§2.3.0) et la gamme aplatie (§2.3.1) doivent
+consolider automatiquement les overrides applicables à un SKU donné.
+
+#### EF-45 — Réservation de capacité multi-variantes
+
+Une SO peut mixer des variantes du même template (ex : 100 PULL-M-NOIR
++ 50 PULL-L-ROUGE). Le CRP consolide la charge sur la gamme aplatie de
+chaque SKU en respectant leurs éventuels overrides.
+
+---
+
 ## 3. Exigences non-fonctionnelles
 
 ### 3.1 Performance
@@ -476,16 +738,79 @@ un rapport de bilan est généré :
 - Chaque action corrective traçable (déviation source, source
   décision : tolérance vs mémoire).
 
-### 3.6 Intégration
+### 3.6 Intégration et interopérabilité
+
+#### 3.6.1 Intégrations métier
 
 | Système | Sens | Contenu |
 |---|:-:|---|
 | ERP | ← | SOs, POs, stocks, articles, BOM |
 | ERP | → | Livraisons, mouvements stock |
-| GMAO | ← | Pannes machines, disponibilité |
-| GMAO | → | Alertes anomalies |
+| GMAO | ← | Pannes machines, disponibilité, maintenance prév. |
+| GMAO | → | Alertes anomalies, demandes intervention |
 | Qualité (LIMS) | ← | Résultats contrôles, NC |
 | MES terrain (tablettes) | ↔ | Saisie opérateurs, écrans postes |
+| PDM/PLM | ← | Templates articles, axes variantes, BOM techniques |
+
+#### 3.6.2 Normes et protocoles
+
+Le système doit se conformer aux standards industriels de référence
+pour crédibilité et interopérabilité :
+
+- **ISA-95** : hiérarchie fonctionnelle. Le module APS positionné
+  Level 4 (planification), le MES Level 3 (exécution). Les échanges
+  entre niveaux respectent le modèle B2MML (Business To Manufacturing
+  Markup Language) pour les objets `Production Schedule`,
+  `Production Performance`, `Material Consumed/Produced`.
+- **OPC-UA** : intégration temps réel avec SCADA / automates /
+  machines connectées. Le MES doit publier un serveur OPC-UA exposant
+  les états de workstation et souscrire aux événements physiques
+  (start op, finish op, alarme).
+- **ISO 9001** : traçabilité audit et gouvernance.
+- **ISO 27001** : sécurité de l'information (cf. §3.4).
+
+### 3.7 Résilience et mode dégradé
+
+Le système doit garantir la continuité d'exploitation en cas
+d'indisponibilité partielle.
+
+#### 3.7.1 Mode dégradé MES sans APS
+
+Si l'APS est down :
+
+- Le MES continue sur l'agenda goulot déjà publié pendant N heures
+  (`degraded_mode_max_hours`, défaut 24h).
+- Les événements réels continuent d'être capturés dans le journal
+  local.
+- Les décisions locales (`action_level ∈ {inform, watch,
+  correct_local}`) restent opérables.
+- Les décisions `replan_local` et supérieures sont mises en file
+  d'attente.
+
+#### 3.7.2 Réconciliation au retour APS
+
+- À la reprise de l'APS, les événements accumulés sont rejoués via le
+  moteur event sourcing.
+- Les file d'attente `replan_*` sont traitées en priorité.
+- Un rapport de sortie de mode dégradé est produit (durée,
+  événements traités, décisions retardées).
+
+#### 3.7.3 Sauvegarde et RPO/RTO
+
+| Métrique | Cible |
+|---|:-:|
+| RPO (Recovery Point Objective) | ≤ 24h |
+| RTO (Recovery Time Objective) | ≤ 4h |
+| Fréquence backups | Nightly + WAL streaming continu |
+| Test restauration | Trimestriel |
+
+#### 3.7.4 Alertes santé système
+
+- Dashboard santé publie latences, files d'attente, erreurs.
+- Seuils d'alerte : latence traitement déviation > 2×cible,
+  file d'attente approbations > 50, erreurs > 5%/h.
+- Notification administrateur + escalade DSI si dégradation
+  prolongée.
 
 ## 4. Contraintes techniques
 
@@ -546,18 +871,41 @@ avec 8 aléas et 5 seeds, il maintient :
 Chaque module doit passer ses tests unitaires + tests d'acceptation
 (voir user stories associées, `user_stories_of_event.md`).
 
-## 7. Hors périmètre
+## 7. Hors périmètre et roadmap V2
 
-Sont explicitement hors périmètre de ce cahier des charges :
+### 7.1 Hors périmètre définitif (choix doctrinal)
+
+Sont exclus **définitivement** de la cible OF+EVENT en raison des
+résultats expérimentaux :
 
 - Contractualisation flux hebdomadaire (V13.I).
 - Jumeau numérique 5 flux persisté (V13.J).
-- Zone négociable enrichie (V13.K).
+- Zone négociable enrichie flux (V13.K).
 - Boucle cybernétique étendue (BCE).
-- Prévision statistique long-terme (ML, séries temporelles) — traitée
-  par le module Forecasting V12.1 existant, non repris dans la cible.
-- Fonctions de mise en marché (CRM, e-commerce).
-- Gestion financière (comptabilité, facturation).
+
+### 7.2 Hors périmètre V1 mais roadmap V2 (à réévaluer)
+
+Ces fonctionnalités sont hors périmètre du présent CdC (V1) mais
+identifiées comme cibles pour une V2 selon retour d'exploitation :
+
+#### 7.2.1 Multi-site avec transferts inter-sites
+
+- Modèle : plusieurs sites (`site_id`) chacun avec ses workstations,
+  stocks, calendriers.
+- Transferts inter-sites : composants ou semi-finis migrent d'un site
+  à l'autre avec délai et coût.
+- MRP et CRP consolidés multi-site (pegging traverse les sites).
+- Optimisation allocation SO → site (charge, coût, proximité client).
+
+**Impact V2** : refonte modèle de données (ajout `site_id` partout),
+extension MRP et CRP, nouveaux moteurs d'allocation.
+
+### 7.3 Hors périmètre système (non-cible)
+
+- Fonctions de mise en marché (CRM, e-commerce, configurateur client).
+- Gestion financière (comptabilité, facturation, paie).
+- Gestion RH complète (formation, entretiens, paie).
+- Traçabilité fine par numéro de série (à évaluer selon secteur).
 
 ## 8. Références
 

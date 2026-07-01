@@ -163,6 +163,26 @@ Confirmation SO           (signature)                  Clôture OF+SO
 | Chaînage clôture OFs → clôture SO | À finaliser |
 | Apprentissage boucle longue | Existant |
 
+**Transverse — Moteurs et gouvernance**
+
+| Module | État |
+|---|:-:|
+| Prévision statistique linéaire + non-linéaire (ARIMA, HW, ensemble) | Existant (V12.1) |
+| CPM forward/backward | Existant |
+| Heuristiques (SLACK, EDD, SPT, ATC) | Existant (V12.2) |
+| Moteur lissage (capacity/due-date/TOC/CPM-aware) | Existant |
+| CP-SAT / OR-Tools | Existant (V12.2) |
+| Sélecteur de profil (rapide / équilibré / qualité) | Existant (V12.5) |
+| **MDM référentiels ERP + versioning BOM/gammes** | À développer |
+| **Générateur de variantes article (axes × cartésien)** | À développer |
+| **Calendriers atelier + maintenance préventive + équipes** | À développer |
+| **Sous-traitance + heures supplémentaires** | À développer |
+| **Simulation what-if (sandbox planificateur)** | À développer |
+| **Horizon configurable (heure / jour / semaine)** | À développer |
+| **RETEX cross-SO (pattern matching)** | À développer |
+| **Interopérabilité ISA-95 + OPC-UA** | À développer |
+| **Mode dégradé MES sans APS** | À développer |
+
 ### 4.2 Périmètre exclu (avec justification)
 
 | Fonctionnalité | Raison de l'exclusion |
@@ -326,7 +346,42 @@ re-ordonnancement global doit être justifié.
    - `of_flux_event_bce_extreme_report.md` (stress extrême)
 5. **Décision d'exclusion FLUX/BCE** — actée par ce document, §2.
 
-## 11. Validation
+## 11. Normes et interopérabilité (positionnement)
+
+Le système cible se positionne dans le cadre normatif industriel de
+référence pour garantir crédibilité et intégration au SI :
+
+- **ISA-95** : hiérarchie fonctionnelle Level 3 (MES) / Level 4 (APS).
+  Échanges normalisés B2MML entre niveaux.
+- **OPC-UA** : intégration temps réel avec SCADA, automates et machines
+  connectées. Le MES expose un serveur OPC-UA.
+- **ISO 9001** : traçabilité audit et gouvernance qualité.
+- **ISO 27001** : sécurité de l'information.
+
+Le respect de ces normes n'est pas un objectif V1 en tant que tel
+mais oriente les choix d'architecture (API, event schemas, hiérarchie
+des rôles).
+
+## 12. Roadmap V2 (au-delà du présent cadrage)
+
+Les fonctionnalités suivantes sont **identifiées comme cibles V2**,
+à réévaluer selon retour d'exploitation de la V1 :
+
+- **Multi-site avec transferts inter-sites** : plusieurs sites
+  physiques, MRP+CRP consolidés multi-site, allocation SO → site
+  optimisée.
+- **Retour d'expérience (RETEX) enrichi** : pattern matching cross-SO
+  avancé, suggestions d'ajustement paramétrique automatiques,
+  dashboard interactif.
+- **Horizon horaire pour cycles courts** : granularité heure pour
+  secteurs à cycle court (agroalimentaire, pharma).
+- **Intégration ERP native** au-delà de l'import batch : CDC + API
+  bidirectionnelle temps réel.
+- **Configurateur client** : outil externalisé permettant au client
+  final de spécifier ses variantes → génération SKU + estimation
+  délai en ligne.
+
+## 13. Validation
 
 Ce cadrage est validé sur la base des résultats expérimentaux joints.
 Toute demande d'inclusion ultérieure de la couche FLUX ou BCE devra

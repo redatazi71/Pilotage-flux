@@ -652,7 +652,259 @@ restaurer,
 
 ---
 
-## Résumé — 41 stories couvrant 9 epics × 3 zones
+---
+
+## Epic 10 [T] — Données de référence et variantes (MDM)
+
+### US-34 [T] (P7) — Importer les référentiels depuis l'ERP
+
+**En tant qu'** administrateur,
+**je veux** importer les articles, BOM, gammes, workstations et coûts
+standards depuis l'ERP,
+**afin de** disposer d'un référentiel unique et à jour.
+
+**Critères d'acceptation :**
+
+- Import batch nightly + CDC delta continue.
+- Rapport d'import : nb objets créés / modifiés / erreurs.
+- Rollback possible sur import erroné.
+
+### US-35 [T] (P7) — Versionner un changement BOM ou routing
+
+**En tant qu'** administrateur MDM,
+**je veux** modifier une BOM ou un routing en créant une nouvelle
+version datée,
+**afin de** préserver l'historique et ne pas casser les OFs en cours.
+
+**Critères d'acceptation :**
+
+- Nouvelle version = nouvel enregistrement avec `valid_from`.
+- L'ancienne version reste consultable (`valid_to` renseigné).
+- OFs déjà lancés restent sur leur version d'origine.
+- Publication après validation référent MDM.
+
+### US-36 [T] (P2) — Créer un article configurable (template)
+
+**En tant que** planificateur (ou administrateur MDM),
+**je veux** créer un article configurable avec ses axes de variation
+(ex : pull avec axes taille et couleur),
+**afin de** simplifier la gestion catalogue.
+
+**Critères d'acceptation :**
+
+- Saisie template + axes (`taille`, `couleur`) + valeurs par axe
+  (`{M, L, XL}`, `{rouge, noir, bleu}`).
+- Convention de nommage `article_id` paramétrable
+  (`{TEMPLATE}-{TAILLE}-{COULEUR}`).
+- Preview des SKUs qui vont être générés.
+
+### US-37 [T] (P2) — Générer les SKUs d'un template
+
+**En tant que** planificateur,
+**je veux** générer les SKUs par produit cartésien des axes,
+**afin d'** obtenir toutes les combinaisons commercialisables.
+
+**Critères d'acceptation :**
+
+- Génération 3 tailles × 3 couleurs = 9 SKUs.
+- Idempotence : re-génération n'écrase pas les SKUs existants.
+- Possibilité de désactiver certains SKUs (ex : XL rouge non
+  fabriqué).
+
+### US-38 [T] (P2) — Définir un override BOM ou routing par axe
+
+**En tant que** planificateur,
+**je veux** définir qu'une valeur d'axe modifie la BOM ou le routing
+(ex : couleur rouge → dye rouge ; taille L → +10% temps machine),
+**afin de** modéliser fidèlement les variantes.
+
+**Critères d'acceptation :**
+
+- Tableau `bom_variant_override` et `routing_variant_override`
+  éditable.
+- Consolidation automatique dans nomenclature aplatie (§2.3.0) et
+  gamme aplatie (§2.3.1) pour le SKU concerné.
+- Validation MDM avant publication.
+
+### US-39 [T] (P2) — Confirmer une SO mixant plusieurs variantes
+
+**En tant que** planificateur,
+**je veux** confirmer une SO composée de plusieurs SKUs d'un même
+template (ex : 100 PULL-M-NOIR + 50 PULL-L-ROUGE),
+**afin de** répondre aux commandes mixtes.
+
+**Critères d'acceptation :**
+
+- Un seul SO, plusieurs lignes SKU.
+- MRP consolide les besoins composants entre SKUs.
+- CRP consolide la charge WS entre SKUs.
+- Pegging identifie contribution SKU par SKU.
+
+---
+
+## Epic 11 [T] — Calendriers et exploitation
+
+### US-40 [T] (P7) — Configurer le calendrier atelier
+
+**En tant qu'** administrateur,
+**je veux** configurer les jours ouvrés, fériés, ponts et fermetures
+collectives,
+**afin que** la capacité disponible reflète la réalité.
+
+**Critères d'acceptation :**
+
+- Interface calendrier annuel.
+- Import possible depuis calendrier standard (ex : ICS).
+- Impact automatique sur CRP et CPM.
+
+### US-41 [T] (P3) — Planifier une maintenance préventive
+
+**En tant que** chef d'atelier,
+**je veux** planifier une maintenance sur une workstation,
+**afin de** bloquer sa capacité sur les créneaux prévus.
+
+**Critères d'acceptation :**
+
+- Créneau (WS, date début, durée).
+- Impact sur CRP immédiat, alerte planificateur si maintenance
+  goulot.
+- Intégration GMAO (import ou saisie manuelle).
+
+### US-42 [T] (P7) — Paramétrer les cycles d'équipes
+
+**En tant qu'** administrateur,
+**je veux** paramétrer les cycles d'équipes (2×8, 3×8, jour seul),
+**afin d'** ajuster la capacité à l'organisation atelier.
+
+**Critères d'acceptation :**
+
+- Table `shifts` (WS, shift_id, start, end).
+- CRP prend en compte le cycle actif.
+- UI opérateur (US-11) filtre selon shift en cours.
+
+---
+
+## Epic 12 [N] — Flexibilité capacité (Zone négociable)
+
+### US-43 [N] (P2) — Déclarer une opération sous-traitée
+
+**En tant que** planificateur,
+**je veux** déclarer qu'une opération est sous-traitée à un
+prestataire,
+**afin d'** absorber une surcharge sans investir en capacité interne.
+
+**Critères d'acceptation :**
+
+- Attributs : subcontractor_id, lead_time, unit_cost, capacity_max.
+- Peggée comme WS virtuelle dans CRP.
+- Déclenche PO service + suivi via event sourcing.
+
+### US-44 [N] (P3) — Activer des heures supplémentaires
+
+**En tant que** chef d'atelier,
+**je veux** activer des créneaux heures sup sur un poste et un jour
+donnés,
+**afin de** dégager de la capacité en cas d'urgence.
+
+**Critères d'acceptation :**
+
+- Autorisation requise (rôle chef d'atelier ou supérieur).
+- Marge `daily_minutes_max` respectée (défaut +20%).
+- Coût majoré appliqué au KPI €/u.
+- Audit log traçable.
+
+---
+
+## Epic 13 [T] — Simulation what-if (sandbox planificateur)
+
+### US-45 [T] (P2) — Simuler l'ajout d'une SO fictive
+
+**En tant que** planificateur,
+**je veux** simuler l'ajout d'une SO potentielle pour voir son impact
+sur le plan et les KPIs,
+**afin de** décider si je peux m'engager sur le délai demandé.
+
+**Critères d'acceptation :**
+
+- Sandbox isolée (base éphémère).
+- Diff clair : plan actuel vs plan simulé, KPIs, alertes surcharge.
+- Résultat exportable pour partage.
+
+### US-46 [T] (P3) — Simuler l'injection d'un aléa
+
+**En tant que** chef d'atelier,
+**je veux** simuler l'impact d'une panne machine ou d'un retard PO,
+**afin d'** anticiper le plan de continuité.
+
+**Critères d'acceptation :**
+
+- Sélection du type d'aléa (breakdown, PO delay, NC).
+- Simulation → prévision recovery + rupture éventuelle.
+- Suggestion actions correctives préventives.
+
+### US-47 [T] (P2) — Comparer des jeux de paramètres
+
+**En tant que** planificateur,
+**je veux** comparer plusieurs jeux de paramètres
+(`toc_target_saturation`, `cpm_margin_minutes`, seuils tolérance),
+**afin de** identifier le meilleur réglage sur mon contexte.
+
+**Critères d'acceptation :**
+
+- Sandbox multi-config (grille de valeurs).
+- Tableau comparatif KPIs.
+- Recommandation surlignée.
+
+---
+
+## Epic 14 [T] — Configuration horizon
+
+### US-48 [T] (P7) — Configurer la granularité horizon
+
+**En tant qu'** administrateur,
+**je veux** configurer la granularité horizon (heure, jour, semaine),
+**afin d'** adapter le système au métier.
+
+**Critères d'acceptation :**
+
+- Paramètre `planning_granularity` sur la table `parameters`.
+- Tous les calculs (MRP, CRP, CPM, lissage, tolérances) s'adaptent.
+- Migration : conversion automatique des paramètres liés au temps
+  (fenêtres, latences).
+
+---
+
+## Epic 15 [T] — Retour d'expérience (RETEX)
+
+### US-49 [T] (P1) — Consulter le rapport RETEX mensuel
+
+**En tant que** directeur industriel,
+**je veux** consulter un rapport RETEX mensuel cross-SO,
+**afin d'** identifier les patterns récurrents et piloter l'amélioration
+continue.
+
+**Critères d'acceptation :**
+
+- Top 5 signatures déviations en échec.
+- Top 5 recettes retenues avec outcome success.
+- Corrélation aléa → KPI dégradé.
+- Suggestions ajustement paramètres.
+
+### US-50 [T] (P2) — Dashboard RETEX interactif
+
+**En tant que** planificateur,
+**je veux** un dashboard interactif RETEX,
+**afin d'** explorer les données de retour d'expérience à la demande.
+
+**Critères d'acceptation :**
+
+- Filtres : période, famille produit, workstation, action_level.
+- Drill-down sur une signature → détail SOs concernées.
+- Export CSV / PDF.
+
+---
+
+## Résumé — 58 stories couvrant 15 epics × 3 zones
 
 | Epic | Zone | Nb US | Personas concernés |
 |---|:-:|:-:|:-:|
@@ -665,22 +917,34 @@ restaurer,
 | 7 — Clôture demande | G | 4 | P1, P2, P3, P4 |
 | 8 — Pilotage / supervision | T | 3 | P1, P6 |
 | 9 — Non-fonctionnel | T | 2 | P7 |
-| **Total** | | **41** | |
+| 10 — MDM + variantes | T | 6 | P2, P7 |
+| 11 — Calendriers | T | 3 | P3, P7 |
+| 12 — Flexibilité capacité | N | 2 | P2, P3 |
+| 13 — Simulation what-if | T | 3 | P2, P3 |
+| 14 — Configuration horizon | T | 1 | P7 |
+| 15 — RETEX | T | 2 | P1, P2 |
+| **Total** | | **58** | |
 
 ## Répartition par zone
 
 | Zone | Nb US | Contenu clé |
 |---|:-:|---|
 | **Libre (L)** | 7 | ATP/CTP, réservation, confirmation SO |
-| **Négociable (N)** | 11 | Nomenclature aplatie, MRP, gamme aplatie, CRP, pegging, ordonnancement DBR |
+| **Négociable (N)** | 13 | MRP, CRP, pegging, DBR, sous-traitance, heures sup |
 | **Gelée (G)** | 14 | MES, event sourcing, filtres duals, clôture |
-| **Transverse (T)** | 9 | Apprentissage, supervision, non-fonctionnel |
+| **Transverse (T)** | 24 | Moteurs, MDM+variantes, calendriers, what-if, horizon, RETEX, apprentissage, supervision, NF |
 
 ## Priorisation MVP
 
-- **MVP0** (P0) : US-01, US-05, US-11, US-13, US-25, US-27.
+- **MVP0** (P0) : US-01, US-05, US-11, US-13, US-25, US-27, US-34
+  (import ERP), US-40 (calendriers).
 - **MVP1** (P1) : US-02, US-03, US-06, US-08a-c (MRP + pegging),
-  US-08, US-12, US-16, US-26.
+  US-08, US-12, US-16, US-26, US-35 (versioning), US-45 (what-if
+  simple).
 - **MVP2** (P2) : US-04, US-07, US-08d-h (PO, CRP, pegging routing,
-  alertes), US-09, US-14, US-15, US-17, US-28, US-29.
-- **Enrichissement** (P3+) : reste des stories.
+  alertes), US-09, US-14, US-15, US-17, US-28, US-29, US-36 à US-39
+  (variantes complet), US-41-42 (maintenance, équipes), US-43-44
+  (sous-traitance, heures sup), US-46-47 (what-if aléa + comparaison
+  params), US-48 (horizon), US-49-50 (RETEX).
+- **Enrichissement** (P3+) : stories NF avancées, reprise sinistre,
+  interopérabilité normée avancée (ISA-95, OPC-UA).

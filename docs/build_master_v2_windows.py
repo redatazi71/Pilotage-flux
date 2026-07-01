@@ -23,10 +23,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import signal
 import statistics
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -154,6 +156,21 @@ def _make_spec(level_cfg: dict, shock_cfg: dict) -> RandomScenarioSpec:
 
 
 # ---------- Un run --------------------------------------------------------
+
+def _run_job(job: tuple) -> dict:
+    """Worker function pour ProcessPoolExecutor.
+
+    Reçoit un tuple pickle-able, régénère la scenario, exécute run_doctrine.
+    Chaque worker a son propre process → import répété acceptable.
+    """
+    (level, shock, tag, doctrine, seed, work_str, fix_dir_str,
+     level_cfg, shock_cfg) = job
+    work = Path(work_str)
+    fix_dir = Path(fix_dir_str)
+    spec = _make_spec(level_cfg, shock_cfg)
+    scen = generate_random_scenario(spec, seed=seed, fixtures_dir=fix_dir)
+    return _run_one(scen, doctrine, work, fix_dir, level, shock, tag)
+
 
 def _run_one(scen, doctrine, work, fix_dir, level, shock, tag) -> dict:
     db = work / f"{level}_{shock}_{tag}_{scen.seed}.db"
@@ -435,7 +452,20 @@ def main() -> int:
                              "(saute les cellules déjà présentes dans CSV)")
     parser.add_argument("--no-live", action="store_true",
                         help="Désactive affichage rich (mode texte plain)")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Nombre de processes parallèles "
+                             "(défaut 1 = séquentiel). Recommandation : "
+                             "os.cpu_count() - 1")
     args = parser.parse_args()
+
+    if args.workers < 1:
+        args.workers = 1
+    if args.workers > 1:
+        max_workers = os.cpu_count() or 1
+        if args.workers > max_workers:
+            print(f"[WARN] workers={args.workers} > cpu_count={max_workers}, "
+                  f"clamp à {max_workers}", flush=True)
+            args.workers = max_workers
 
     n_seeds = args.seeds
     seeds = list(range(SEED_BASE, SEED_BASE + n_seeds))
@@ -490,7 +520,7 @@ def main() -> int:
 
     signal.signal(signal.SIGINT, _sig_handler)
 
-    def _run_all(live_display=None):
+    def _run_all_sequential(live_display=None):
         with TemporaryDirectory(prefix="master_v2_") as tmp:
             work = Path(tmp)
             fix_dir = work / "fix"
@@ -520,6 +550,62 @@ def main() -> int:
                                 live_display.update(display.make_layout())
                             if interrupted["flag"]:
                                 return
+
+    def _run_all_parallel(live_display=None):
+        with TemporaryDirectory(prefix="master_v2_") as tmp:
+            work = Path(tmp)
+            fix_dir = work / "fix"
+            generate_random_fixtures(DEFAULT_SPEC, seed=42, out_dir=fix_dir)
+
+            # Prépare la liste de jobs pickle-ables
+            jobs: list[tuple] = []
+            for level, level_cfg in STRESS_LEVELS:
+                for shock_name, shock_cfg in SHOCK_TYPES:
+                    for seed in seeds:
+                        for tag, doctrine in CONFIGS:
+                            key = (level, shock_name, tag, seed)
+                            if key in done_keys:
+                                continue
+                            jobs.append((
+                                level, shock_name, tag, doctrine, seed,
+                                str(work), str(fix_dir),
+                                dict(level_cfg), dict(shock_cfg),
+                            ))
+
+            print(f"[PARALLEL] {len(jobs)} jobs sur "
+                  f"{args.workers} workers", flush=True)
+
+            with ProcessPoolExecutor(max_workers=args.workers) as executor:
+                futures = {
+                    executor.submit(_run_job, job): job for job in jobs
+                }
+                for future in as_completed(futures):
+                    if interrupted["flag"]:
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        return
+                    try:
+                        r = future.result()
+                    except Exception as e:
+                        job = futures[future]
+                        r = {
+                            "level": job[0], "shock_type": job[1],
+                            "config_tag": job[2], "doctrine": job[3],
+                            "seed": job[4], "status": "crashed",
+                            "error": str(e)[:200],
+                        }
+                    all_runs.append(r)
+                    _append_row(writer, r, csv_file)
+                    display.register_run(r)
+                    if display.done % 20 == 0:
+                        display.dump_status()
+                    if live_display is not None:
+                        live_display.update(display.make_layout())
+
+    def _run_all(live_display=None):
+        if args.workers > 1:
+            _run_all_parallel(live_display)
+        else:
+            _run_all_sequential(live_display)
 
     try:
         if HAS_RICH and not args.no_live:

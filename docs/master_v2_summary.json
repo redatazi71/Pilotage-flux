@@ -49,54 +49,6 @@
           "n": 1
         }
       },
-      "OF+EVENT": {
-        "n_runs": 1,
-        "otif": {
-          "mean": 0.9503,
-          "std": 0.0,
-          "n": 1
-        },
-        "q": {
-          "mean": 0.9503,
-          "std": 0.0,
-          "n": 1
-        },
-        "d": {
-          "mean": 1.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "cost_per_u": {
-          "mean": 110.48,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_avg": {
-          "mean": 3.6,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_sd": {
-          "mean": 4.8820572260698345,
-          "std": 0.0,
-          "n": 1
-        },
-        "nervousness": {
-          "mean": 0.067,
-          "std": 0.0,
-          "n": 1
-        },
-        "rupture_pct": {
-          "mean": 0.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "recovery_days": {
-          "mean": 4,
-          "std": 0.0,
-          "n": 1
-        }
-      },
       "FLUX+EVENT": {
         "n_runs": 1,
         "otif": {
@@ -141,6 +93,54 @@
         },
         "recovery_days": {
           "mean": 8,
+          "std": 0.0,
+          "n": 1
+        }
+      },
+      "OF+EVENT": {
+        "n_runs": 1,
+        "otif": {
+          "mean": 0.9503,
+          "std": 0.0,
+          "n": 1
+        },
+        "q": {
+          "mean": 0.9503,
+          "std": 0.0,
+          "n": 1
+        },
+        "d": {
+          "mean": 1.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "cost_per_u": {
+          "mean": 110.48,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_avg": {
+          "mean": 3.6,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_sd": {
+          "mean": 4.8820572260698345,
+          "std": 0.0,
+          "n": 1
+        },
+        "nervousness": {
+          "mean": 0.067,
+          "std": 0.0,
+          "n": 1
+        },
+        "rupture_pct": {
+          "mean": 0.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "recovery_days": {
+          "mean": 4,
           "std": 0.0,
           "n": 1
         }
@@ -871,54 +871,6 @@
           "n": 1
         }
       },
-      "OF+EVENT+BCE": {
-        "n_runs": 1,
-        "otif": {
-          "mean": 0.9508,
-          "std": 0.0,
-          "n": 1
-        },
-        "q": {
-          "mean": 0.9508,
-          "std": 0.0,
-          "n": 1
-        },
-        "d": {
-          "mean": 1.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "cost_per_u": {
-          "mean": 109.75,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_avg": {
-          "mean": 3.33,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_sd": {
-          "mean": 5.005743827281598,
-          "std": 0.0,
-          "n": 1
-        },
-        "nervousness": {
-          "mean": 0.033,
-          "std": 0.0,
-          "n": 1
-        },
-        "rupture_pct": {
-          "mean": 0.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "recovery_days": {
-          "mean": 4,
-          "std": 0.0,
-          "n": 1
-        }
-      },
       "FLUX+EVENT+BCE": {
         "n_runs": 1,
         "otif": {
@@ -963,6 +915,54 @@
         },
         "recovery_days": {
           "mean": 0,
+          "std": 0.0,
+          "n": 1
+        }
+      },
+      "OF+EVENT+BCE": {
+        "n_runs": 1,
+        "otif": {
+          "mean": 0.9508,
+          "std": 0.0,
+          "n": 1
+        },
+        "q": {
+          "mean": 0.9508,
+          "std": 0.0,
+          "n": 1
+        },
+        "d": {
+          "mean": 1.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "cost_per_u": {
+          "mean": 109.75,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_avg": {
+          "mean": 3.33,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_sd": {
+          "mean": 5.005743827281598,
+          "std": 0.0,
+          "n": 1
+        },
+        "nervousness": {
+          "mean": 0.033,
+          "std": 0.0,
+          "n": 1
+        },
+        "rupture_pct": {
+          "mean": 0.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "recovery_days": {
+          "mean": 4,
           "std": 0.0,
           "n": 1
         }
@@ -1357,54 +1357,6 @@
           "n": 1
         }
       },
-      "OF+EVENT+BCE": {
-        "n_runs": 1,
-        "otif": {
-          "mean": 0.9508,
-          "std": 0.0,
-          "n": 1
-        },
-        "q": {
-          "mean": 0.9508,
-          "std": 0.0,
-          "n": 1
-        },
-        "d": {
-          "mean": 1.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "cost_per_u": {
-          "mean": 97.06,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_avg": {
-          "mean": 3.8,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_sd": {
-          "mean": 6.49685238473916,
-          "std": 0.0,
-          "n": 1
-        },
-        "nervousness": {
-          "mean": 0.022,
-          "std": 0.0,
-          "n": 1
-        },
-        "rupture_pct": {
-          "mean": 0.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "recovery_days": {
-          "mean": 12,
-          "std": 0.0,
-          "n": 1
-        }
-      },
       "FLUX+EVENT+BCE": {
         "n_runs": 1,
         "otif": {
@@ -1434,6 +1386,54 @@
         },
         "wip_sd": {
           "mean": 4.710829989706611,
+          "std": 0.0,
+          "n": 1
+        },
+        "nervousness": {
+          "mean": 0.022,
+          "std": 0.0,
+          "n": 1
+        },
+        "rupture_pct": {
+          "mean": 0.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "recovery_days": {
+          "mean": 12,
+          "std": 0.0,
+          "n": 1
+        }
+      },
+      "OF+EVENT+BCE": {
+        "n_runs": 1,
+        "otif": {
+          "mean": 0.9508,
+          "std": 0.0,
+          "n": 1
+        },
+        "q": {
+          "mean": 0.9508,
+          "std": 0.0,
+          "n": 1
+        },
+        "d": {
+          "mean": 1.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "cost_per_u": {
+          "mean": 97.06,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_avg": {
+          "mean": 3.8,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_sd": {
+          "mean": 6.49685238473916,
           "std": 0.0,
           "n": 1
         },
@@ -2811,54 +2811,6 @@
           "n": 1
         }
       },
-      "OF+EVENT+BCE": {
-        "n_runs": 1,
-        "otif": {
-          "mean": 0.9505,
-          "std": 0.0,
-          "n": 1
-        },
-        "q": {
-          "mean": 0.9505,
-          "std": 0.0,
-          "n": 1
-        },
-        "d": {
-          "mean": 1.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "cost_per_u": {
-          "mean": 125.32,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_avg": {
-          "mean": 6.2,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_sd": {
-          "mean": 10.237518237396062,
-          "std": 0.0,
-          "n": 1
-        },
-        "nervousness": {
-          "mean": 0.017,
-          "std": 0.0,
-          "n": 1
-        },
-        "rupture_pct": {
-          "mean": 0.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "recovery_days": {
-          "mean": 20,
-          "std": 0.0,
-          "n": 1
-        }
-      },
       "FLUX+EVENT+BCE": {
         "n_runs": 1,
         "otif": {
@@ -2903,6 +2855,54 @@
         },
         "recovery_days": {
           "mean": 13,
+          "std": 0.0,
+          "n": 1
+        }
+      },
+      "OF+EVENT+BCE": {
+        "n_runs": 1,
+        "otif": {
+          "mean": 0.9505,
+          "std": 0.0,
+          "n": 1
+        },
+        "q": {
+          "mean": 0.9505,
+          "std": 0.0,
+          "n": 1
+        },
+        "d": {
+          "mean": 1.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "cost_per_u": {
+          "mean": 125.32,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_avg": {
+          "mean": 6.2,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_sd": {
+          "mean": 10.237518237396062,
+          "std": 0.0,
+          "n": 1
+        },
+        "nervousness": {
+          "mean": 0.017,
+          "std": 0.0,
+          "n": 1
+        },
+        "rupture_pct": {
+          "mean": 0.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "recovery_days": {
+          "mean": 20,
           "std": 0.0,
           "n": 1
         }
@@ -4267,54 +4267,6 @@
           "n": 1
         }
       },
-      "OF+EVENT+BCE": {
-        "n_runs": 1,
-        "otif": {
-          "mean": 0.9503,
-          "std": 0.0,
-          "n": 1
-        },
-        "q": {
-          "mean": 0.9503,
-          "std": 0.0,
-          "n": 1
-        },
-        "d": {
-          "mean": 1.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "cost_per_u": {
-          "mean": 98.79,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_avg": {
-          "mean": 6.41,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_sd": {
-          "mean": 14.946929233535036,
-          "std": 0.0,
-          "n": 1
-        },
-        "nervousness": {
-          "mean": 0.007,
-          "std": 0.0,
-          "n": 1
-        },
-        "rupture_pct": {
-          "mean": 0.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "recovery_days": {
-          "mean": 20,
-          "std": 0.0,
-          "n": 1
-        }
-      },
       "FLUX+EVENT+BCE": {
         "n_runs": 1,
         "otif": {
@@ -4354,6 +4306,54 @@
         },
         "rupture_pct": {
           "mean": 0.03333333333333333,
+          "std": 0.0,
+          "n": 1
+        },
+        "recovery_days": {
+          "mean": 20,
+          "std": 0.0,
+          "n": 1
+        }
+      },
+      "OF+EVENT+BCE": {
+        "n_runs": 1,
+        "otif": {
+          "mean": 0.9503,
+          "std": 0.0,
+          "n": 1
+        },
+        "q": {
+          "mean": 0.9503,
+          "std": 0.0,
+          "n": 1
+        },
+        "d": {
+          "mean": 1.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "cost_per_u": {
+          "mean": 98.79,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_avg": {
+          "mean": 6.41,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_sd": {
+          "mean": 14.946929233535036,
+          "std": 0.0,
+          "n": 1
+        },
+        "nervousness": {
+          "mean": 0.007,
+          "std": 0.0,
+          "n": 1
+        },
+        "rupture_pct": {
+          "mean": 0.0,
           "std": 0.0,
           "n": 1
         },
@@ -4509,54 +4509,6 @@
           "n": 1
         }
       },
-      "OF+EVENT+BCE": {
-        "n_runs": 1,
-        "otif": {
-          "mean": 0.935,
-          "std": 0.0,
-          "n": 1
-        },
-        "q": {
-          "mean": 0.935,
-          "std": 0.0,
-          "n": 1
-        },
-        "d": {
-          "mean": 1.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "cost_per_u": {
-          "mean": 97.62,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_avg": {
-          "mean": 6.36,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_sd": {
-          "mean": 14.85558218810865,
-          "std": 0.0,
-          "n": 1
-        },
-        "nervousness": {
-          "mean": 0.013,
-          "std": 0.0,
-          "n": 1
-        },
-        "rupture_pct": {
-          "mean": 0.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "recovery_days": {
-          "mean": 20,
-          "std": 0.0,
-          "n": 1
-        }
-      },
       "FLUX+EVENT+BCE": {
         "n_runs": 1,
         "otif": {
@@ -4596,6 +4548,54 @@
         },
         "rupture_pct": {
           "mean": 0.03225806451612903,
+          "std": 0.0,
+          "n": 1
+        },
+        "recovery_days": {
+          "mean": 20,
+          "std": 0.0,
+          "n": 1
+        }
+      },
+      "OF+EVENT+BCE": {
+        "n_runs": 1,
+        "otif": {
+          "mean": 0.935,
+          "std": 0.0,
+          "n": 1
+        },
+        "q": {
+          "mean": 0.935,
+          "std": 0.0,
+          "n": 1
+        },
+        "d": {
+          "mean": 1.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "cost_per_u": {
+          "mean": 97.62,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_avg": {
+          "mean": 6.36,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_sd": {
+          "mean": 14.85558218810865,
+          "std": 0.0,
+          "n": 1
+        },
+        "nervousness": {
+          "mean": 0.013,
+          "std": 0.0,
+          "n": 1
+        },
+        "rupture_pct": {
+          "mean": 0.0,
           "std": 0.0,
           "n": 1
         },
@@ -4995,54 +4995,6 @@
           "n": 1
         }
       },
-      "OF+EVENT+BCE": {
-        "n_runs": 1,
-        "otif": {
-          "mean": 0.91897703,
-          "std": 0.0,
-          "n": 1
-        },
-        "q": {
-          "mean": 0.9409,
-          "std": 0.0,
-          "n": 1
-        },
-        "d": {
-          "mean": 0.9767,
-          "std": 0.0,
-          "n": 1
-        },
-        "cost_per_u": {
-          "mean": 112.41,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_avg": {
-          "mean": 8.38,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_sd": {
-          "mean": 18.625169190487952,
-          "std": 0.0,
-          "n": 1
-        },
-        "nervousness": {
-          "mean": 0.011,
-          "std": 0.0,
-          "n": 1
-        },
-        "rupture_pct": {
-          "mean": 0.023255813953488372,
-          "std": 0.0,
-          "n": 1
-        },
-        "recovery_days": {
-          "mean": 20,
-          "std": 0.0,
-          "n": 1
-        }
-      },
       "FLUX+EVENT+BCE": {
         "n_runs": 1,
         "otif": {
@@ -5072,6 +5024,54 @@
         },
         "wip_sd": {
           "mean": 17.609034276302886,
+          "std": 0.0,
+          "n": 1
+        },
+        "nervousness": {
+          "mean": 0.011,
+          "std": 0.0,
+          "n": 1
+        },
+        "rupture_pct": {
+          "mean": 0.023255813953488372,
+          "std": 0.0,
+          "n": 1
+        },
+        "recovery_days": {
+          "mean": 20,
+          "std": 0.0,
+          "n": 1
+        }
+      },
+      "OF+EVENT+BCE": {
+        "n_runs": 1,
+        "otif": {
+          "mean": 0.91897703,
+          "std": 0.0,
+          "n": 1
+        },
+        "q": {
+          "mean": 0.9409,
+          "std": 0.0,
+          "n": 1
+        },
+        "d": {
+          "mean": 0.9767,
+          "std": 0.0,
+          "n": 1
+        },
+        "cost_per_u": {
+          "mean": 112.41,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_avg": {
+          "mean": 8.38,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_sd": {
+          "mean": 18.625169190487952,
           "std": 0.0,
           "n": 1
         },
@@ -5479,54 +5479,6 @@
           "n": 1
         }
       },
-      "OF+EVENT+BCE": {
-        "n_runs": 1,
-        "otif": {
-          "mean": 0.9423,
-          "std": 0.0,
-          "n": 1
-        },
-        "q": {
-          "mean": 0.9423,
-          "std": 0.0,
-          "n": 1
-        },
-        "d": {
-          "mean": 1.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "cost_per_u": {
-          "mean": 109.36,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_avg": {
-          "mean": 7.48,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_sd": {
-          "mean": 17.920512124676478,
-          "std": 0.0,
-          "n": 1
-        },
-        "nervousness": {
-          "mean": 0.006,
-          "std": 0.0,
-          "n": 1
-        },
-        "rupture_pct": {
-          "mean": 0.0,
-          "std": 0.0,
-          "n": 1
-        },
-        "recovery_days": {
-          "mean": 20,
-          "std": 0.0,
-          "n": 1
-        }
-      },
       "FLUX+EVENT+BCE": {
         "n_runs": 1,
         "otif": {
@@ -5556,6 +5508,54 @@
         },
         "wip_sd": {
           "mean": 11.3709789381202,
+          "std": 0.0,
+          "n": 1
+        },
+        "nervousness": {
+          "mean": 0.006,
+          "std": 0.0,
+          "n": 1
+        },
+        "rupture_pct": {
+          "mean": 0.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "recovery_days": {
+          "mean": 20,
+          "std": 0.0,
+          "n": 1
+        }
+      },
+      "OF+EVENT+BCE": {
+        "n_runs": 1,
+        "otif": {
+          "mean": 0.9423,
+          "std": 0.0,
+          "n": 1
+        },
+        "q": {
+          "mean": 0.9423,
+          "std": 0.0,
+          "n": 1
+        },
+        "d": {
+          "mean": 1.0,
+          "std": 0.0,
+          "n": 1
+        },
+        "cost_per_u": {
+          "mean": 109.36,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_avg": {
+          "mean": 7.48,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_sd": {
+          "mean": 17.920512124676478,
           "std": 0.0,
           "n": 1
         },
@@ -5721,54 +5721,6 @@
           "n": 1
         }
       },
-      "OF+EVENT+BCE": {
-        "n_runs": 1,
-        "otif": {
-          "mean": 0.92374919,
-          "std": 0.0,
-          "n": 1
-        },
-        "q": {
-          "mean": 0.9487,
-          "std": 0.0,
-          "n": 1
-        },
-        "d": {
-          "mean": 0.9737,
-          "std": 0.0,
-          "n": 1
-        },
-        "cost_per_u": {
-          "mean": 112.43,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_avg": {
-          "mean": 8.08,
-          "std": 0.0,
-          "n": 1
-        },
-        "wip_sd": {
-          "mean": 18.633020354953373,
-          "std": 0.0,
-          "n": 1
-        },
-        "nervousness": {
-          "mean": 0.011,
-          "std": 0.0,
-          "n": 1
-        },
-        "rupture_pct": {
-          "mean": 0.02631578947368421,
-          "std": 0.0,
-          "n": 1
-        },
-        "recovery_days": {
-          "mean": 20,
-          "std": 0.0,
-          "n": 1
-        }
-      },
       "FLUX+EVENT+BCE": {
         "n_runs": 1,
         "otif": {
@@ -5798,6 +5750,54 @@
         },
         "wip_sd": {
           "mean": 17.62188114874119,
+          "std": 0.0,
+          "n": 1
+        },
+        "nervousness": {
+          "mean": 0.011,
+          "std": 0.0,
+          "n": 1
+        },
+        "rupture_pct": {
+          "mean": 0.02631578947368421,
+          "std": 0.0,
+          "n": 1
+        },
+        "recovery_days": {
+          "mean": 20,
+          "std": 0.0,
+          "n": 1
+        }
+      },
+      "OF+EVENT+BCE": {
+        "n_runs": 1,
+        "otif": {
+          "mean": 0.92374919,
+          "std": 0.0,
+          "n": 1
+        },
+        "q": {
+          "mean": 0.9487,
+          "std": 0.0,
+          "n": 1
+        },
+        "d": {
+          "mean": 0.9737,
+          "std": 0.0,
+          "n": 1
+        },
+        "cost_per_u": {
+          "mean": 112.43,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_avg": {
+          "mean": 8.08,
+          "std": 0.0,
+          "n": 1
+        },
+        "wip_sd": {
+          "mean": 18.633020354953373,
           "std": 0.0,
           "n": 1
         },

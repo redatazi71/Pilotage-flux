@@ -468,7 +468,17 @@ def main() -> int:
                         help="Nombre de processes parallèles "
                              "(défaut 1 = séquentiel). Recommandation : "
                              "os.cpu_count() - 1")
+    parser.add_argument("--no-bce", action="store_true",
+                        help="Exclut les configs BCE : 3 doctrines "
+                             "seulement (OF / OF+EVENT / FLUX+EVENT)")
     args = parser.parse_args()
+
+    # --no-bce : filtre CONFIGS globalement (pour --resume compat)
+    global CONFIGS
+    if args.no_bce:
+        CONFIGS = [c for c in CONFIGS if "BCE" not in c[0]]
+        print(f"[--no-bce] {len(CONFIGS)} configs actives : "
+              f"{[c[0] for c in CONFIGS]}", flush=True)
 
     if args.workers < 1:
         args.workers = 1

@@ -449,6 +449,10 @@ class HazardState:
     # L9.4 — lissage : map of_id -> jour logique de lancement (selon smoothing)
     scheduled_launch_day: dict[str, int] = field(default_factory=dict)
 
+    # V13.G — MES DBR-aware : goulot dynamique protégé par budget strict
+    dbr_bottleneck_ws: str | None = None
+    dbr_budget_min: float = 0.0  # minutes utilisables/jour sur le goulot
+
 
 def _apply_hazard(
     conn: sqlite3.Connection,
@@ -580,6 +584,151 @@ def _apply_hazard(
     if bce_info is not None and result.hazards_observed:
         # Enrichit la dernière trace hazard avec le résultat BCE
         result.hazards_observed[-1].update(bce_info)
+
+
+def _get_mes_dbr_aware_flag(conn: sqlite3.Connection) -> bool:
+    """V13.G — Lit `mes_dbr_aware` (default 0).
+
+    1 = active la protection DBR du goulot au niveau MES :
+        - identifie le goulot dynamique (argmax charge/capa)
+        - impose un budget strict = daily_min × capa × target_sat sur
+          ce WS (les ops en excès attendent le jour suivant)
+        - les autres WS restent en mode legacy ou réaliste selon
+          la config existante
+    0 = comportement legacy (1 op/WS/jour) ou réaliste (V13.A).
+    """
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="mes_dbr_aware", default=0.0,
+    )
+    return bool(val and float(val) > 0.5)
+
+
+def _get_mes_dbr_target_saturation(conn: sqlite3.Connection) -> float:
+    """V13.G — Cible saturation pour le goulot MES (default 0.85)."""
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="mes_dbr_target_saturation", default=0.85,
+    )
+    f = float(val) if val is not None else 0.85
+    return min(0.99, max(0.30, f))
+
+
+def _get_mes_dbr_rope_buffer_size(conn: sqlite3.Connection) -> int:
+    """V14 — Taille buffer d'OFs en attente devant le goulot.
+
+    Rope = quand la file devant le goulot atteint ce nombre, les
+    ops amont (qui alimenteraient cette file) sont bloquées jusqu'à
+    ce que la file baisse. Le goulot lui-même tourne à 100 %.
+
+    Default 3 (règle industrielle typique : 2-5 OFs de buffer).
+    Clamped [1, 20].
+    """
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="mes_dbr_rope_buffer_size", default=3.0,
+    )
+    b = int(val) if val is not None else 3
+    return min(20, max(1, b))
+
+
+def _count_bottleneck_queue(
+    conn: sqlite3.Connection, bottleneck_ws: str,
+) -> int:
+    """V14 — Compte les OFs dont la prochaine op pending est sur le
+    goulot. Sert au Rope : file d'attente devant le goulot."""
+    row = conn.execute(
+        """
+        SELECT COUNT(DISTINCT m.of_id) AS n
+        FROM manufacturing_orders m
+        JOIN order_operations o ON o.of_id = m.of_id
+        WHERE m.status IN ('launched', 'in_progress')
+          AND o.status = 'pending'
+          AND o.workstation_id = ?
+          AND o.sequence_idx = (
+              SELECT MIN(o2.sequence_idx)
+              FROM order_operations o2
+              WHERE o2.of_id = m.of_id AND o2.status = 'pending'
+          )
+        """,
+        (bottleneck_ws,),
+    ).fetchone()
+    return int(row["n"]) if row else 0
+
+
+def _of_will_reach_bottleneck(
+    conn: sqlite3.Connection, of_id: str, current_seq_idx: int,
+    bottleneck_ws: str,
+) -> bool:
+    """V14 — L'OF a-t-il une op future sur le goulot (> current_seq) ?
+    Si oui, il alimentera la file goulot → soumis au Rope."""
+    row = conn.execute(
+        """
+        SELECT 1 FROM order_operations
+        WHERE of_id = ? AND workstation_id = ?
+          AND sequence_idx > ? AND status = 'pending'
+        LIMIT 1
+        """,
+        (of_id, bottleneck_ws, current_seq_idx),
+    ).fetchone()
+    return row is not None
+
+
+def _identify_mes_dbr_bottleneck(
+    conn: sqlite3.Connection, target_saturation: float,
+) -> tuple[str | None, float]:
+    """V13.G — Goulot dynamique côté MES.
+
+    Identification : argmax(charge_effective / capa) sur tous les
+    candidates courants. La charge effective (qty × unit_time / capa)
+    reflète le "temps machine" occupé — ce que l'exécution réaliste
+    consomme sur le budget du WS.
+
+    Budget DBR : `daily_capa_min × target_saturation`
+    où daily_capa_min est le budget minutes/jour du realistic mode
+    (V13.A). Le capa_factor est déjà encapsulé dans op_dur côté
+    exécution — le budget doit être comparable à ces durées.
+
+    Fallback si realistic mode inactif : daily_min du calendrier ×
+    target_saturation (utilisable même en legacy pour informer).
+
+    Renvoie (bottleneck_ws, budget_min_per_day).
+    """
+    from pilotage_flux.parameters import workstation_capacity_factor
+    rows = conn.execute(
+        """
+        SELECT r.workstation_id AS ws,
+               SUM(r.unit_time_min * c.quantity) AS load
+        FROM candidate_orders c
+        JOIN routing_operations r ON r.article_id = c.article_id
+        WHERE c.status IN ('candidate', 'promoted')
+        GROUP BY r.workstation_id
+        """
+    ).fetchall()
+    if not rows:
+        return None, 0.0
+    daily_capa_realistic = _get_realistic_capacity_minutes_per_day(conn)
+    if daily_capa_realistic > 0:
+        daily_budget_base = daily_capa_realistic
+    else:
+        daily_min_row = conn.execute(
+            "SELECT daily_minutes FROM calendars LIMIT 1"
+        ).fetchone()
+        daily_budget_base = int(daily_min_row["daily_minutes"]) if (
+            daily_min_row and daily_min_row["daily_minutes"]
+        ) else 480
+    stats: dict[str, float] = {}
+    for r in rows:
+        ws = r["ws"]
+        capa = workstation_capacity_factor(conn, ws)
+        load_eff = float(r["load"] or 0) / max(capa, 0.01)
+        stats[ws] = load_eff
+    bottleneck = max(stats, key=lambda w: stats[w])
+    budget = daily_budget_base * target_saturation
+    return bottleneck, budget
 
 
 def _get_realistic_capacity_minutes_per_day(
@@ -1257,6 +1406,21 @@ def _advance_one_day(
     bom_op_aware = _get_bom_op_linkage_flag(conn)
     # V13.B (item 4) — rendement composé par poste
     compounding = _get_yield_compounding_flag(conn)
+    # V13.G — MES DBR-aware : identification lazy du goulot (une fois)
+    dbr_aware = _get_mes_dbr_aware_flag(conn)
+    if dbr_aware and state.dbr_bottleneck_ws is None:
+        state.dbr_bottleneck_ws, state.dbr_budget_min = (
+            _identify_mes_dbr_bottleneck(
+                conn, _get_mes_dbr_target_saturation(conn),
+            )
+        )
+    dbr_ws = state.dbr_bottleneck_ws if dbr_aware else None
+    dbr_used_today = 0.0
+    # V14 — Rope : buffer size + file goulot courante
+    rope_buffer_size = _get_mes_dbr_rope_buffer_size(conn) if dbr_aware else 0
+    rope_queue_at_bottleneck = (
+        _count_bottleneck_queue(conn, dbr_ws) if dbr_ws else 0
+    )
     busy_ws: set[str] = set()  # legacy
     ws_minutes_used: dict[str, float] = {}  # realistic
     # Scrap cumulé des NC du jour (et précédents) à appliquer au 1er OF avancé.
@@ -1295,6 +1459,22 @@ def _advance_one_day(
         ).fetchone()
         qty = float(qty_row["quantity"])
         ws = op["workstation_id"]
+        # V14 — Rope désactivé sur le simulateur MES actuel.
+        # Le vrai DBR (blocage amont selon file goulot) nécessite une
+        # refonte du modèle MES : files d'attente explicites par WS,
+        # priorisation par slot goulot (pas FIFO), buffer matérialisé.
+        # Sur le modèle actuel (FIFO simple, 1 op/WS/jour ou budget en
+        # min), le Rope crée un deadlock : les ops amont sont bloquées
+        # mais rien ne "vide" la file goulot suffisamment vite pour
+        # relâcher, et le simulateur MES n'a pas de mécanique de
+        # priorisation par slot goulot. Les helpers restent en place
+        # pour usage futur (refactor MES V15).
+        # if (dbr_ws is not None and ws != dbr_ws
+        #         and rope_queue_at_bottleneck >= rope_buffer_size
+        #         and _of_will_reach_bottleneck(
+        #             conn, of_id, int(op["sequence_idx"]), dbr_ws,
+        #         )):
+        #     continue
         if realistic:
             # V13.A — réaliste : N ops/WS/jour tant que cap minutes pas dépassé
             op_dur = _compute_op_duration_min(
@@ -1303,6 +1483,12 @@ def _advance_one_day(
             used = ws_minutes_used.get(ws, 0.0)
             if used + op_dur > daily_capa_min:
                 continue
+            # V13.G — Trace occupation goulot (utile pour Rope V14).
+            # Note doctrinale : le goulot doit tourner à 100 % (Goldratt) ;
+            # aucune contrainte de budget appliquée ici. Le vrai Rope
+            # (cadence WS amont sur file goulot) sera implémenté en V14.
+            if dbr_ws is not None and ws == dbr_ws:
+                dbr_used_today += op_dur
             start_min = int(used)
             end_min = int(min(daily_capa_min, used + op_dur))
             ws_minutes_used[ws] = used + op_dur
@@ -1333,6 +1519,7 @@ def _advance_one_day(
                 pass
         elif ws in busy_ws:
             # Legacy : un poste ne peut traiter qu'un OF par jour
+            # (le budget DBR V13.G n'est actif qu'en mode realistic V13.A)
             continue
         elif ws in state.breakdown_ws:
             busy_ws.add(ws)

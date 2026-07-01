@@ -120,3 +120,67 @@ def test_hazard_state_has_dbr_fields():
     state = HazardState()
     assert state.dbr_bottleneck_ws is None
     assert state.dbr_budget_min == 0.0
+
+
+# V14 — Rope helpers (blocage amont selon file goulot). Le hook dans
+# _advance_one_day est désactivé (deadlock sur le simulateur actuel)
+# mais les helpers restent en place pour usage futur (refactor MES V15).
+
+def test_rope_buffer_size_default_is_3(tmp_db):
+    from pilotage_flux.comparative.runner import (
+        _get_mes_dbr_rope_buffer_size,
+    )
+    with db_session(tmp_db) as conn:
+        assert _get_mes_dbr_rope_buffer_size(conn) == 3
+
+
+def test_rope_buffer_size_clamped_to_20(tmp_db):
+    from pilotage_flux.comparative.runner import (
+        _get_mes_dbr_rope_buffer_size,
+    )
+    with db_session(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO parameters (scope, scope_ref, name, value_num) "
+            "VALUES ('global', NULL, 'mes_dbr_rope_buffer_size', 100.0)"
+        )
+        assert _get_mes_dbr_rope_buffer_size(conn) == 20
+
+
+def test_count_bottleneck_queue_empty_when_no_ofs(tmp_db):
+    from pilotage_flux.comparative.runner import _count_bottleneck_queue
+    with db_session(tmp_db) as conn:
+        assert _count_bottleneck_queue(conn, "WS-1") == 0
+
+
+def test_of_will_reach_bottleneck_true_when_future_op_on_it(tmp_db):
+    from pilotage_flux.comparative.runner import (
+        _of_will_reach_bottleneck,
+    )
+    with db_session(tmp_db) as conn:
+        _seed_ws(conn, "WS-A", 1.0)
+        _seed_ws(conn, "WS-B", 0.5)
+        conn.execute(
+            "INSERT OR IGNORE INTO articles (article_id, label) VALUES (?, ?)",
+            ("ART-A", "A"),
+        )
+        conn.execute(
+            "INSERT INTO manufacturing_orders "
+            "(of_id, article_id, quantity, status) "
+            "VALUES ('OF-1', 'ART-A', 10, 'launched')"
+        )
+        # Op 1 sur WS-A (déjà exécuté), Op 2 sur WS-B (goulot, pending)
+        conn.execute(
+            "INSERT INTO order_operations "
+            "(of_id, sequence_idx, workstation_id, unit_time_min, status) "
+            "VALUES ('OF-1', 1, 'WS-A', 5, 'done')"
+        )
+        conn.execute(
+            "INSERT INTO order_operations "
+            "(of_id, sequence_idx, workstation_id, unit_time_min, status) "
+            "VALUES ('OF-1', 2, 'WS-B', 5, 'pending')"
+        )
+        # De l'op 1 (déjà exécutée), y a-t-il un futur op sur WS-B ?
+        assert _of_will_reach_bottleneck(conn, "OF-1", 1, "WS-B") is True
+        # De l'op 2, y a-t-il un futur op sur WS-B ? Non (op 2 EST WS-B
+        # mais on cherche > current_seq — WS-B ne se rejoue pas plus tard)
+        assert _of_will_reach_bottleneck(conn, "OF-1", 2, "WS-B") is False

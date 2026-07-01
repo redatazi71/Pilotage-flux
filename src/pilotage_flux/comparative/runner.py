@@ -616,6 +616,67 @@ def _get_mes_dbr_target_saturation(conn: sqlite3.Connection) -> float:
     return min(0.99, max(0.30, f))
 
 
+def _get_mes_dbr_rope_buffer_size(conn: sqlite3.Connection) -> int:
+    """V14 — Taille buffer d'OFs en attente devant le goulot.
+
+    Rope = quand la file devant le goulot atteint ce nombre, les
+    ops amont (qui alimenteraient cette file) sont bloquées jusqu'à
+    ce que la file baisse. Le goulot lui-même tourne à 100 %.
+
+    Default 3 (règle industrielle typique : 2-5 OFs de buffer).
+    Clamped [1, 20].
+    """
+    from pilotage_flux.parameters import get_num
+    val = get_num(
+        conn, scope="global", scope_ref=None,
+        name="mes_dbr_rope_buffer_size", default=3.0,
+    )
+    b = int(val) if val is not None else 3
+    return min(20, max(1, b))
+
+
+def _count_bottleneck_queue(
+    conn: sqlite3.Connection, bottleneck_ws: str,
+) -> int:
+    """V14 — Compte les OFs dont la prochaine op pending est sur le
+    goulot. Sert au Rope : file d'attente devant le goulot."""
+    row = conn.execute(
+        """
+        SELECT COUNT(DISTINCT m.of_id) AS n
+        FROM manufacturing_orders m
+        JOIN order_operations o ON o.of_id = m.of_id
+        WHERE m.status IN ('launched', 'in_progress')
+          AND o.status = 'pending'
+          AND o.workstation_id = ?
+          AND o.sequence_idx = (
+              SELECT MIN(o2.sequence_idx)
+              FROM order_operations o2
+              WHERE o2.of_id = m.of_id AND o2.status = 'pending'
+          )
+        """,
+        (bottleneck_ws,),
+    ).fetchone()
+    return int(row["n"]) if row else 0
+
+
+def _of_will_reach_bottleneck(
+    conn: sqlite3.Connection, of_id: str, current_seq_idx: int,
+    bottleneck_ws: str,
+) -> bool:
+    """V14 — L'OF a-t-il une op future sur le goulot (> current_seq) ?
+    Si oui, il alimentera la file goulot → soumis au Rope."""
+    row = conn.execute(
+        """
+        SELECT 1 FROM order_operations
+        WHERE of_id = ? AND workstation_id = ?
+          AND sequence_idx > ? AND status = 'pending'
+        LIMIT 1
+        """,
+        (of_id, bottleneck_ws, current_seq_idx),
+    ).fetchone()
+    return row is not None
+
+
 def _identify_mes_dbr_bottleneck(
     conn: sqlite3.Connection, target_saturation: float,
 ) -> tuple[str | None, float]:
@@ -1355,6 +1416,11 @@ def _advance_one_day(
         )
     dbr_ws = state.dbr_bottleneck_ws if dbr_aware else None
     dbr_used_today = 0.0
+    # V14 — Rope : buffer size + file goulot courante
+    rope_buffer_size = _get_mes_dbr_rope_buffer_size(conn) if dbr_aware else 0
+    rope_queue_at_bottleneck = (
+        _count_bottleneck_queue(conn, dbr_ws) if dbr_ws else 0
+    )
     busy_ws: set[str] = set()  # legacy
     ws_minutes_used: dict[str, float] = {}  # realistic
     # Scrap cumulé des NC du jour (et précédents) à appliquer au 1er OF avancé.
@@ -1393,6 +1459,22 @@ def _advance_one_day(
         ).fetchone()
         qty = float(qty_row["quantity"])
         ws = op["workstation_id"]
+        # V14 — Rope désactivé sur le simulateur MES actuel.
+        # Le vrai DBR (blocage amont selon file goulot) nécessite une
+        # refonte du modèle MES : files d'attente explicites par WS,
+        # priorisation par slot goulot (pas FIFO), buffer matérialisé.
+        # Sur le modèle actuel (FIFO simple, 1 op/WS/jour ou budget en
+        # min), le Rope crée un deadlock : les ops amont sont bloquées
+        # mais rien ne "vide" la file goulot suffisamment vite pour
+        # relâcher, et le simulateur MES n'a pas de mécanique de
+        # priorisation par slot goulot. Les helpers restent en place
+        # pour usage futur (refactor MES V15).
+        # if (dbr_ws is not None and ws != dbr_ws
+        #         and rope_queue_at_bottleneck >= rope_buffer_size
+        #         and _of_will_reach_bottleneck(
+        #             conn, of_id, int(op["sequence_idx"]), dbr_ws,
+        #         )):
+        #     continue
         if realistic:
             # V13.A — réaliste : N ops/WS/jour tant que cap minutes pas dépassé
             op_dur = _compute_op_duration_min(

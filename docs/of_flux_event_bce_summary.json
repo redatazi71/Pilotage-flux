@@ -1,0 +1,67 @@
+{
+  "OF": {
+    "n_runs": 5,
+    "otif_mean": 0.94398,
+    "q_mean": 0.94398,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 113.616,
+    "wip_avg_mean": 5.554,
+    "wip_sd_mean": 9.676003243674447,
+    "nervousness_mean": 0.15,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 10.4,
+    "of_closed_ratio_mean": 0.996
+  },
+  "OF+EVENT": {
+    "n_runs": 5,
+    "otif_mean": 0.94398,
+    "q_mean": 0.94398,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 111.04,
+    "wip_avg_mean": 5.51,
+    "wip_sd_mean": 9.68410151658613,
+    "nervousness_mean": 0.033,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 10.8,
+    "of_closed_ratio_mean": 0.996
+  },
+  "FLUX+EVENT": {
+    "n_runs": 5,
+    "otif_mean": 0.916104896,
+    "q_mean": 0.92666,
+    "d_mean": 0.98888,
+    "cost_per_u_mean": 113.394,
+    "wip_avg_mean": 4.008,
+    "wip_sd_mean": 3.026533100315833,
+    "nervousness_mean": 0.033,
+    "rupture_pct_mean": 0.01111111111111111,
+    "recovery_days_mean": 17.4,
+    "of_closed_ratio_mean": 0.9873488372093023
+  },
+  "OF+EVENT+BCE": {
+    "n_runs": 5,
+    "otif_mean": 0.94398,
+    "q_mean": 0.94398,
+    "d_mean": 1.0,
+    "cost_per_u_mean": 111.04,
+    "wip_avg_mean": 5.51,
+    "wip_sd_mean": 9.68410151658613,
+    "nervousness_mean": 0.033,
+    "rupture_pct_mean": 0.0,
+    "recovery_days_mean": 10.8,
+    "of_closed_ratio_mean": 0.996
+  },
+  "FLUX+EVENT+BCE": {
+    "n_runs": 5,
+    "otif_mean": 0.916104896,
+    "q_mean": 0.92666,
+    "d_mean": 0.98888,
+    "cost_per_u_mean": 113.314,
+    "wip_avg_mean": 4.008,
+    "wip_sd_mean": 3.026533100315833,
+    "nervousness_mean": 0.033,
+    "rupture_pct_mean": 0.01111111111111111,
+    "recovery_days_mean": 17.4,
+    "of_closed_ratio_mean": 0.9873488372093023
+  }
+}

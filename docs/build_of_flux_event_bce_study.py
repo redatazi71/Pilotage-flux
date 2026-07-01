@@ -69,9 +69,9 @@ SUMMARY_JSON = HERE / "of_flux_event_bce_summary.json"
 REPORT_MD = HERE / "of_flux_event_bce_report.md"
 
 
-def _run_one(scen, doctrine, work, fix_dir, tag) -> dict:
+def _run_one(scen, doctrine, work, fix_dir, config_tag) -> dict:
     """Lance un run et collecte les métriques."""
-    db = work / f"{tag}.db"
+    db = work / f"{config_tag}_{scen.seed}.db"
     try:
         result = run_doctrine(scen, doctrine, db, fixtures_dir=fix_dir)
         k = compute_kpis(scen, result)
@@ -86,7 +86,7 @@ def _run_one(scen, doctrine, work, fix_dir, tag) -> dict:
         recovery_days = compute_time_to_recover(result, shock_day=first_hazard_day)
         return {
             "seed": scen.seed,
-            "config_tag": tag,
+            "config_tag": config_tag,
             "doctrine": doctrine,
             "status": "ok",
             "otif": k.quantity_compliance * k.disponibility_so_level,
@@ -247,8 +247,7 @@ def main() -> int:
             scen = generate_random_scenario(spec, seed=seed,
                                              fixtures_dir=fix_dir)
             for tag, doctrine in CONFIGS:
-                r = _run_one(scen, doctrine, work, fix_dir,
-                              f"{tag}_{seed}")
+                r = _run_one(scen, doctrine, work, fix_dir, tag)
                 all_runs.append(r)
                 done += 1
                 if r.get("status") == "crashed":

@@ -1199,3 +1199,69 @@ CREATE INDEX IF NOT EXISTS idx_delta_decisions_status
     ON delta_decisions (status);
 CREATE INDEX IF NOT EXISTS idx_delta_decisions_racine
     ON delta_decisions (racine_id, categorie_code);
+
+-- ---------------------------------------------------------------------
+-- V13.H — Contrats de production (zone négociable enrichie)
+-- ---------------------------------------------------------------------
+-- Un contrat de production est le lien entre une demande client (SO)
+-- et sa promesse de fabrication. Il enrichit le simple candidate_order
+-- avec les cibles doctrinales (takt, WIP, buffers), le dossier de
+-- faisabilité (charges/capa par WS, goulot identifié, ρ), et l'état
+-- des 5 flux (physique, info, décisionnel, documentaire, qualité).
+--
+-- Le contrat est créé lors de la promotion candidate → OF (P3 freeze).
+-- Il persiste après cette étape pour tracer les cibles et permettre
+-- l'audit doctrinal (takt réellement tenu vs cible, WIP écart, etc.).
+-- Note : la table `production_contracts` existante porte les PCs
+-- atomiques doctrine Goldilocks (T, Ep, Er, C, O) par of_op_id. La
+-- table `demand_contracts` ci-dessous est un niveau au-dessus : un
+-- contrat par SO/demande enrichi avec les cibles zone négociable
+-- (takt, WIP, bottleneck, appro, 5 flux). Différents concepts,
+-- articulés via candidate_id / of_id.
+CREATE TABLE IF NOT EXISTS demand_contracts (
+    contract_id         TEXT PRIMARY KEY,
+    sales_order_id      TEXT NOT NULL
+        REFERENCES sales_orders(sales_order_id),
+    candidate_id        TEXT REFERENCES candidate_orders(candidate_id),
+    article_id          TEXT NOT NULL REFERENCES articles(article_id),
+    quantity            REAL NOT NULL,
+    delivery_deadline   TEXT NOT NULL,
+    -- Cibles doctrinales (issues de V13.E feasibility)
+    takt_target_min     REAL,       -- min/unité (débit goulot cible)
+    wip_target          REAL,       -- unités (Little : throughput × cycle)
+    bottleneck_ws       TEXT,
+    buffer_days         INTEGER DEFAULT 2,
+    -- Dossier de faisabilité
+    charge_total_min    REAL,       -- charge totale toutes ops
+    charge_bottleneck_min REAL,     -- charge sur le goulot
+    capa_needed_min     REAL,       -- capa min requise sur le goulot
+    wip_predicted       REAL,       -- WIP prévu (Little)
+    rho_bottleneck      REAL,       -- saturation goulot du run (∈ [0,1])
+    feasible            INTEGER NOT NULL DEFAULT 0,
+        -- 0 = infeasible (charge > capa), 1 = ok
+    -- Approvisionnement (à date de création du contrat)
+    appro_status        TEXT,       -- 'ok' | 'partial' | 'missing'
+    -- État des 5 flux (jumeau numérique)
+    flux_physical_status    TEXT,   -- 'planned' | 'active' | 'closed'
+    flux_info_ready         INTEGER DEFAULT 0,
+        -- 1 = event sourcing prêt (dual_tolerance seuils calibrés)
+    flux_decision_status    TEXT,   -- 'auto' | 'human_review'
+    flux_doc_status         TEXT,   -- 'draft' | 'signed' | 'archived'
+    flux_quality_status     TEXT,   -- 'planned' | 'in_control' | 'nc'
+    -- Planning
+    scheduled_start_day INTEGER,
+    scheduled_end_day   INTEGER,
+    -- Traçabilité
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    signed_at           TEXT,       -- moment où le contrat est freezé
+    closed_at           TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_demand_contracts_so
+    ON demand_contracts (sales_order_id);
+CREATE INDEX IF NOT EXISTS idx_demand_contracts_candidate
+    ON demand_contracts (candidate_id);
+CREATE INDEX IF NOT EXISTS idx_demand_contracts_deadline
+    ON demand_contracts (delivery_deadline);
+CREATE INDEX IF NOT EXISTS idx_demand_contracts_feasible
+    ON demand_contracts (feasible);

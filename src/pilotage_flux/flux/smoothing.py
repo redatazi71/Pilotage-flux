@@ -22,6 +22,10 @@ from pilotage_flux.flux.contracts import (
     fetch_version,
     get_candidates_in_version,
 )
+from pilotage_flux.flux.lot_sizing import (
+    _get_lot_sizing_mode,
+    split_candidates_for_takt,
+)
 from pilotage_flux.parameters import get_num, workstation_capacity_factor
 
 
@@ -869,6 +873,23 @@ def compute_smoothing(
                 conn, c["candidate_id"], horizon_min, ws_factors,
             ),
         )
+
+    # V13.F — Lot-sizing takt-minimal AVANT le placement. Split UNIQUEMENT
+    # si la charge sur le goulot dépasse le budget quotidien à target_sat.
+    # Par défaut (mode off) : 1 candidate = 1 candidate (LFL, minimise OFs).
+    lot_sizing_mode = _get_lot_sizing_mode(conn)
+    if lot_sizing_mode == "takt_minimal" and (toc_aware or capacity_aware):
+        horizon_days_for_lot = max(1, horizon_min // 1440)
+        bottleneck_for_lot, _, _ = _identify_bottleneck(
+            conn, candidates, horizon_days_for_lot, _daily_minutes(conn),
+        )
+        candidates = split_candidates_for_takt(
+            conn, candidates, bottleneck_for_lot, target_saturation,
+        )
+        # Total recomputed after split
+        total_qty = sum(float(c["qty_in_contract"]) for c in candidates)
+        if total_qty <= 0:
+            return []
 
     # V13.E — Si smoothing_toc_aware, on utilise DBR + goulot dynamique
     # + takt time + buffer. Prend le pas sur capacity_aware si les 2

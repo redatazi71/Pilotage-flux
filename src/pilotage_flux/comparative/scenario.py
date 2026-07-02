@@ -29,6 +29,12 @@ DOCTRINE_FLUX = "flux"
 DOCTRINE_OF_EVENT = "of_event"
 DOCTRINE_EVENT = "event"
 DOCTRINE_OF_MILP = "of_milp"
+# Ext-l — Baseline « CP-SAT réactif » : re-solve CP-SAT à chaque événement
+# significatif (hazard). Réponse frontale à l'objection reviewer
+# « pourquoi pas juste re-solve OR-Tools à chaque event ? ». Attendu :
+# coûteux, instable (nervosité pire qu'OF), OTIF marginal — preuve
+# qu'event-driven ≠ ré-optimisation permanente.
+DOCTRINE_OF_REACTIVE_CPSAT = "of_reactive_cpsat"
 # BCE (Boucle Cybernétique Étendue) — pilotages 5 et 6 du banc
 # 6-pilotages. Activent la chaîne MACRS Couche 2 + moteur Delta
 # (B.1/B.2/B.3) + propagation hazard étiquetée (C.1/C.2). Les

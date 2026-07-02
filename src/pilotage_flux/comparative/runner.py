@@ -71,6 +71,7 @@ from pilotage_flux.comparative.scenario import (
     DOCTRINE_OF,
     DOCTRINE_OF_EVENT,
     DOCTRINE_OF_MILP,
+    DOCTRINE_OF_REACTIVE_CPSAT,
     DOCTRINES,
     HAZARD_BREAKDOWN,
     HAZARD_LOGISTIC_DELAY,
@@ -2622,6 +2623,131 @@ def run_of_milp_doctrine(
 
 
 # ----------------------------------------------------------------------
+# Ext-l — Baseline « CP-SAT réactif »
+# ----------------------------------------------------------------------
+
+
+def run_of_reactive_cpsat_doctrine(
+    scenario: Scenario, db_path: Path,
+    *, fixtures_dir: Path = DEFAULT_FIXTURES_DIR,
+) -> RunResult:
+    """Ext-l — Re-solve CP-SAT complet à chaque hazard significatif.
+
+    Baseline pour désamorcer la critique reviewer classique :
+    « pourquoi pas juste re-solve OR-Tools à chaque événement ? ».
+
+    Comportement :
+      - Jour 0 : CP-SAT initial (comme OF_MILP).
+      - À chaque hazard, on relance `compute_milp_launch_days` sur les
+        OFs non encore clôturés et on met à jour les `scheduled_launch_day`.
+      - Chaque re-solve incrémente `aps_recalculations` — la nervosité
+        montera mécaniquement en régime perturbé.
+      - Pas de couche événementielle (pas de dual filter, pas de mémoire
+        causale) : l'unique réponse aux perturbations est la ré-optimisation.
+
+    Attendu :
+      - Nervosité **plus élevée** qu'OF+EVENT (chaque hazard = replan_global).
+      - OTIF marginalement différent d'OF classique.
+      - Coût compute élevé (chaque re-solve = 1 CP-SAT sur horizon).
+      - Prouve que la valeur d'event-driven n'est PAS dans la
+        ré-optimisation permanente mais dans la **compensation locale**
+        ciblée.
+    """
+    from pilotage_flux.comparative.milp_scheduler import (
+        compute_milp_launch_days,
+    )
+    _bootstrap_db(scenario, db_path, fixtures_dir)
+    result = RunResult(
+        doctrine=DOCTRINE_OF_REACTIVE_CPSAT, scenario_name=scenario.name,
+        db_path=db_path, seed=scenario.seed,
+    )
+    rng = random.Random(scenario.seed)
+    state = HazardState()
+
+    with db_session(db_path) as conn:
+        p1 = run_p1_promotion(conn, actor="of_reactive_cpsat.p1")
+        result.aps_recalculations += 1
+        for plan in p1.ofs_created:
+            _arbitrate_of_routing(conn, plan.of_id, result)
+
+        # Résolution CP-SAT initiale
+        milp_res = compute_milp_launch_days(
+            conn, horizon_days=scenario.horizon_days,
+        )
+        result.notes.append(
+            f"milp_init_status={milp_res.status} "
+            f"solve_time={milp_res.solve_time_sec:.2f}s"
+        )
+        for plan in p1.ofs_created:
+            scheduled = milp_res.launch_day_by_of.get(plan.of_id, 0)
+            state.scheduled_launch_day[plan.of_id] = scheduled
+            result.of_created_day[plan.of_id] = scheduled
+            if scheduled == 0:
+                _launch_of_at_day(
+                    conn, plan.of_id, horizon_start=scenario.horizon_start,
+                    day=0, actor="of_reactive_cpsat.mes",
+                )
+
+        hazards_by_day: dict[int, list] = {}
+        for h in scenario.hazards:
+            hazards_by_day.setdefault(h.day, []).append(h)
+
+        for day in range(1, scenario.horizon_days + 1):
+            _receive_due_purchase_orders(conn, scenario, day)
+            for of_id, sched_day in list(state.scheduled_launch_day.items()):
+                if sched_day == day:
+                    _launch_of_at_day(
+                        conn, of_id, horizon_start=scenario.horizon_start,
+                        day=day, actor="of_reactive_cpsat.mes",
+                    )
+                    state.scheduled_launch_day.pop(of_id, None)
+
+            hazards_today = hazards_by_day.get(day, [])
+            hazard_triggered_resolve = False
+            for h in hazards_today:
+                _apply_hazard(conn, scenario, h, state, result, DOCTRINE_OF)
+                if h.kind == HAZARD_URGENT_ORDER:
+                    new = run_p1_promotion(conn, actor="of_reactive_cpsat.p1")
+                    result.aps_recalculations += 1
+                    for plan in new.ofs_created:
+                        _arbitrate_of_routing(conn, plan.of_id, result)
+                        result.of_created_day[plan.of_id] = day
+                        _launch_of_at_day(
+                            conn, plan.of_id,
+                            horizon_start=scenario.horizon_start,
+                            day=day, actor="of_reactive_cpsat.mes",
+                        )
+                else:
+                    compute_candidates(conn)
+                hazard_triggered_resolve = True
+
+            # Ext-l — re-solve CP-SAT sur les OFs restants après un hazard
+            if hazard_triggered_resolve:
+                new_milp = compute_milp_launch_days(
+                    conn,
+                    horizon_days=max(1, scenario.horizon_days - day),
+                )
+                result.aps_recalculations += 1
+                result.notes.append(
+                    f"cpsat_resolve_day={day} "
+                    f"solve_time={new_milp.solve_time_sec:.3f}s"
+                )
+                # Applique les nouveaux launch_day sur les OFs non lancés
+                for of_id, new_sched in new_milp.launch_day_by_of.items():
+                    if of_id in state.scheduled_launch_day:
+                        state.scheduled_launch_day[of_id] = day + new_sched
+
+            _advance_one_day(
+                conn, scenario, day, state, result, rng,
+                actor="of_reactive_cpsat.mes",
+            )
+            _decay_breakdowns(state)
+            _measure_wip(conn, result, day)
+            _v13k_snapshot_if_enabled(conn, scenario, day, result)
+    return result
+
+
+# ----------------------------------------------------------------------
 # Point 2 paper — mécanisme de rejet de SO (§7.2)
 # ----------------------------------------------------------------------
 
@@ -2724,6 +2850,7 @@ _DISPATCH = {
     DOCTRINE_OF_EVENT: run_of_event_doctrine,
     DOCTRINE_EVENT: run_event_doctrine,
     DOCTRINE_OF_MILP: run_of_milp_doctrine,
+    DOCTRINE_OF_REACTIVE_CPSAT: run_of_reactive_cpsat_doctrine,
     DOCTRINE_OF_EVENT_BCE: run_of_event_bce_doctrine,
     DOCTRINE_EVENT_BCE: run_event_bce_doctrine,
 }

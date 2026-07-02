@@ -140,6 +140,79 @@ def compute_time_to_recover(
     return max_recovery_days
 
 
+def compute_recovery_metric(
+    result: RunResult,
+    shock_day: int,
+    tolerance: float = 0.30,
+    max_recovery_days: int = 20,
+) -> tuple[int | None, bool]:
+    """Ext-f — retourne (days, recovered) au lieu de mapper les non-récupérés
+    sur `max_recovery_days`.
+
+    - `recovered=True` : le WIP est revenu sous la bande de tolérance, `days`
+      est le délai réel entre `shock_day` et ce retour.
+    - `recovered=False` : la fenêtre s'est écoulée sans retour, `days=None`.
+
+    Cette séparation permet de distinguer une *récupération lente* d'un
+    *échec de récupération* — ce que `compute_time_to_recover` confond.
+    """
+    if not result.daily_wip:
+        return None, False
+    median_wip = statistics.median(result.daily_wip.values())
+    threshold = median_wip * (1.0 + tolerance)
+
+    candidates = {
+        d: result.daily_wip[d]
+        for d in range(shock_day, shock_day + max_recovery_days + 1)
+        if d in result.daily_wip
+    }
+    if not candidates:
+        return None, False
+    peak_day = max(candidates, key=lambda d: candidates[d])
+    if candidates[peak_day] <= threshold:
+        return 0, True
+    for d in range(peak_day, peak_day + max_recovery_days + 1):
+        if result.daily_wip.get(d, 0) <= threshold:
+            return d - shock_day, True
+    return None, False
+
+
+def aggregate_recovery(
+    result: RunResult,
+    tolerance: float = 0.30,
+    max_recovery_days: int = 20,
+) -> tuple[float | None, float, int, int]:
+    """Ext-f — agrégat par run à partir des hazards observés.
+
+    Retourne `(mean_recovery_days_conditional, recovery_success_rate,
+    n_hazards, n_recoveries)`.
+
+    - `mean_recovery_days_conditional` : moyenne des jours **conditionnée**
+      sur les seuls chocs récupérés (`None` si aucun).
+    - `recovery_success_rate` : `n_recoveries / max(1, n_hazards)`.
+    """
+    hazards = getattr(result, "hazards_observed", []) or []
+    if not hazards:
+        return None, 1.0, 0, 0
+    days_recovered: list[int] = []
+    n_recoveries = 0
+    for h in hazards:
+        shock_day = int(h.get("day", 0))
+        days, ok = compute_recovery_metric(
+            result, shock_day,
+            tolerance=tolerance, max_recovery_days=max_recovery_days,
+        )
+        if ok:
+            n_recoveries += 1
+            if days is not None:
+                days_recovered.append(days)
+    n = len(hazards)
+    mean_days = (
+        sum(days_recovered) / len(days_recovered) if days_recovered else None
+    )
+    return mean_days, n_recoveries / n, n, n_recoveries
+
+
 # ---------------------------------------------------------------------------
 # 3) Gradient d'intensité — N seeds × N doctrines × N niveaux d'intensité
 # ---------------------------------------------------------------------------

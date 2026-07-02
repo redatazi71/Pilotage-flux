@@ -86,9 +86,16 @@ class KpiSet:
     approvals_pending: int = 0
     approvals_approved: int = 0
     approvals_rejected: int = 0
-    # V12.4 — Recovery success rate (résilience)
+    # Ext-f — Recovery metrics (résilience) désormais distincts :
+    # `recovery_success_rate` = fraction des chocs ayant conduit à un retour
+    #   du WIP dans la bande de tolérance (n_recoveries / n_hazards).
+    # `recovery_days_conditional` = moyenne des jours de récupération
+    #   conditionnée sur les seuls chocs récupérés (None si aucun).
+    # `n_hazards_observed` / `n_recoveries_observed` = compteurs bruts.
     recovery_success_rate: float = 1.0
-    # = SOs livrées à date / SOs total post-1er choc
+    recovery_days_conditional: float | None = None
+    n_hazards_observed: int = 0
+    n_recoveries_observed: int = 0
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -258,9 +265,12 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
         except Exception:
             pass
 
-        # V12.4 — Recovery success rate : SOs délivrées à date
-        # ratio SOs livrées à temps / SOs total sur période post-1er choc
-        recovery_success_rate = disponibility_so_level
+    # Ext-f — Vrais KPIs de récupération, désormais distincts de la
+    # disponibilité SO. On itère sur `hazards_observed` et on mesure pour
+    # chaque choc si le WIP est revenu dans la bande de tolérance.
+    from pilotage_flux.comparative.resilience import aggregate_recovery
+    recovery_days_conditional, recovery_success_rate, n_hazards_obs, \
+        n_recoveries_obs = aggregate_recovery(result)
 
     # Défaut 4 — Nervosité enrichie : APS replan + replan_global +
     # replan_local + correct_local, pondérée par impact décroissant.
@@ -311,4 +321,10 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
         approvals_approved=approvals_approved,
         approvals_rejected=approvals_rejected,
         recovery_success_rate=round(recovery_success_rate, 4),
+        recovery_days_conditional=(
+            round(recovery_days_conditional, 2)
+            if recovery_days_conditional is not None else None
+        ),
+        n_hazards_observed=n_hazards_obs,
+        n_recoveries_observed=n_recoveries_obs,
     )

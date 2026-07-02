@@ -10,6 +10,10 @@ et la route vers l'un des 4 niveaux d'autonomie :
 
 Le dispatcher est *idempotent* : appelé deux fois avec le même
 decision_id il ne crée pas de doublon dans la queue.
+
+Ext-h — Un `bounded_rationality_engine` optionnel peut être injecté
+pour appliquer les biais Simon / Kahneman-Tversky / fatigue sur les
+décisions L3/L4 avant enqueue. Sans engine, comportement V12.3 inchangé.
 """
 
 from __future__ import annotations
@@ -45,6 +49,8 @@ def dispatch_decision(
     decision_id: int,
     *,
     action_level: str | None = None,
+    bounded_rationality: "Any | None" = None,
+    day_index: int = 0,
 ) -> DispatchResult:
     """Route une décision V3 vers son niveau d'autonomie V12.3.
 
@@ -55,6 +61,12 @@ def dispatch_decision(
     action_level : str, optional
         Si fourni, court-circuite la lecture de la DB. Sinon, on lit
         l'action_level depuis tolerance_filter_decisions.
+    bounded_rationality : BoundedRationalityEngine, optional
+        Ext-h — si fourni, applique les biais humains sur la décision
+        L3/L4 avant enqueue. Peut promouvoir vers L4 (fatigue) ou bloquer
+        l'enqueue (aversion à la perte).
+    day_index : int
+        Jour simulé courant (nécessaire pour le compteur fatigue).
 
     Returns
     -------
@@ -63,16 +75,38 @@ def dispatch_decision(
     """
     if action_level is None:
         row = conn.execute(
-            "SELECT action_level FROM tolerance_filter_decisions "
+            "SELECT action_level, score_combined FROM tolerance_filter_decisions "
             "WHERE decision_id = ?",
             (decision_id,),
         ).fetchone()
         if row is None:
             raise ValueError(f"decision_id inconnu : {decision_id}")
         action_level = row["action_level"]
+        raw_score = float(row["score_combined"]) if row["score_combined"] is not None else 0.5
+    else:
+        raw_score = 0.5
 
     level = classify_autonomy_level(action_level)
     needs_approval = level in REQUIRES_APPROVAL
+
+    # Ext-h — appliquer les biais humains si engine fourni
+    if bounded_rationality is not None and needs_approval:
+        from pilotage_flux.cybernetic.human_loop.bounded_rationality import (
+            DecisionContext,
+        )
+        ctx = DecisionContext(
+            raw_score=raw_score,
+            threshold=0.5,
+            estimated_cost_eur=0.0,
+            day_index=day_index,
+        )
+        biased = bounded_rationality.evaluate(ctx)
+        # Si fatigue active : promotion vers L4 (déchargement)
+        if "fatigue" in biased.active_biases and level == AUTONOMY_LEVEL_L3:
+            level = AUTONOMY_LEVEL_L4
+        # Si aversion à la perte non-triggered : on n'escalade pas
+        if "loss_aversion" in biased.active_biases and not biased.triggered:
+            needs_approval = False
 
     queue_id: int | None = None
     if needs_approval:

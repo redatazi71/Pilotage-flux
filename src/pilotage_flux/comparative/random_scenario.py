@@ -69,6 +69,10 @@ class RandomScenarioSpec:
     # Achats ouverts initiaux
     n_initial_pos: int = 3
     initial_po_qty_range: tuple[int, int] = (300, 1000)
+    # Ext-g — Cascade d'aléas corrélée temporellement.
+    # None = aucun profil ; sinon nom dans CASCADE_PROFILES.
+    cascade_profile: str | None = None
+    cascade_max_depth: int = 2
 
 
 def _read_articles(fixtures_dir: Path) -> dict[str, list[str]]:
@@ -252,6 +256,19 @@ def generate_random_scenario(
         )
         if h is not None:
             hazards.append(h)
+
+    # Ext-g — Applique la cascade corrélée si un profil est spécifié.
+    if spec.cascade_profile:
+        from pilotage_flux.comparative.hazard_correlation import (
+            apply_correlations,
+        )
+        hazards, _cascade_stats = apply_correlations(
+            hazards,
+            profile=spec.cascade_profile,
+            seed=seed,
+            horizon_days=spec.horizon_days,
+            max_cascade_depth=spec.cascade_max_depth,
+        )
 
     return Scenario(
         name=f"{spec.name_prefix}_{seed}",

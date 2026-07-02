@@ -96,6 +96,13 @@ class KpiSet:
     recovery_days_conditional: float | None = None
     n_hazards_observed: int = 0
     n_recoveries_observed: int = 0
+    # Ext-k — Bilan carbone (comparatif, non LCA rigoureux)
+    co2_total_kg: float = 0.0
+    co2_per_unit: float = 0.0
+    co2_energy_kg: float = 0.0
+    co2_replan_kg: float = 0.0
+    co2_rupture_kg: float = 0.0
+    co2_wip_kg: float = 0.0
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -272,6 +279,20 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
     recovery_days_conditional, recovery_success_rate, n_hazards_obs, \
         n_recoveries_obs = aggregate_recovery(result)
 
+    # Ext-k — Bilan carbone (défensible, comparatif inter-doctrines)
+    try:
+        from pilotage_flux.comparative.carbon_kpis import compute_carbon_kpis
+        _c = compute_carbon_kpis(result, result.db_path)
+        co2_total = _c.co2_total_kg
+        co2_per_u = _c.co2_per_unit
+        co2_energy = _c.energy_co2_kg
+        co2_replan = _c.replan_co2_kg
+        co2_rupture = _c.rupture_co2_kg
+        co2_wip = _c.wip_holding_co2_kg
+    except Exception:
+        co2_total = co2_per_u = co2_energy = 0.0
+        co2_replan = co2_rupture = co2_wip = 0.0
+
     # Défaut 4 — Nervosité enrichie : APS replan + replan_global +
     # replan_local + correct_local, pondérée par impact décroissant.
     # Rend le KPI sensible aux corrections locales (BCE, delta engine).
@@ -327,4 +348,10 @@ def compute_kpis(scenario: Scenario, result: RunResult) -> KpiSet:
         ),
         n_hazards_observed=n_hazards_obs,
         n_recoveries_observed=n_recoveries_obs,
+        co2_total_kg=co2_total,
+        co2_per_unit=co2_per_u,
+        co2_energy_kg=co2_energy,
+        co2_replan_kg=co2_replan,
+        co2_rupture_kg=co2_rupture,
+        co2_wip_kg=co2_wip,
     )

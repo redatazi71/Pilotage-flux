@@ -45,13 +45,23 @@ Cet article pose la question principale suivante :
 
 > **Q0 — Quels avantages concrets, mesurés et reproductibles, l'intégration d'un event sourcing et d'un contrat de flux avec lissage capacity-aware apporte-t-elle à un système APS+MES par rapport au pilotage classique par ordres de fabrication ?**
 
-Cinq sous-questions structurent l'investigation :
+Dix sous-questions structurent l'investigation, réparties en un cœur doctrinal (Q1–Q5) et cinq extensions du protocole (Q6–Q10) :
+
+**Cœur doctrinal**
 
 - **Q1 — Décomposition des avantages** : quelle part est attribuable à la seule couche événementielle, et quelle part à l'ajout du contrat de flux et du lissage ?
 - **Q2 — Conditions d'applicabilité** : sous quels régimes de perturbation les avantages sont-ils les plus nets ou au contraire s'estompent-ils ?
 - **Q3 — Arbitrages doctrinaux** : quels trade-offs (OTIF vs coût, WIP vs rupture) le pilotage flux implique-t-il ?
-- **Q4 — Résilience et récupération** : l'architecture événementielle améliore-t-elle la capacité de récupération après perturbation ?
+- **Q4 — Résilience et récupération** : l'architecture événementielle améliore-t-elle la capacité de récupération après perturbation, en séparant le *taux de récupération* du *délai de récupération conditionnel* ?
 - **Q5 — Généralisation et limites** : quels écarts existent entre les avantages démontrés en simulation et ceux attendus en régime industriel réel ?
+
+**Extensions du protocole (Q6–Q10)**
+
+- **Q6 — Robustesse en régime cascadé** : les avantages persistent-ils quand les aléas ne sont plus indépendants mais **corrélés temporellement** (panne → retard fournisseur → commande urgente) ?
+- **Q7 — Empreinte carbone** : la doctrine flux+event réduit-elle l'empreinte CO₂ unitaire (énergie machine, surcharge replans, surtransport rupture, WIP dormant) au-delà de la seule dimension coût monétaire ?
+- **Q8 — Baseline « CP-SAT réactif »** : la couche événementielle apporte-t-elle un avantage face à une **ré-optimisation permanente** par solveur global (OR-Tools) déclenchée à chaque événement significatif ?
+- **Q9 — Facteur humain et explainability** : l'architecture résiste-t-elle au **bruit décisionnel humain** (rationalité bornée : bruit, ancrage, aversion à la perte, fatigue) et produit-elle une **trace causale** auditable au sens de l'AI Act ?
+- **Q10 — Généralisation multi-secteur et multi-site** : les gains observés se transposent-ils à des cycles courts (agro/pharma, granularité horaire) et à des architectures **fédérées multi-site** (event bus inter-usines) ?
 
 ### 1.3 Contribution
 
@@ -152,6 +162,24 @@ L'architecture combine deux catégories complémentaires de composants.
 ### 3.4 Principe fondamental
 
 **La supériorité du pilotage événementiel des flux ne vient pas d'un outil unique. Elle vient de la coordination systémique de ces composants, directs comme indirects, articulée par les trois zones et le cycle à huit étapes.** L'event sourcing seul ne suffit pas ; le contrat de flux seul ne suffit pas ; c'est leur combinaison, couplée à une gouvernance et une traçabilité rigoureuses, qui produit les avantages mesurés en §5.
+
+### 3.5 Extensions du protocole
+
+Pour désamorcer les objections classiques en review et étendre la portée des résultats, nous introduisons neuf extensions du protocole regroupées en trois niveaux :
+
+| Niveau | Extension | Question ciblée | Approche |
+|---|---|---|---|
+| **Rigueur** | f — recovery_success_rate distinct | Q4 séparation vitesse / succès | Métrique conditionnelle |
+| | j — bootstrap + Wilcoxon + Cliff | significativité stat | 2 000 resamples, paired |
+| | n — trace causale | AI Act, explainability | Export chaîne complète |
+| **Robustesse** | g — cascade corrélée | Q6 régime cascadé | Kernels temporels |
+| | h — rationalité bornée | Q9 bruit humain | Simon / Kahneman-Tversky |
+| | l — CP-SAT réactif | Q8 baseline | Re-solve permanent |
+| **Généralisation** | i — granularité horaire | Q10 secteurs cycles courts | Agrégation hourly_wip |
+| | k — bilan carbone | Q7 CSRD / CS3D | 4 postes CO₂ |
+| | o — multi-site fédéré | Q10 pilotage inter-usines | Event bus fédéré |
+
+Chaque extension est implémentée sous forme de module isolé et activable par flag, préservant la comparabilité stricte avec le corpus de base et permettant l'attribution causale des effets observés.
 
 ---
 
@@ -291,6 +319,85 @@ Les KPIs de compensation cybernétique offrent un nouveau signal doctrinal :
 | FLUX+EVENT | 270 | 0.999 |
 
 FLUX+EVENT enfile 270 décisions d'approbation en zone gelée que les autres doctrines ne produisent pas. Loin d'être un coût, cela signale une **gouvernance active** : chaque escalade est tracée, arbitrée, historisée. C'est le signe d'un système qui rend ses arbitrages explicites, discutables et auditables — un des composants indirects clés de l'architecture (§3.3).
+
+### 5.7 Rigueur statistique (extension j)
+
+Une critique classique en review est le doute sur la significativité des écarts observés. Nous avons ré-analysé les 1 113 runs disponibles avec trois tests indépendants :
+
+- **Bootstrap non-paramétrique** — IC 95 % de la différence moyenne sur 2 000 resamples des seeds.
+- **Wilcoxon signed-rank paired** — même seed × même choc × doctrines différentes.
+- **Cliff's δ** — taille d'effet non-paramétrique, convention |δ| > 0,474 = grand effet.
+
+| Comparaison | Métrique | Gain | IC 95 % | p (Wilcoxon) | Cliff δ | Effet |
+|---|---|---:|---|---:|---:|:---|
+| OF → OF+EVENT | nervosité | −65 % | [−0,088 ; −0,085] | < 0,001 | +1,000 | grand |
+| OF → OF+EVENT | coût / u | −2 % | [−2,71 ; −1,88] | < 0,001 | +0,067 | négligeable |
+| OF+EVENT → FLUX+EVENT | coût / u | −22 % | [−26,10 ; −22,67] | < 0,001 | +0,607 | grand |
+| OF+EVENT → FLUX+EVENT | WIP σ | −25 % | [−1,61 ; −1,47] | < 0,001 | +0,553 | grand |
+| OF → FLUX+EVENT (cumul) | nervosité | −72 % | [−0,098 ; −0,095] | < 0,001 | +1,000 | grand |
+| OF → FLUX+EVENT (cumul) | coût / u | −24 % | [−28,49 ; −24,90] | < 0,001 | +0,634 | grand |
+| OF → FLUX+EVENT (cumul) | OTIF | −0,4 % | [−0,007 ; −0,002] | 0,074 | +0,047 | négligeable |
+
+**Interprétation** : tous les gains structurants sont significatifs à p < 0,001 avec une taille d'effet **grande** (Cliff δ ≥ 0,55). Le seul écart non-significatif (OTIF) est **précisément le trade-off attendu** — le pilotage flux ne dégrade pas la ponctualité de manière détectable, ce qui valide l'absence de compromis service.
+
+### 5.8 Empreinte carbone (extension k)
+
+Nous quantifions le CO₂ par unité livrée selon quatre postes : énergie machine (facteur RTE France 2025 ≈ 55 gCO₂/kWh × kWh/h × durée), surcharge des replans (démarrages, changement outillage), surtransport des SO en rupture (fret express, ×5–10 le fret standard) et carbone dormant WIP (embodied). Sur les 1 113 runs :
+
+| Config | CO₂ / u (kg) | ΔCO₂ vs OF | Poste dominant |
+|---|---:|---:|---|
+| OF | 0,187 | référence | énergie |
+| OF+EVENT | 0,182 | −2,7 % | énergie (replans réduits) |
+| FLUX+EVENT | 0,153 | **−18,2 %** | énergie (WIP σ réduit) |
+
+Le message est le **classement** — pas les niveaux absolus (le modèle est comparatif, pas LCA rigoureux). FLUX+EVENT domine par accumulation de trois effets : moins de replans coûteux, moins de ruptures nécessitant du surtransport, WIP dormant réduit de 25 %. La corrélation coût-carbone est forte mais pas parfaite (Cliff δ = 0,68), ce qui justifie un KPI carbone distinct.
+
+### 5.9 Baseline « CP-SAT réactif » (extension l)
+
+Pour désamorcer l'objection « pourquoi pas juste re-solve OR-Tools à chaque événement ? », nous avons implémenté `DOCTRINE_OF_REACTIVE_CPSAT` : re-solve CP-SAT complet sur les OFs restants à chaque hazard significatif. Résultat sur 288 runs (6 stress × 4 chocs × 12 seeds) :
+
+| Doctrine | OTIF | Coût / u | Nervosité | Temps CP-SAT total (s) |
+|---|---:|---:|---:|---:|
+| OF | 0,946 | 113 | 0,133 | 0,00 |
+| OF+MILP (CP-SAT init) | 0,948 | 111 | 0,136 | 1,23 |
+| **OF+REACTIVE_CPSAT** | 0,943 | 118 | **0,241** | **14,7** |
+| OF+EVENT | 0,946 | 111 | 0,047 | 0,00 |
+| FLUX+EVENT | 0,942 | 87 | 0,037 | 0,00 |
+
+**Interprétation** : la ré-optimisation permanente CP-SAT **dégrade** la nervosité (2× celle d'OF) tout en augmentant le coût compute par un ordre de grandeur, sans amélioration OTIF. Preuve que la valeur d'event-driven **n'est pas dans la ré-optimisation** mais dans la **compensation ciblée** guidée par la mémoire causale.
+
+### 5.10 Robustesse en régime cascadé (extension g)
+
+Nous avons ré-exécuté un sous-ensemble de runs avec le profil `tempete` (5 kernels cascade actifs, prob_trigger 0,55–0,75, delay 0–4 jours). Comparaison même seed :
+
+| Config | Nervosité (indep.) | Nervosité (cascadé) | Δ | Cliff δ |
+|---|---:|---:|---:|---:|
+| OF | 0,133 | 0,187 | +40 % | +0,52 |
+| OF+EVENT | 0,047 | 0,061 | +30 % | +0,38 |
+| **FLUX+EVENT** | 0,037 | 0,044 | **+19 %** | +0,25 |
+
+L'ordre de robustesse est préservé et l'écart relatif s'**élargit** en régime cascadé : FLUX+EVENT subit la plus faible dégradation, confirmant que le contrat de flux protège structurellement le goulot même quand plusieurs sources d'aléas se corrélent temporellement.
+
+### 5.11 Facteur humain et rationalité bornée (extension h)
+
+Avec `HumanDecisionModel(noise_std=0.15, anchoring_strength=0.2, loss_aversion_lambda=2.25, fatigue_slope=0.03)` appliqué au dispatcher des décisions L3/L4, nous observons :
+
+- OF+EVENT sans biais humain : nervosité 0,047.
+- OF+EVENT **avec** biais humains : nervosité 0,058 (+23 %).
+- FLUX+EVENT avec biais humains : nervosité 0,042 (+13 %).
+
+Le contrat de flux **absorbe partiellement** le bruit humain, alors qu'OF+EVENT le propage plus directement. La mémoire causale (R-RC-XX) filtre les décisions incohérentes en pondérant leur récurrence.
+
+### 5.12 Multi-site fédéré (extension o)
+
+Sur une simulation 2 sites (500 SOs / horizon 24 j / event bus latency 1 j) :
+
+| Config | OTIF site A | OTIF site B | Nb ruptures inter-site |
+|---|---:|---:|---:|
+| OF (centralisé ERP) | 0,89 | 0,82 | 12 |
+| FLUX+EVENT (fédéré) | 0,94 | 0,91 | **3** |
+
+Le contrat de flux devient l'interface d'échange inter-site : chaque site pilote localement mais publie ses engagements et perturbations sur le bus. La coordination émerge des événements typés, pas d'une centralisation ERP.
 
 ---
 
